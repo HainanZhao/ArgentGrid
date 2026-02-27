@@ -17,9 +17,7 @@ import {
   GroupRowNode
 } from '../types/ag-grid-types';
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable()
 export class GridService<TData = any> {
   private columns: Map<string, Column> = new Map();
   private rowData: TData[] = [];
