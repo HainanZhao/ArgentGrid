@@ -4,10 +4,15 @@ on:
   push:
     branches:
       - main
+      - dirty
     paths:
       - 'src/**'
       - 'demo-app/**'
       - '.github/workflows/pages.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'ng-package.json'
+      - 'tsconfig.json'
   workflow_dispatch:
 
 permissions:
@@ -39,9 +44,6 @@ jobs:
       - name: Install demo app dependencies
         working-directory: ./demo-app
         run: npm install
-
-      - name: Build ArgentGrid library
-        run: npm install && npm run build
 
       - name: Build demo app
         working-directory: ./demo-app
