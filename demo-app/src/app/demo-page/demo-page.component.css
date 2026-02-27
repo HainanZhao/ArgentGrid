@@ -115,6 +115,15 @@
   display: block;
 }
 
+.demo-controls {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .btn {
   padding: 10px 20px;
   background: #4f46e5;
@@ -125,6 +134,16 @@
   font-size: 14px;
   font-weight: 600;
   transition: all 0.2s;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .btn:hover:not(:disabled) {

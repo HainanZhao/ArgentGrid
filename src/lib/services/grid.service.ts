@@ -22,6 +22,7 @@ export class GridService<TData = any> {
   private columns: Map<string, Column> = new Map();
   private rowData: TData[] = [];
   private rowNodes: Map<string, IRowNode<TData>> = new Map();
+  private displayedRowNodes: IRowNode<TData>[] = [];
   private columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
   private sortModel: SortModelItem[] = [];
   private filterModel: FilterModel = {};
@@ -30,16 +31,20 @@ export class GridService<TData = any> {
   private selectedRows: Set<string> = new Set();
   private expandedGroups: Set<string> = new Set();
   private gridId: string = '';
+  private gridOptions: GridOptions<TData> | null = null;
   
   createApi(
     columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null,
-    rowData: TData[] | null
+    rowData: TData[] | null,
+    gridOptions?: GridOptions<TData> | null
   ): GridApi<TData> {
     this.columnDefs = columnDefs;
     this.rowData = rowData ? [...rowData] : [];
     this.filteredRowData = [...this.rowData];
     this.groupedRowData = [];
+    this.displayedRowNodes = [];
     this.gridId = this.generateGridId();
+    this.gridOptions = gridOptions || null;
 
     this.initializeColumns();
     this.initializeRowNodes();
@@ -57,20 +62,56 @@ export class GridService<TData = any> {
     }
     
     this.columns.clear();
+
+    const groupColumns = this.getGroupColumns();
+    const isGrouping = groupColumns.length > 0;
+    const groupDisplayType = this.gridOptions?.groupDisplayType || 'singleColumn';
+
+    // 1. Handle Auto Group Column (for singleColumn display)
+    if (isGrouping && (groupDisplayType === 'singleColumn' || !this.gridOptions?.groupDisplayType)) {
+      const autoGroupDef = this.gridOptions?.autoGroupColumnDef || {};
+      const autoGroupCol: Column = {
+        colId: 'ag-Grid-AutoColumn',
+        field: 'ag-Grid-AutoColumn',
+        headerName: autoGroupDef.headerName || 'Group',
+        width: autoGroupDef.width || 200,
+        minWidth: autoGroupDef.minWidth,
+        maxWidth: autoGroupDef.maxWidth,
+        pinned: this.normalizePinned(autoGroupDef.pinned || 'left'),
+        visible: true,
+        sort: null
+      };
+      this.columns.set(autoGroupCol.colId, autoGroupCol);
+    }
+
+    // 2. Process regular columns
     this.columnDefs.forEach((def, index) => {
       if ('children' in def) {
         // Column group
         def.children.forEach((child, childIndex) => {
-          this.addColumn(child, index * 100 + childIndex);
+          this.addColumn(child, index * 100 + childIndex, isGrouping);
         });
       } else {
-        this.addColumn(def, index);
+        this.addColumn(def, index, isGrouping);
       }
     });
   }
+
+  private normalizePinned(pinned: boolean | 'left' | 'right' | null | undefined): 'left' | 'right' | false {
+    if (pinned === 'left' || pinned === true) return 'left';
+    if (pinned === 'right') return 'right';
+    return false;
+  }
   
-  private addColumn(def: ColDef<TData>, index: number): void {
+  private addColumn(def: ColDef<TData>, index: number, isGrouping: boolean): void {
     const colId = def.colId || def.field?.toString() || `col-${index}`;
+    
+    // Auto-hide columns that are being grouped (AG Grid default)
+    let visible = !def.hide;
+    if (isGrouping && def.rowGroup && visible && this.gridOptions?.groupHideOpenParents !== false) {
+      visible = false;
+    }
+
     const column: Column = {
       colId,
       field: def.field?.toString(),
@@ -78,8 +119,8 @@ export class GridService<TData = any> {
       width: def.width || 150,
       minWidth: def.minWidth,
       maxWidth: def.maxWidth,
-      pinned: def.pinned === true ? 'left' : (def.pinned || false),
-      visible: !def.hide,
+      pinned: this.normalizePinned(def.pinned),
+      visible: visible,
       sort: (typeof def.sort === 'object' && def.sort !== null) ? (def.sort as any).sort : def.sort || null,
       sortIndex: def.sortIndex ?? undefined,
       aggFunc: typeof def.aggFunc === 'string' ? def.aggFunc : null
@@ -89,6 +130,7 @@ export class GridService<TData = any> {
   
   private initializeRowNodes(): void {
     this.rowNodes.clear();
+    this.displayedRowNodes = [];
     
     // Separate rows by pinned state
     const pinnedTopRows: TData[] = [];
@@ -132,6 +174,7 @@ export class GridService<TData = any> {
         displayedRowIndex: index
       };
       this.rowNodes.set(id, node);
+      this.displayedRowNodes.push(node);
     });
   }
   
@@ -155,8 +198,7 @@ export class GridService<TData = any> {
       },
       getAllColumns: () => Array.from(this.columns.values()),
       getDisplayedRowAtIndex: (index) => {
-        const node = Array.from(this.rowNodes.values()).find(n => n.displayedRowIndex === index);
-        return node || null;
+        return this.displayedRowNodes[index] || null;
       },
       
       // Row Data API
@@ -260,7 +302,26 @@ export class GridService<TData = any> {
       
       // Grid Information
       getGridId: () => this.gridId,
-      getGridOption: (key) => undefined as any
+      getGridOption: (key) => this.gridOptions ? this.gridOptions[key] : undefined as any,
+      setGridOption: (key, value) => {
+        if (this.gridOptions) {
+          this.gridOptions[key] = value;
+        } else {
+          this.gridOptions = { [key]: value } as GridOptions<TData>;
+        }
+      },
+      
+      // Group Expansion
+      setRowNodeExpanded: (node, expanded) => {
+        if (node.id && node.group) {
+          if (expanded) {
+            this.expandedGroups.add(node.id);
+          } else {
+            this.expandedGroups.delete(node.id);
+          }
+          this.applyGrouping();
+        }
+      }
     };
   }
   
@@ -298,21 +359,18 @@ export class GridService<TData = any> {
     
     if (transaction.update) {
       transaction.update.forEach(data => {
-        const anyData = data as any;
-        const dataId = anyData?.id;
+        const id = this.getRowId(data, 0); // Note: index doesn't matter for id lookup if data has id
         
-        // First try direct lookup by data id
-        let existingNode: IRowNode<TData> | undefined;
-        for (const [nodeId, node] of this.rowNodes.entries()) {
-          const nodeDataId = (node.data as any)?.id;
-          if (nodeDataId === dataId) {
-            existingNode = node;
-            break;
-          }
-        }
-        
+        const existingNode = this.rowNodes.get(id);
         if (existingNode) {
           existingNode.data = data;
+          
+          // Also update in the original rowData array to persist across sorts/filters
+          const index = this.rowData.findIndex(r => this.getRowId(r, 0) === id);
+          if (index !== -1) {
+            this.rowData[index] = data;
+          }
+          
           result.update.push(existingNode);
         }
       });
@@ -531,9 +589,11 @@ export class GridService<TData = any> {
 
   private initializeRowNodesFromGroupedData(): void {
     this.rowNodes.clear();
+    this.displayedRowNodes = [];
     const flatRows = this.flattenGroupedData(this.groupedRowData);
     
     flatRows.forEach((item, index) => {
+      // ... (code omitted for brevity in thought, but I'll provide full function)
       let id: string;
       let data: TData;
       let isGroup = false;
@@ -545,14 +605,18 @@ export class GridService<TData = any> {
         const groupNode = item;
         id = groupNode.id;
         // Create synthetic data for group row
-        data = { [groupNode.groupField]: groupNode.groupKey, ...groupNode.aggregation } as TData;
+        data = { 
+          ...groupNode.aggregation,
+          [groupNode.groupField]: groupNode.groupKey,
+          'ag-Grid-AutoColumn': groupNode.groupKey 
+        } as TData;
         isGroup = true;
         level = groupNode.level;
         expanded = groupNode.expanded;
       } else {
         // Regular data node
         id = this.getRowId(item, index);
-        data = item;
+        data = { ...item, 'ag-Grid-AutoColumn': '' } as any;
       }
 
       const node: IRowNode<TData> = {
@@ -571,6 +635,7 @@ export class GridService<TData = any> {
         displayedRowIndex: index
       };
       this.rowNodes.set(id, node);
+      this.displayedRowNodes.push(node);
     });
   }
 
@@ -710,6 +775,7 @@ export class GridService<TData = any> {
 
   private initializeRowNodesFromFilteredData(): void {
     this.rowNodes.clear();
+    this.displayedRowNodes = [];
     this.filteredRowData.forEach((data, index) => {
       const id = this.getRowId(data, index);
       const node: IRowNode<TData> = {
@@ -728,6 +794,7 @@ export class GridService<TData = any> {
         displayedRowIndex: index
       };
       this.rowNodes.set(id, node);
+      this.displayedRowNodes.push(node);
     });
   }
   

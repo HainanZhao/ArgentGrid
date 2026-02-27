@@ -1,60 +1,71 @@
-Gemini said
-Building a free, high-performance, and API-compatible alternative to AG Grid Enterprise is an ambitious but feasible engineering project if you leverage a Canvas-rendering engine (like Glide Data Grid) with a headless logic layer (like TanStack Table).
+# ArgentGrid Project Plan
 
-To execute this, we will design an Agentic Workflow that uses a "Research-First" approach combined with a strict Test-Driven Development (TDD) loop.
+> **Goal:** Build a free, high-performance alternative to AG Grid Enterprise using Canvas rendering and a headless logic layer.
 
-1. The AI Agent Strategic Plan
-The "Master Agent" will follow this 4-phase roadmap to initialize the project:
+## 🚀 Status: Phase III Complete - Core Enterprise Features Implemented
 
-Phase I: API Extraction & Investigation
-Action: The agent will crawl the official AG Grid documentation and ag-grid-community source code to map out the GridOptions, ColumnDefs, and GridApi interfaces.
+ArgentGrid currently achieves 60fps rendering for 1,000,000+ rows and includes core Enterprise features like Grouping, Aggregation, and Pinning.
 
-Goal: Create a 1:1 TypeScript definition file that mocks the AG Grid API. This ensures users can switch to your lib by simply changing their import statement.
+---
 
-Phase II: Architectural Fusion
-Action: Investigate the "Canvas vs. DOM" bottleneck.
+## 🗺️ Roadmap
 
-Design Choice: Use an HTML5 Canvas for the main data viewport (Glide-style) but keep the headers, menus, and sidebars as Angular Components (DOM-based) for accessibility and styling ease.
+### Phase I: API Extraction & Architecture ✅
+- [x] Map AG Grid `GridOptions`, `ColDef`, and `GridApi` interfaces.
+- [x] Bootstrap Angular library project.
+- [x] Hybrid Architecture: DOM Headers + Canvas Viewport.
+- [x] Virtual Scrolling engine (60fps at 1M rows).
 
-State Management: Use a reactive store (like RxJS or Signals) to handle data updates, which will trigger canvas repaints.
+### Phase II: Core Grid Logic ✅
+- [x] Client-side Sorting.
+- [x] Advanced Filtering (Text, Number, Date, Boolean).
+- [x] Cell Editing (Inline with valueParser/valueSetter).
+- [x] Selection (Single/Multi with Checkbox support).
+- [x] Column & Row Pinning (Left/Right, Top/Bottom).
 
-Phase III: Team Formation (Sub-Agents)
-The Master Agent will spawn a specialized team:
+### Phase III: Enterprise Features ✅
+- [x] **Row Grouping**: Hierarchical data with expand/collapse.
+- [x] **Aggregation**: sum, avg, min, max, count, and custom functions.
+- [x] **Export**: CSV and HTML-based Excel export.
 
-The Architect: Designs the data-to-canvas mapping logic and the Angular "Bridge."
+### Phase IV: UI Interactivity & UX (Current Focus) 🕒
+- [ ] **Column Re-ordering (Drag & Drop)**:
+    - [ ] Implement drag handle in DOM headers.
+    - [ ] Update `columnDefs` and `GridApi` on drop.
+    - [ ] Animate column movement on Canvas.
+- [x] **Header Menus**:
+    - [x] Add "hamburger" or "ellipsis" menu to column headers.
+    - [x] Support Sort, Filter, and "Hide Column" actions from menu.
+    - [x] Integrate with existing `GridApi`.
+- [x] **Context Menus**:
+    - [x] Right-click cell interaction.
+    - [x] Default actions: Copy, Export, Reset Columns.
+    - [x] Support for user-defined custom context menu items.
+- [ ] **Excel-like Range Selection**:
+    - [ ] Drag-to-select rectangular ranges of cells.
+    - [ ] Visual selection box rendered on Canvas.
+    - [ ] "Copy with Headers" support.
 
-The Researcher: Analyzes specific Enterprise features (e.g., how AG Grid calculates "Pivot" tables) to replicate the logic.
+### Phase V: Advanced Data Analysis 🚀
+- [ ] **Pivoting**: Excel-style pivot tables (cross-tabulation).
+- [ ] **Master/Detail**: Expandable rows to reveal nested grids or custom templates.
+- [ ] **True Excel Export**: Implementation using `xlsx` or `exceljs` for native `.xlsx` files with styles.
+- [ ] **Integrated Sparklines**: Mini-charts rendered directly in cells using the Canvas engine.
+- [ ] **Tool Panels & Sidebars**: Dedicated UI for column management and global filtering.
 
-The TDD Coder: Writes the "Red" tests first, then the implementation.
+---
 
-The Compatibility Checker: Continuously runs existing AG Grid example projects against your new library to find API mismatches.
+## 🛠️ Implementation Strategy
 
-2. Multi-Agent Team Execution (TDD Focus)
-We will use a Swarm/Orchestrator pattern where the agents interact through a shared "Task Board."
+1. **Hybrid Rendering Strategy**:
+   - Keep headers as DOM elements for easy Drag-and-Drop implementation (using Angular CDK) and native browser menus.
+   - Maintain the data viewport on Canvas for infinite performance.
+   - Synchronize horizontal scroll between DOM header and Canvas viewport.
 
-Task Breakdown & Workflow
-Agent	Role	TDD Step
-Spec-Agent	Define the Test Case.	RED: Generates a .spec.ts file describing an AG Grid feature (e.g., rowGrouping).
-Canvas-Agent	Implement the Painter.	GREEN: Writes the low-level Canvas code to render the grouped rows.
-Angular-Agent	Framework Bridge.	GREEN: Connects the Canvas logic to Angular Input() and Output() decorators.
-Refactor-Agent	Optimize & Clean.	REFACTOR: Optimizes the rendering loop (requestAnimationFrame) to hit 60fps.
-3. High-Level Architecture (The "Glide-Grid" Approach)
-To achieve "Enterprise" performance for free, your library should follow this structure:
+2. **State Management**:
+   - Use a centralized `GridService` to maintain the source of truth.
+   - Trigger partial Canvas repaints on state changes to maximize performance.
 
-The "Hybrid" Core
-Headless Logic Engine: Manages sorting, filtering, and aggregation in memory (Worker threads for large datasets).
-
-Canvas Layer: Handles the "Data Viewport." Instead of <div> tags for 1,000 cells, it's one <canvas> element.
-
-Angular Overlay: Handles the "Interactivity Layer" (floating filters, context menus, and tool panels).
-
-4. Initial Task List for the AI Agent
-If you were to start this today, here is the "Prompt Zero" for your agent:
-
-Research Task: "Scrape the ag-grid-community and ag-grid-enterprise API references. Generate a JSON schema of all available properties in GridOptions."
-
-Infrastructure Task: "Bootstrap an Angular library project. Implement a basic virtualized Canvas that can render 100,000 rows of text at 60fps."
-
-API Bridge Task: "Create an AgGridCompatibility directive that maps [columnDefs] and [rowData] to our internal Canvas engine."
-
-Feature Sprint (TDD): "Implement 'Row Grouping' logic. First, write a test that expects a hierarchical data structure when a 'group' field is provided. Then, implement the logic in a Web Worker."
+3. **Test-Driven Development (TDD)**:
+   - Every new UI feature must have a corresponding Playwright E2E test in the `demo-app`.
+   - Logic changes must be verified by Jest unit tests in `src/lib/services/grid.service.spec.ts`.

@@ -24,6 +24,22 @@ The demo showcases:
 - 🧪 **TDD Developed**: Comprehensive test coverage with Jest
 - 🎨 **Hybrid Architecture**: Canvas viewport + DOM headers for accessibility
 
+## Feature Parity Comparison
+
+| Feature | AG Grid Community | AG Grid Enterprise | **ArgentGrid (Current)** |
+| :--- | :--- | :--- | :--- |
+| **Rendering Engine** | DOM-based | DOM-based | **Canvas-based** |
+| **Data Volume Limit** | ~100k rows | Millions (SSRM) | **1M+ rows (Client-side)** |
+| **Sorting & Filtering**| Yes | Yes | **Yes** |
+| **Row Grouping** | No | Yes | **Yes (Basic Hierarchical)** |
+| **Aggregation** | No | Yes | **Yes (Sum/Avg/Min/Max/Count)** |
+| **Export** | CSV only | .xlsx | **HTML-based Excel & CSV** |
+| **Selection** | Row only | Range | **Row (Checkbox/Multi)** |
+| **Header Menus** | Basic | Advanced | **Planned (Phase IV)** |
+| **Context Menus** | No | Yes | **Planned (Phase IV)** |
+| **Drag/Drop Columns**| Yes | Yes | **Planned (Phase IV)** |
+| **Pivoting** | No | Yes | **Planned (Phase V)** |
+
 ## Installation
 
 ```bash
@@ -137,6 +153,25 @@ npm run test:coverage # With coverage
 ```bash
 npm run lint
 ```
+
+## 🎨 Demo App Development
+
+The repository includes a standalone Angular application for visual testing and performance benchmarking. It is configured to import `argentgrid` directly from the `src/` folder using TypeScript path mapping.
+
+**Why this is better:**
+- **No Build Step:** You don't need to run `npm run build` in the root every time you change the library.
+- **HMR / Live Reload:** Changes in `src/` are detected by the Angular dev-server, triggering an immediate browser refresh.
+- **Easier Debugging:** Sourcemaps point directly to your original library source code.
+
+### Run Demo App
+
+```bash
+cd demo-app
+npm install
+npm start
+```
+
+Open [http://localhost:4200](http://localhost:4200) to view the demo.
 
 ## Roadmap
 

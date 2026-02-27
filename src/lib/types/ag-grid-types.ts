@@ -66,6 +66,7 @@ export interface GridOptions<TData = any> {
   doesExternalFilterPass?: (node: IRowNode<TData>) => boolean;
   excludeChildrenWhenTreeDataFiltering?: boolean;
   enableAdvancedFilter?: boolean;
+  floatingFilter?: boolean;
 
   // === SCROLLING ===
   alwaysShowHorizontalScroll?: boolean;
@@ -404,6 +405,10 @@ export interface GridApi<TData = any> {
   // === GRID INFORMATION ===
   getGridId(): string;
   getGridOption<K extends keyof GridOptions<TData>>(key: K): GridOptions<TData>[K];
+  setGridOption<K extends keyof GridOptions<TData>>(key: K, value: GridOptions<TData>[K]): void;
+
+  // === GROUP EXPANSION ===
+  setRowNodeExpanded(node: IRowNode<TData>, expanded: boolean): void;
 }
 
 // ============================================================================

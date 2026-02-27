@@ -1,5 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 import { ArgentGridComponent } from './components/argent-grid.component';
 import { AgGridCompatibilityDirective } from './directives/ag-grid-compatibility.directive';
 
@@ -9,7 +10,8 @@ import { AgGridCompatibilityDirective } from './directives/ag-grid-compatibility
     AgGridCompatibilityDirective
   ],
   imports: [
-    CommonModule
+    CommonModule,
+    DragDropModule
   ],
   exports: [
     ArgentGridComponent,

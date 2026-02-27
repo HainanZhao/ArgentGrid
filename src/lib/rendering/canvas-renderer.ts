@@ -1,4 +1,4 @@
-import { GridApi, IRowNode, Column } from '../types/ag-grid-types';
+import { GridApi, IRowNode, Column, ColDef } from '../types/ag-grid-types';
 
 /**
  * CanvasRenderer - High-performance canvas rendering engine for ArgentGrid
@@ -17,9 +17,12 @@ export class CanvasRenderer<TData = any> {
   private ctx: CanvasRenderingContext2D;
   private gridApi: GridApi<TData>;
   private rowHeight: number;
-  private visibleRows: IRowNode<TData>[] = [];
   private scrollTop = 0;
   private scrollLeft = 0;
+
+  get currentScrollTop(): number { return this.scrollTop; }
+  get currentScrollLeft(): number { return this.scrollLeft; }
+
   private animationFrameId: number | null = null;
   private renderPending = false;
   private rowBuffer = 5; // Render extra rows above/below viewport for smooth scrolling
@@ -114,21 +117,14 @@ export class CanvasRenderer<TData = any> {
   private updateCanvasSize(): void {
     const dpr = window.devicePixelRatio || 1;
     
-    // Set canvas size for the full scrollable area
-    const totalHeight = this.totalRowCount * this.rowHeight;
+    // Set canvas size for the visible area (viewport)
     const width = this.viewportWidth || this.canvas.clientWidth;
+    const height = this.viewportHeight || this.canvas.clientHeight || 600;
     
     this.canvas.width = width * dpr;
-    this.canvas.height = Math.min(totalHeight, this.viewportHeight || 600) * dpr;
+    this.canvas.height = height * dpr;
     this.canvas.style.width = `${width}px`;
-    this.canvas.style.height = `${Math.min(totalHeight, this.viewportHeight || 600)}px`;
-    
-    // Set scrollable container height
-    const container = this.canvas.parentElement;
-    if (container && totalHeight > this.viewportHeight) {
-      container.style.height = `${this.viewportHeight}px`;
-      container.style.overflowY = 'auto';
-    }
+    this.canvas.style.height = `${height}px`;
     
     // Scale context for DPR (use setTransform if available, fallback to scale)
     if (typeof this.ctx.setTransform === 'function') {
@@ -179,19 +175,16 @@ export class CanvasRenderer<TData = any> {
       this.totalRowCount || this.gridApi.getDisplayedRowCount()
     );
 
-    // Get columns (cache this for performance)
-    const columns = this.gridApi.getAllColumns().filter(col => col.visible);
+    // Get columns and separate by pinning
+    const allVisibleColumns = this.gridApi.getAllColumns().filter(col => col.visible);
+    const leftPinned = allVisibleColumns.filter(c => c.pinned === 'left');
+    const rightPinned = allVisibleColumns.filter(c => c.pinned === 'right');
+    const centerColumns = allVisibleColumns.filter(c => !c.pinned);
 
-    // Calculate column positions
-    let x = 0;
-    const columnPositions: Map<string, { x: number; width: number }> = new Map();
-    columns.forEach(col => {
-      columnPositions.set(col.colId, { x, width: col.width });
-      x += col.width;
-    });
+    const leftWidth = leftPinned.reduce((sum, c) => sum + c.width, 0);
+    const rightWidth = rightPinned.reduce((sum, c) => sum + c.width, 0);
 
     // Set common context properties once
-    this.ctx.fillStyle = this.TEXT_COLOR;
     this.ctx.font = this.FONT;
     this.ctx.textBaseline = 'middle';
 
@@ -200,68 +193,149 @@ export class CanvasRenderer<TData = any> {
       const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
       if (!rowNode) continue;
 
-      const y = (rowIndex * this.rowHeight) - this.scrollTop + (this.rowBuffer * this.rowHeight);
+      const y = (rowIndex * this.rowHeight) - this.scrollTop;
 
-      // Row background (striping for better readability)
+      // 1. Row background
       this.ctx.fillStyle = rowIndex % 2 === 0 ? this.ROW_STRIPING.even : this.ROW_STRIPING.odd;
-      this.ctx.fillRect(0, y, x, this.rowHeight);
+      this.ctx.fillRect(0, y, width, this.rowHeight);
 
-      // Selected row overlay
       if (rowNode.selected) {
         this.ctx.fillStyle = this.SELECTED_BG_COLOR;
-        this.ctx.fillRect(0, y, x, this.rowHeight);
+        this.ctx.fillRect(0, y, width, this.rowHeight);
       }
 
-      // Row borders
+      // 2. Center columns (with clipping)
+      this.ctx.save();
+      this.ctx.beginPath();
+      this.ctx.rect(leftWidth, y, width - leftWidth - rightWidth, this.rowHeight);
+      this.ctx.clip();
+      this.renderColGroup(centerColumns, leftWidth, true, rowNode, y, width, leftWidth, rightWidth, allVisibleColumns);
+      this.ctx.restore();
+
+      // 3. Left pinned columns
+      this.renderColGroup(leftPinned, 0, false, rowNode, y, width, leftWidth, rightWidth, allVisibleColumns);
+
+      // 4. Right pinned columns
+      this.renderColGroup(rightPinned, width - rightWidth, false, rowNode, y, width, leftWidth, rightWidth, allVisibleColumns);
+
+      // 5. Row bottom border
       this.ctx.strokeStyle = this.BORDER_COLOR;
       this.ctx.beginPath();
       this.ctx.moveTo(0, y + this.rowHeight);
-      this.ctx.lineTo(x, y + this.rowHeight);
+      this.ctx.lineTo(width, y + this.rowHeight);
       this.ctx.stroke();
-
-      // Render cells
-      columns.forEach(col => {
-        const colPos = columnPositions.get(col.colId);
-        if (!colPos) return;
-
-        const cellX = colPos.x;
-        const cellValue = (rowNode.data as any)[col.field || ''];
-
-        // Cell border
-        this.ctx.strokeStyle = this.BORDER_COLOR;
+      
+      // 6. Draw vertical lines separating pinned sections
+      if (leftWidth > 0) {
+        this.ctx.strokeStyle = '#ccc';
+        this.ctx.lineWidth = 2;
         this.ctx.beginPath();
-        this.ctx.moveTo(cellX + colPos.width, y);
-        this.ctx.lineTo(cellX + colPos.width, y + this.rowHeight);
+        this.ctx.moveTo(leftWidth, y);
+        this.ctx.lineTo(leftWidth, y + this.rowHeight);
         this.ctx.stroke();
-
-        // Cell text with truncation
-        if (cellValue !== null && cellValue !== undefined) {
-          const text = String(cellValue);
-          const truncatedText = this.truncateText(
-            text,
-            colPos.width - (this.CELL_PADDING * 2)
-          );
-
-          this.ctx.fillText(
-            truncatedText,
-            cellX + this.CELL_PADDING,
-            y + this.rowHeight / 2
-          );
-        }
-      });
-    }
-
-    // Store visible rows for hit testing (adjust for scroll offset)
-    this.visibleRows = [];
-    for (let rowIndex = startIndex; rowIndex < endIndex; rowIndex++) {
-      const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
-      if (rowNode) {
-        this.visibleRows.push(rowNode);
+        this.ctx.lineWidth = 1;
+      }
+      if (rightWidth > 0) {
+        this.ctx.strokeStyle = '#ccc';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(width - rightWidth, y);
+        this.ctx.lineTo(width - rightWidth, y + this.rowHeight);
+        this.ctx.stroke();
+        this.ctx.lineWidth = 1;
       }
     }
   }
 
+  private renderColGroup(
+    cols: Column[],
+    startX: number,
+    isScrollable: boolean,
+    rowNode: IRowNode<TData>,
+    y: number,
+    viewportWidth: number,
+    leftWidth: number,
+    rightWidth: number,
+    allVisibleColumns: Column[]
+  ): void {
+    let x = startX;
+    cols.forEach((col) => {
+      const cellX = isScrollable ? x - this.scrollLeft : x;
+      const cellWidth = col.width;
+
+      // Skip rendering if cell is outside viewport (only for center columns)
+      if (isScrollable && (cellX + cellWidth < leftWidth || cellX > viewportWidth - rightWidth)) {
+        x += cellWidth;
+        return;
+      }
+
+      const cellValue = (rowNode.data as any)[col.field || ''];
+
+      // Cell border
+      this.ctx.strokeStyle = this.BORDER_COLOR;
+      this.ctx.beginPath();
+      this.ctx.moveTo(cellX + cellWidth, y);
+      this.ctx.lineTo(cellX + cellWidth, y + this.rowHeight);
+      this.ctx.stroke();
+
+      // Cell text
+      if (cellValue !== null && cellValue !== undefined) {
+        this.ctx.fillStyle = this.TEXT_COLOR;
+        
+        let text = '';
+        const colDef = this.getColumnDef(col);
+        
+        if (colDef && typeof colDef.valueFormatter === 'function') {
+          text = colDef.valueFormatter({
+            value: cellValue,
+            data: rowNode.data,
+            node: rowNode,
+            colDef,
+            api: this.gridApi
+          });
+        } else {
+          text = String(cellValue);
+        }
+
+        let textX = cellX + this.CELL_PADDING;
+        
+        // Add indentation and indicator for group rows
+        const isAutoGroupCol = col.colId === 'ag-Grid-AutoColumn';
+        const isFirstColIfNoAutoGroup = !allVisibleColumns.some(c => c.colId === 'ag-Grid-AutoColumn') && col === allVisibleColumns[0];
+
+        if ((isAutoGroupCol || isFirstColIfNoAutoGroup) && (rowNode.group || rowNode.level > 0)) {
+          const indent = rowNode.level * 20;
+          textX += indent;
+          
+          if (rowNode.group) {
+            this.ctx.beginPath();
+            if (rowNode.expanded) {
+              this.ctx.moveTo(textX, y + this.rowHeight / 2 - 3);
+              this.ctx.lineTo(textX + 8, y + this.rowHeight / 2 - 3);
+              this.ctx.lineTo(textX + 4, y + this.rowHeight / 2 + 3);
+            } else {
+              this.ctx.moveTo(textX + 2, y + this.rowHeight / 2 - 4);
+              this.ctx.lineTo(textX + 6, y + this.rowHeight / 2);
+              this.ctx.lineTo(textX + 2, y + this.rowHeight / 2 + 4);
+            }
+            this.ctx.fill();
+            textX += 15;
+          }
+        }
+
+        const truncatedText = this.truncateText(
+          text,
+          cellWidth - (textX - cellX) - this.CELL_PADDING
+        );
+
+        this.ctx.fillText(truncatedText, textX, y + this.rowHeight / 2);
+      }
+      x += cellWidth;
+    });
+  }
+
   private truncateText(text: string, maxWidth: number): string {
+    if (maxWidth <= 0) return '';
     const metrics = this.ctx.measureText(text);
     if (metrics.width <= maxWidth) {
       return text;
@@ -285,9 +359,8 @@ export class CanvasRenderer<TData = any> {
 
   private handleMouseDown(event: MouseEvent): void {
     const { rowIndex } = this.getHitTestResult(event);
-    if (rowIndex === -1 || rowIndex >= this.visibleRows.length) return;
-
-    const rowNode = this.visibleRows[rowIndex];
+    
+    const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
 
     // Handle selection
@@ -309,10 +382,47 @@ export class CanvasRenderer<TData = any> {
 
   private handleClick(event: MouseEvent): void {
     const { rowIndex, columnIndex } = this.getHitTestResult(event);
-    if (rowIndex === -1 || rowIndex >= this.visibleRows.length) return;
-
-    const rowNode = this.visibleRows[rowIndex];
+    
+    const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
+
+    // Handle expand/collapse toggle if it's a group row and clicked near the indicator
+    if (rowNode.group && columnIndex !== -1) {
+      const columns = this.gridApi.getAllColumns().filter(col => col.visible);
+      const clickedCol = columns[columnIndex];
+      
+      const isAutoGroupCol = clickedCol.colId === 'ag-Grid-AutoColumn';
+      const isFirstColIfNoAutoGroup = !columns.some(c => c.colId === 'ag-Grid-AutoColumn') && columnIndex === 0;
+
+      if (isAutoGroupCol || isFirstColIfNoAutoGroup) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        
+        // Account for pinning in click detection
+        let colX = 0;
+        if (clickedCol.pinned === 'left') {
+          // Calculate start X of this left-pinned column
+          const leftPinned = columns.filter(c => c.pinned === 'left');
+          for (let i = 0; i < columns.indexOf(clickedCol); i++) {
+            if (columns[i].pinned === 'left') colX += columns[i].width;
+          }
+        } else if (clickedCol.pinned === 'right') {
+          colX = this.viewportWidth - columns.filter(c => c.pinned === 'right').reduce((sum, c, i) => i >= columns.indexOf(clickedCol) ? sum + c.width : sum, 0);
+        } else {
+          const leftWidth = columns.filter(c => c.pinned === 'left').reduce((sum, c) => sum + c.width, 0);
+          colX = leftWidth + this.getCenterColumnOffset(clickedCol) - this.scrollLeft;
+        }
+
+        const indent = rowNode.level * 20;
+        const indicatorAreaWidth = colX + this.CELL_PADDING + indent + 20;
+
+        if (x >= colX + indent && x < indicatorAreaWidth) {
+          this.gridApi.setRowNodeExpanded(rowNode, !rowNode.expanded);
+          this.render();
+          return;
+        }
+      }
+    }
 
     // Emit row click event for selection handling
     if (this.onRowClick) {
@@ -322,15 +432,13 @@ export class CanvasRenderer<TData = any> {
 
   private handleDoubleClick(event: MouseEvent): void {
     const { rowIndex, columnIndex } = this.getHitTestResult(event);
-    if (rowIndex === -1 || rowIndex >= this.visibleRows.length) return;
+    if (columnIndex === -1) return;
 
-    const rowNode = this.visibleRows[rowIndex];
+    const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
 
     // Get column at index
     const columns = this.gridApi.getAllColumns().filter(col => col.visible);
-    if (columnIndex >= columns.length) return;
-
     const column = columns[columnIndex];
     
     // Trigger cell editing callback
@@ -339,26 +447,85 @@ export class CanvasRenderer<TData = any> {
     }
   }
 
-  private getHitTestResult(event: MouseEvent): { rowIndex: number; columnIndex: number } {
+  getHitTestResult(event: MouseEvent): { rowIndex: number; columnIndex: number } {
     const rect = this.canvas.getBoundingClientRect();
     const y = event.clientY - rect.top + this.scrollTop;
-    const x = event.clientX - rect.left + this.scrollLeft;
+    const x = event.clientX - rect.left;
 
     const rowIndex = Math.floor(y / this.rowHeight);
 
-    // Calculate column index
     const columns = this.gridApi.getAllColumns().filter(col => col.visible);
-    let columnIndex = 0;
-    let xPos = 0;
-    for (const col of columns) {
-      if (x < xPos + col.width) {
-        break;
+    const leftPinned = columns.filter(c => c.pinned === 'left');
+    const rightPinned = columns.filter(c => c.pinned === 'right');
+    const centerColumns = columns.filter(c => !c.pinned);
+
+    const leftWidth = leftPinned.reduce((sum, c) => sum + c.width, 0);
+    const rightWidth = rightPinned.reduce((sum, c) => sum + c.width, 0);
+
+    // 1. Check Left Pinned
+    if (x < leftWidth) {
+      let xPos = 0;
+      for (const col of leftPinned) {
+        if (x < xPos + col.width) {
+          return { rowIndex, columnIndex: columns.indexOf(col) };
+        }
+        xPos += col.width;
       }
-      xPos += col.width;
-      columnIndex++;
     }
 
-    return { rowIndex, columnIndex };
+    // 2. Check Right Pinned
+    if (x > this.viewportWidth - rightWidth) {
+      let xPos = this.viewportWidth - rightWidth;
+      for (const col of rightPinned) {
+        if (x < xPos + col.width) {
+          return { rowIndex, columnIndex: columns.indexOf(col) };
+        }
+        xPos += col.width;
+      }
+    }
+
+    // 3. Check Center
+    const scrolledX = x - leftWidth + this.scrollLeft;
+    let xPos = 0;
+    for (const col of centerColumns) {
+      if (scrolledX < xPos + col.width) {
+        return { rowIndex, columnIndex: columns.indexOf(col) };
+      }
+      xPos += col.width;
+    }
+
+    return { rowIndex, columnIndex: -1 };
+  }
+
+  private getCenterColumnOffset(targetCol: Column): number {
+    const columns = this.gridApi.getAllColumns().filter(col => col.visible && !col.pinned);
+    let offset = 0;
+    for (const col of columns) {
+      if (col === targetCol) return offset;
+      offset += col.width;
+    }
+    return offset;
+  }
+
+  private getColumnDef(column: Column): ColDef<TData> | null {
+    const allDefs = this.gridApi.getColumnDefs();
+    if (!allDefs) return null;
+
+    for (const def of allDefs) {
+      if ('children' in def) {
+        const found = def.children.find(c => {
+          const cDef = c as ColDef;
+          return cDef.colId === column.colId || cDef.field?.toString() === column.colId || cDef.field?.toString() === column.field;
+        });
+        if (found) return found as ColDef<TData>;
+      } else {
+        const cDef = def as ColDef;
+        if (cDef.colId === column.colId || cDef.field?.toString() === column.colId || cDef.field?.toString() === column.field) {
+          return def as ColDef<TData>;
+        }
+      }
+    }
+    return null;
   }
 
   /**

@@ -38,6 +38,20 @@
         {{ isLoading ? 'Loading...' : '1M' }}
       </button>
     </div>
+    <div class="demo-controls">
+      <button class="btn btn-secondary" (click)="toggleGrouping()">
+        {{ isGrouped ? 'Ungroup' : 'Group by Dept' }}
+      </button>
+      <button class="btn btn-secondary" (click)="toggleFloatingFilter()">
+        {{ isFloatingFilterShown ? 'Hide Filters' : 'Show Filters' }}
+      </button>
+      <button class="btn btn-secondary" (click)="applyFilter()">
+        Filter 'Engineering'
+      </button>
+      <button class="btn btn-secondary" (click)="clearFilters()">
+        Clear Filters
+      </button>
+    </div>
   </header>
 
   <div class="grid-wrapper">
@@ -50,6 +64,7 @@
       <argent-grid
         [columnDefs]="columnDefs"
         [rowData]="rowData"
+        [gridOptions]="gridOptions"
         [rowHeight]="32"
         [height]="'100%'"
         [width]="'100%'"
