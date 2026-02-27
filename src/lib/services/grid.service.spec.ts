@@ -586,6 +586,103 @@ describe('GridService', () => {
     expect(selectionColumnDefs[0].checkboxSelection).toBe(true);
   });
 
+  // Aggregation Tests
+  it('should calculate sum aggregation', () => {
+    const aggData: any[] = [
+      { id: 1, name: 'Item 1', value: 100 },
+      { id: 2, name: 'Item 2', value: 200 },
+      { id: 3, name: 'Item 3', value: 300 }
+    ];
+    const aggColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID' },
+      { colId: 'name', field: 'name', headerName: 'Name' },
+      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: 'sum' }
+    ];
+    
+    service.createApi(aggColumnDefs, aggData);
+    const agg = service.calculateColumnAggregations(aggData);
+    expect(agg.value).toBe(600);
+  });
+
+  it('should calculate average aggregation', () => {
+    const aggData: any[] = [
+      { id: 1, name: 'Item 1', value: 100 },
+      { id: 2, name: 'Item 2', value: 200 },
+      { id: 3, name: 'Item 3', value: 300 }
+    ];
+    const aggColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID' },
+      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: 'avg' }
+    ];
+    
+    service.createApi(aggColumnDefs, aggData);
+    const agg = service.calculateColumnAggregations(aggData);
+    expect(agg.value).toBe(200);
+  });
+
+  it('should calculate min/max aggregation', () => {
+    const aggData: any[] = [
+      { id: 1, name: 'Item 1', value: 100 },
+      { id: 2, name: 'Item 2', value: 50 },
+      { id: 3, name: 'Item 3', value: 300 }
+    ];
+    const aggColumnDefs: ColDef[] = [
+      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: 'min' }
+    ];
+    
+    service.createApi(aggColumnDefs, aggData);
+    const agg = service.calculateColumnAggregations(aggData);
+    expect(agg.value).toBe(50);
+  });
+
+  it('should calculate max aggregation', () => {
+    const aggData: any[] = [
+      { id: 1, name: 'Item 1', value: 100 },
+      { id: 2, name: 'Item 2', value: 50 },
+      { id: 3, name: 'Item 3', value: 300 }
+    ];
+    const aggColumnDefs: ColDef[] = [
+      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: 'max' }
+    ];
+    
+    service.createApi(aggColumnDefs, aggData);
+    const agg = service.calculateColumnAggregations(aggData);
+    expect(agg.value).toBe(300);
+  });
+
+  it('should calculate count aggregation', () => {
+    const aggData: any[] = [
+      { id: 1, name: 'Item 1' },
+      { id: 2, name: 'Item 2' },
+      { id: 3, name: 'Item 3' }
+    ];
+    const aggColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID', aggFunc: 'count' }
+    ];
+    
+    service.createApi(aggColumnDefs, aggData);
+    const agg = service.calculateColumnAggregations(aggData);
+    expect(agg.id).toBe(3);
+  });
+
+  it('should support custom aggregation function', () => {
+    const aggData: any[] = [
+      { id: 1, value: 100 },
+      { id: 2, value: 200 },
+      { id: 3, value: 300 }
+    ];
+    const customAggFunc = (params: any) => {
+      return params.values.reduce((sum: number, v: number) => sum + v, 0) * 2;
+    };
+    const aggColumnDefs: ColDef[] = [
+      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: customAggFunc }
+    ];
+    
+    service.createApi(aggColumnDefs, aggData);
+    const agg = service.calculateColumnAggregations(aggData);
+    expect(agg.value).toBe(1200); // (100+200+300) * 2
+  });
+
   it('should get displayed row at index', () => {
     const sortedApi = service.createApi(testColumnDefs, [
       { id: 10, name: 'First', age: 20, email: 'first@example.com' },

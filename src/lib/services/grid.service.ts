@@ -171,6 +171,7 @@ export class GridService<TData = any> {
       },
       applyTransaction: (transaction) => this.applyTransaction(transaction),
       getDisplayedRowCount: () => Array.from(this.rowNodes.values()).filter(n => n.displayed).length,
+      getAggregations: () => this.calculateColumnAggregations(this.filteredRowData),
       getRowNode: (id) => this.rowNodes.get(id) || null,
       
       // Selection API
@@ -481,6 +482,10 @@ export class GridService<TData = any> {
   }
 
   private calculateAggregations(data: TData[], groupField: string): { [field: string]: any } {
+    return this.calculateColumnAggregations(data);
+  }
+
+  public calculateColumnAggregations(data: TData[]): { [field: string]: any } {
     const aggregations: { [field: string]: any } = {};
     
     if (!this.columnDefs) return aggregations;
@@ -496,24 +501,30 @@ export class GridService<TData = any> {
       
       if (values.length === 0) return;
 
-      switch (def.aggFunc) {
-        case 'sum':
-          aggregations[field] = values.reduce((sum, v) => sum + (Number(v) || 0), 0);
-          break;
-        case 'avg':
-          aggregations[field] = values.reduce((sum, v) => sum + (Number(v) || 0), 0) / values.length;
-          break;
-        case 'min':
-          aggregations[field] = Math.min(...values.map(v => Number(v) || 0));
-          break;
-        case 'max':
-          aggregations[field] = Math.max(...values.map(v => Number(v) || 0));
-          break;
-        case 'count':
-          aggregations[field] = values.length;
-          break;
-        default:
-          aggregations[field] = values[0];
+      if (typeof def.aggFunc === 'function') {
+        // Custom aggregation function
+        aggregations[field] = def.aggFunc({ values, data });
+      } else {
+        // Built-in aggregation functions
+        switch (def.aggFunc) {
+          case 'sum':
+            aggregations[field] = values.reduce((sum, v) => sum + (Number(v) || 0), 0);
+            break;
+          case 'avg':
+            aggregations[field] = values.reduce((sum, v) => sum + (Number(v) || 0), 0) / values.length;
+            break;
+          case 'min':
+            aggregations[field] = Math.min(...values.map(v => Number(v) || 0));
+            break;
+          case 'max':
+            aggregations[field] = Math.max(...values.map(v => Number(v) || 0));
+            break;
+          case 'count':
+            aggregations[field] = values.length;
+            break;
+          default:
+            aggregations[field] = values[0];
+        }
       }
     });
 
