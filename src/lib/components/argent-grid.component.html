@@ -222,10 +222,22 @@
         <!-- Columns Tool Panel -->
         <div class="columns-tool-panel" *ngIf="activeToolPanel === 'columns'">
           <h3>Columns</h3>
-          <div class="column-list">
-            <div *ngFor="let col of getAllColumns()" class="column-item">
+            <div class="column-list" 
+               cdkDropList 
+               (cdkDropListDropped)="onSidebarColumnDropped($event)">
+            <div *ngFor="let col of getAllColumns()" 
+                 class="column-item" 
+                 cdkDrag
+                 [cdkDragData]="col">
+              <div *cdkDragPreview class="sidebar-drag-preview">
+                <span class="column-drag-handle">⠿</span>
+                <span>{{ getHeaderName(col) }}</span>
+              </div>
+              <div *cdkDragPlaceholder class="sidebar-drag-placeholder"></div>
+              
+              <span class="column-drag-handle" cdkDragHandle>⠿</span>
               <input type="checkbox" [checked]="col.visible" (change)="toggleColumnVisibility(col)" />
-              <span>{{ getHeaderName(col) }}</span>
+              <span class="column-label">{{ getHeaderName(col) }}</span>
             </div>
           </div>
         </div>
@@ -282,22 +294,27 @@
        [style.top.px]="contextMenuPosition.y"
        [style.left.px]="contextMenuPosition.x"
        (click)="$event.stopPropagation()">
-    <div class="menu-item" (click)="copyContextMenuCell()">
-      <span class="menu-icon">📋</span> Copy Cell
-    </div>
-    <div class="menu-item" *ngIf="hasRangeSelection()" (click)="copyRangeWithHeaders()">
-      <span class="menu-icon">📋</span> Copy with Headers
-    </div>
-    <div class="menu-divider"></div>
-    <div class="menu-item" (click)="exportCSV()">
-      <span class="menu-icon">⤓</span> Export CSV
-    </div>
-    <div class="menu-item" (click)="exportExcel()">
-      <span class="menu-icon">⤓</span> Export Excel
-    </div>
-    <div class="menu-divider"></div>
-    <div class="menu-item" (click)="resetColumns()">
-      <span class="menu-icon">⟲</span> Reset Columns
-    </div>
+    <ng-container *ngFor="let item of contextMenuItems">
+      <div *ngIf="item.separator" class="menu-divider"></div>
+      <div *ngIf="!item.separator" 
+           class="menu-item" 
+           [class.disabled]="item.disabled"
+           [class.has-submenu]="item.subMenu && item.subMenu.length > 0"
+           (click)="!item.disabled && item.action(); !item.subMenu && closeContextMenu()">
+        <span class="menu-icon" *ngIf="item.icon">{{ item.icon }}</span>
+        <span class="menu-text">{{ item.name }}</span>
+        <span class="menu-arrow" *ngIf="item.subMenu && item.subMenu.length > 0">▶</span>
+        
+        <!-- Sub-menu -->
+        <div class="argent-grid-context-menu sub-menu" *ngIf="item.subMenu && item.subMenu.length > 0">
+          <div *ngFor="let subItem of item.subMenu" 
+               class="menu-item"
+               (click)="subItem.action(); closeContextMenu(); $event.stopPropagation()">
+            <span class="menu-icon" *ngIf="subItem.icon">{{ subItem.icon }}</span>
+            <span class="menu-text">{{ subItem.name }}</span>
+          </div>
+        </div>
+      </div>
+    </ng-container>
   </div>
 </div>

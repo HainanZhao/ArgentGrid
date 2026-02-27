@@ -60,11 +60,8 @@
       <button class="btn btn-secondary" (click)="toggleFloatingFilter()">
         {{ isFloatingFilterShown ? 'Hide Filters' : 'Show Filters' }}
       </button>
-      <button class="btn btn-secondary" (click)="applyFilter()">
-        Filter 'Engineering'
-      </button>
-      <button class="btn btn-secondary" (click)="clearFilters()">
-        Clear Filters
+      <button class="btn btn-secondary" (click)="toggleFilter()">
+        {{ isFiltered ? 'Clear Filter' : 'Filter "Eng"' }}
       </button>
     </div>
   </header>

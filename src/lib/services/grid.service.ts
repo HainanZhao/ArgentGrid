@@ -603,15 +603,18 @@ export class GridService<TData = any> {
     const newPivotColDefs: (ColDef<TData> | ColGroupDef<TData>)[] = [];
 
     sortedPivotKeys.forEach(pivotKey => {
-      const children: ColDef<TData>[] = valueColumns.map(valCol => ({
-        ...valCol,
-        colId: `pivot_${pivotKey}_${String(valCol.field)}`,
-        headerName: valCol.headerName || String(valCol.field),
-        // We use a custom field accessor for pivoted data
-        field: `pivotData.${pivotKey}.${String(valCol.field)}` as any,
-        pivot: false, // These are the results, not the pivot sources
-        rowGroup: false
-      }));
+      const children: ColDef<TData>[] = valueColumns.map(valCol => {
+        const valueName = valCol.headerName || String(valCol.field);
+        return {
+          ...valCol,
+          colId: `pivot_${pivotKey}_${String(valCol.field)}`,
+          headerName: `${pivotKey} (${valueName})`,
+          // We use a custom field accessor for pivoted data
+          field: `pivotData.${pivotKey}.${String(valCol.field)}` as any,
+          pivot: false, // These are the results, not the pivot sources
+          rowGroup: false
+        };
+      });
 
       newPivotColDefs.push({
         headerName: pivotKey,
@@ -625,7 +628,13 @@ export class GridService<TData = any> {
   private applyGrouping(): void {
     const groupColumns = this.getGroupColumns();
     
-    if (groupColumns.length === 0) {
+    if (this.isPivotMode) {
+      this.generatePivotColumnDefs();
+      // If we have pivot columns but weren't grouping, we need to initialize them
+      this.initializeColumns();
+    }
+
+    if (groupColumns.length === 0 && !this.isPivotMode) {
       // No grouping, use filtered data
       this.cachedGroupedData = null;
       this.groupingDirty = true;
@@ -638,6 +647,8 @@ export class GridService<TData = any> {
       this.cachedGroupedData = this.groupByColumns(this.filteredRowData, groupColumns, 0);
       
       if (this.isPivotMode) {
+        // Already called above, but we do it again after grouping to be sure 
+        // (though in Pivot Mode we usually want grouping)
         this.generatePivotColumnDefs();
         this.initializeColumns(); // Re-initialize with new pivot columns
         this.gridStateChanged$.next({ type: 'columnsChanged' });
@@ -666,6 +677,20 @@ export class GridService<TData = any> {
     level: number
   ): (TData | GroupRowNode<TData>)[] {
     if (level >= groupColumns.length || data.length === 0) {
+      if (this.isPivotMode && level === 0 && data.length > 0 && groupColumns.length === 0) {
+        // Pivot mode without row groups - return a single root group summarizer
+        const rootGroup: GroupRowNode<TData> = {
+          id: 'pivot-total-summary',
+          groupKey: 'Summary (All rows)',
+          groupField: 'ag-Grid-AutoColumn',
+          level: 0,
+          children: data,
+          expanded: true,
+          aggregation: this.calculateAggregations(data, 'Summary'),
+          pivotData: this.calculatePivotData(data)
+        };
+        return [rootGroup];
+      }
       return data;
     }
 

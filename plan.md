@@ -2,9 +2,36 @@
 
 > **Goal:** Build a free, high-performance alternative to AG Grid Enterprise using Canvas rendering and a headless logic layer.
 
-## 🚀 Status: Phase V Complete - Advanced Data Analysis Implemented
+## ⚖️ AG Grid Comparison Matrix
 
-ArgentGrid now supports Enterprise-grade features including Pivoting, Master/Detail, Sparklines, and native Excel export.
+| Feature Category | AG Grid Community | AG Grid Enterprise | **ArgentGrid (Current)** |
+| :--- | :--- | :--- | :--- |
+| **Rendering Engine** | DOM-based | DOM-based | **Canvas-based (GPU Opt)** |
+| **Data Volume Limit** | ~100k rows | Millions (SSRM) | **1M+ rows (Client-side)** |
+| **Row Models** | Client-side only | Client, **SSRM, Infinite** | **Client-side only** |
+| **Custom Components** | Header, Cell, Filter | Header, Cell, Filter | **Hardcoded / String-based** |
+| **Sorting & Filtering**| Yes (Basic) | Yes (Advanced) | **Yes (Client-side)** |
+| **Filter Types** | Text, Num, Date | + **Set Filter**, Multi | **Text, Num, Date, Boolean** |
+| **Row Grouping** | No | Yes | **Yes (Hierarchical)** |
+| **Aggregation** | No | Yes | **Yes (Sum/Avg/Min/Max/Cnt)** |
+| **Pivoting** | No | Yes | **Yes (Basic)** |
+| **Master/Detail** | No | Yes | **Yes (Basic)** |
+| **Tree Data** | Basic | Advanced | **Planned (Phase IV)** |
+| **Selection** | Row only | Row + **Range** | **Row + Range (Basic)** |
+| **Excel Export** | No (CSV only) | True .xlsx | **True .xlsx & CSV** |
+| **Context Menu** | No | Yes | **Yes (Basic)** |
+| **Header Menus** | Basic | Advanced | **Yes (Sort, Hide, Pin)** |
+| **Side Bar** | No | Yes | **Yes (Columns, Filters)** |
+| **Keyboard Nav** | Yes (Cell-level) | Yes (Advanced) | **Basic (Editing only)** |
+| **State Persistence** | No | Yes | **No** |
+| **Integrated Charts** | No | Yes | **Planned (Phase IV)** |
+| **Sparklines** | No | Yes | **Yes (Area, Line, Bar)** |
+| **Accessibility (ARIA)**| Yes | Yes | **Partial (Headers only)** |
+
+
+## 🚀 Status: Phase V Complete - Transitioning to Enterprise Maturity
+
+ArgentGrid has met its initial implementation goals. We are now entering a maturity phase to bridge the final gaps with AG Grid Enterprise, including Server-Side Row Models and deep Angular component integration.
 
 ---
 
@@ -31,6 +58,7 @@ ArgentGrid now supports Enterprise-grade features including Pivoting, Master/Det
 ### Phase IV: UI Interactivity & UX ✅
 - [x] **Column Re-ordering (Drag & Drop)**:
     - [x] Implement drag handle in DOM headers.
+    - [x] Sidebar column re-ordering via tool panel.
     - [x] Update `columnDefs` and `GridApi` on drop.
     - [x] Animate column movement on Canvas.
 - [x] **Column Resizing**:
@@ -41,10 +69,10 @@ ArgentGrid now supports Enterprise-grade features including Pivoting, Master/Det
     - [x] Add "hamburger" or "ellipsis" menu to column headers.
     - [x] Support Sort, Filter, and "Hide Column" actions from menu.
     - [x] Integrate with existing `GridApi`.
-- [x] **Context Menus**:
+- [ ] **Context Menus**:
     - [x] Right-click cell interaction.
     - [x] Default actions: Copy, Export, Reset Columns.
-    - [x] Support for user-defined custom context menu items.
+    - [ ] Support for user-defined custom context menu items.
 - [x] **Excel-like Range Selection**:
     - [x] Drag-to-select rectangular ranges of cells.
     - [x] Visual selection box rendered on Canvas.
@@ -54,18 +82,35 @@ ArgentGrid now supports Enterprise-grade features including Pivoting, Master/Det
 - [x] **Pivoting**: Excel-style pivot tables (cross-tabulation).
 - [x] **Tool Panels & Sidebars**: Dedicated UI for column management and global filtering.
 - [x] **Master/Detail**: Expandable rows to reveal nested grids or custom templates.
-- [x] **True Excel Export**: Implementation using `xlsx` or `exceljs` for native `.xlsx` files with styles.
+- [x] **True Excel Export**: Implementation using `exceljs` for native `.xlsx` files with styles.
 - [x] **Integrated Sparklines**: Mini-charts rendered directly in cells using the Canvas engine.
 
-## 🎉 Project Milestone: ALL PHASES COMPLETE!
+### Phase VI: UX Polish & Extensibility 🚧
+- [ ] **Custom Angular Components**: Support for using real Angular components as cell renderers/editors inside the Canvas.
+- [x] **Context Menu API**: Full implementation of `getContextMenuItems` to allow dynamic, user-defined menu actions.
+- [ ] **Advanced Keyboard Navigation**: Full cell-to-cell navigation (Arrows, Tab, Page Up/Down) matching AG Grid behavior.
+- [ ] **State Persistence**: Save/Restore user grid state (order, width, filters) to LocalStorage.
+- [ ] **Advanced Filtering**: Set Filter (Excel-style checkboxes) and Multi-Filter support.
+
+### Phase VII: Enterprise Row Models
+- [ ] **Server-Side Row Model (SSRM)**: Loading and aggregating millions of rows on the server.
+- [ ] **Infinite Row Model**: Standard infinite scrolling for large flat datasets.
+- [ ] **Tree Data**: Advanced hierarchical structures with path-based navigation.
+
+### Phase VIII: Final Polish
+- [ ] **Advanced Accessibility**: Full ARIA compliance and screen reader optimization for the Canvas viewport.
+- [ ] **Touch & Mobile Support**: Optimized interactions for mobile devices.
+- [ ] **Web Workers**: Move data processing to background threads for even better responsiveness.
+
+## 🎉 Project Milestone: CORE PHASES COMPLETE!
 
 ArgentGrid has reached its initial goal of providing a high-performance, Enterprise-compatible Angular data grid.
 
-### Future Roadmap
+### Future Considerations
 - [ ] **Web Workers**: Move data processing to background threads for even better responsiveness.
-- [ ] **Accessibility (A11Y)**: Enhance screen reader support for the canvas viewport.
-- [ ] **Localization**: Support for multiple languages and RTL.
-- [ ] **Custom Cell Editors**: Support for Angular components as cell editors.
+- [ ] **Touch & Mobile Support**: Optimized interactions for mobile devices.
+- [ ] **Integrated Charts**: User-creatable charts directly from range selections.
+- [ ] **Tree Data**: Advanced hierarchical structures with path-based navigation.
 
 
 ---
