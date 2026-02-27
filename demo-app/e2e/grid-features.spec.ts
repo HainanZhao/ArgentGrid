@@ -158,6 +158,47 @@ test.describe('ArgentGrid Feature Guard Rails', () => {
     
     expect(nameBoxAfter!.x).toBeLessThan(idBoxAfter!.x);
   });
+
+  test('should support programmatic filter synchronization and UI reactivity', async ({ page }) => {
+    // 1. Apply filter via "Filter Engineering" button (calls gridApi.setFilterModel)
+    await page.click('button:has-text("Filter \'Engineering\'")');
+    
+    // 2. Verify row count via GridApi dropped (reactivity check)
+    await page.waitForTimeout(1000);
+    const filteredCount = await page.evaluate(() => window.gridApi.getDisplayedRowCount());
+    expect(filteredCount).toBeLessThan(100000);
+    expect(filteredCount).toBeGreaterThan(0);
+
+    // 3. Verify the floating filter input shows "Eng" (bidirectional sync check)
+    const deptFilter = page.locator('.floating-filter-input').nth(2);
+    const filterValue = await deptFilter.inputValue();
+    expect(filterValue).toBe('Eng');
+
+    // 4. Clear via "Clear Filters" button
+    await page.click('button:has-text("Clear Filters")');
+    await page.waitForTimeout(500);
+    
+    // 5. Verify input cleared and count restored
+    const clearedValue = await deptFilter.inputValue();
+    expect(clearedValue).toBe('');
+    const finalCount = await page.evaluate(() => window.gridApi.getDisplayedRowCount());
+    expect(finalCount).toBe(100000);
+  });
+
+  test('should support global options toggle via setGridOption', async ({ page }) => {
+    // 1. Hide Filters via button (calls gridApi.setGridOption)
+    await page.click('button:has-text("Hide Filters")');
+    
+    // 2. Verify floating filter row is removed from DOM
+    const filterRow = page.locator('.floating-filter-row');
+    await expect(filterRow).not.toBeVisible();
+
+    // 3. Show Filters back
+    await page.click('button:has-text("Show Filters")');
+    
+    // 4. Verify floating filter row returned
+    await expect(filterRow).toBeVisible();
+  });
 });
 
 declare global {
