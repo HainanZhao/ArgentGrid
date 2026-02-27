@@ -4,20 +4,101 @@
  * Exports all rendering-related modules.
  */
 
-// Types
-export * from './types';
+// Types (base definitions)
+export {
+  Rectangle,
+  Point,
+  Size,
+  ScrollPosition,
+  PositionedColumn,
+  ColumnWalkCallback,
+  RowWalkCallback,
+  CellWalkCallback,
+  CellDrawContext,
+  ColumnPrepResult,
+  BlitResult,
+  BufferPair,
+  DamageType,
+  DirtyRegions,
+  GridTheme,
+  PartialTheme,
+  RenderState,
+  VisibleRange,
+  HitTestResult,
+  GridMouseEvent,
+} from './types';
 
-// Theme
-export * from './theme';
+// Theme (re-export the DEFAULT_THEME and utilities)
+export {
+  DEFAULT_THEME,
+  DARK_THEME,
+  THEME_PRESETS,
+  mergeTheme,
+  getFontFromTheme,
+  getRowTheme,
+  getCellBackgroundColor,
+  getThemePreset,
+  createTheme,
+} from './theme';
 
 // Walker functions
-export * from './walk';
+export {
+  walkColumns,
+  getPositionedColumns,
+  getPinnedWidths,
+  walkRows,
+  getVisibleRowRange,
+  getRowY,
+  walkCells,
+  getColumnAtX,
+  getColumnIndex,
+  getTotalColumnWidth,
+  getRowAtY,
+  isRowVisible,
+  calculateVisibleRange,
+} from './walk';
 
 // Blitting optimization
-export * from './blit';
+export {
+  MIN_BLIT_DELTA,
+  MAX_BLIT_DELTA_RATIO,
+  shouldBlit,
+  calculateBlit,
+  blitLastFrame,
+  createBufferPair,
+  swapBuffers,
+  displayBuffer,
+  resizeBufferPair,
+  BlitState,
+} from './blit';
 
-// Cell rendering
-export * from './cells';
+// Cell rendering (explicit exports to avoid conflicts)
+export {
+  prepColumn,
+  prepColumns,
+  drawCell,
+  drawCellBackground,
+  drawCellContent,
+  drawGroupIndicators,
+  truncateText,
+  measureText,
+  calculateColumnWidth,
+  getFormattedValue,
+  renderRow,
+} from './cells';
 
 // Grid lines
-export * from './lines';
+export {
+  drawCrispLine,
+  drawHorizontalLine,
+  drawVerticalLine,
+  drawRowLines,
+  drawColumnLines,
+  getColumnBorderPositions,
+  drawGridLines,
+  drawBorder,
+  drawCellSelectionBorder,
+  drawRangeSelectionBorder,
+  drawPinnedRegionBorders,
+  drawPinnedRegionShadows,
+} from './lines';

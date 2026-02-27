@@ -15,13 +15,13 @@ import { Rectangle, BlitResult, BufferPair } from './types';
  * Minimum scroll delta to trigger blitting
  * Small scrolls are faster to just redraw
  */
-const MIN_BLIT_DELTA = 2;
+export const MIN_BLIT_DELTA = 2;
 
 /**
  * Maximum scroll delta before full redraw
  * Large scrolls would copy too much garbage
  */
-const MAX_BLIT_DELTA_RATIO = 0.8; // 80% of viewport
+export const MAX_BLIT_DELTA_RATIO = 0.8; // 80% of viewport
 
 // ============================================================================
 // BLIT CALCULATIONS

@@ -385,13 +385,13 @@ export function drawCell(prep: ColumnPrepResult, cellCtx: CellDrawContext): void
    - [x] Implement cell rendering with prep/draw (`cells.ts`)
    - [x] Implement grid lines rendering (`lines.ts`)
 
-2. **Week 2: Integration** (Next)
-   - [ ] Refactor `canvas-renderer.ts` to use new modules
-   - [ ] Integrate `DamageTracker` with selection changes
-   - [ ] Add blitting support to scroll handler
-   - [ ] Test performance improvements
+2. **Week 2: Integration** ✅ COMPLETED
+   - [x] Refactor `canvas-renderer.ts` to use new modules
+   - [x] Integrate `DamageTracker` with selection changes
+   - [x] Add blitting support to scroll handler
+   - [x] Test performance improvements
 
-3. **Week 3: Testing**
+3. **Week 3: Testing** (In Progress)
    - [ ] Unit tests for walker functions
    - [ ] Unit tests for damage tracker
    - [ ] Performance benchmarks
