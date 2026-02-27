@@ -29,6 +29,9 @@ export class CanvasRenderer<TData = any> {
   
   // Callback for cell editing
   onCellDoubleClick?: (rowIndex: number, colId: string) => void;
+  
+  // Callback for row click (selection)
+  onRowClick?: (rowIndex: number, event: MouseEvent) => void;
 
   // Styling constants
   private readonly CELL_PADDING = 8;
@@ -311,8 +314,10 @@ export class CanvasRenderer<TData = any> {
     const rowNode = this.visibleRows[rowIndex];
     if (!rowNode) return;
 
-    // Emit row click event (TODO: use EventEmitter)
-    console.log('Row clicked:', rowNode.data);
+    // Emit row click event for selection handling
+    if (this.onRowClick) {
+      this.onRowClick(rowIndex, event);
+    }
   }
 
   private handleDoubleClick(event: MouseEvent): void {

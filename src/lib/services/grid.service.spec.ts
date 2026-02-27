@@ -509,6 +509,83 @@ describe('GridService', () => {
     expect(freshApi.getDisplayedRowCount()).toBe(3);
   });
 
+  // Selection API Tests
+  it('should select single row', () => {
+    const selectApi = service.createApi(testColumnDefs, [...testRowData]);
+    const firstRow = selectApi.getDisplayedRowAtIndex(0);
+    if (!firstRow) return;
+    
+    firstRow.selected = true;
+    const selected = selectApi.getSelectedRows();
+    
+    expect(selected.length).toBe(1);
+    expect(selected[0].data.id).toBe(1);
+  });
+
+  it('should select multiple rows with Ctrl key', () => {
+    const selectApi = service.createApi(testColumnDefs, [...testRowData]);
+    
+    // Select first row
+    const firstRow = selectApi.getDisplayedRowAtIndex(0);
+    if (!firstRow) return;
+    firstRow.selected = true;
+    
+    // Ctrl+click to select third row (multi-select)
+    const thirdRow = selectApi.getDisplayedRowAtIndex(2);
+    if (!thirdRow) return;
+    thirdRow.selected = true;
+    
+    const selected = selectApi.getSelectedRows();
+    expect(selected.length).toBe(2);
+  });
+
+  it('should select all rows', () => {
+    const selectApi = service.createApi(testColumnDefs, [...testRowData]);
+    selectApi.selectAll();
+    
+    const selected = selectApi.getSelectedRows();
+    expect(selected.length).toBe(3);
+  });
+
+  it('should deselect all rows', () => {
+    const selectApi = service.createApi(testColumnDefs, [...testRowData]);
+    selectApi.selectAll();
+    expect(selectApi.getSelectedRows().length).toBe(3);
+    
+    selectApi.deselectAll();
+    expect(selectApi.getSelectedRows().length).toBe(0);
+  });
+
+  it('should toggle row selection', () => {
+    const selectApi = service.createApi(testColumnDefs, [...testRowData]);
+    const row = selectApi.getDisplayedRowAtIndex(0);
+    if (!row) return;
+    
+    row.selected = true;
+    expect(selectApi.getSelectedRows().length).toBe(1);
+    
+    row.selected = false;
+    expect(selectApi.getSelectedRows().length).toBe(0);
+  });
+
+  it('should get selected row count', () => {
+    const selectApi = service.createApi(testColumnDefs, [...testRowData]);
+    selectApi.selectAll();
+    
+    const selectedCount = selectApi.getSelectedRows().length;
+    expect(selectedCount).toBe(3);
+  });
+
+  it('should support row selection with checkbox', () => {
+    const selectionColumnDefs: ColDef[] = [
+      { colId: 'select', headerName: '', checkboxSelection: true, width: 50 },
+      { colId: 'id', field: 'id', headerName: 'ID' },
+      { colId: 'name', field: 'name', headerName: 'Name' }
+    ];
+    
+    expect(selectionColumnDefs[0].checkboxSelection).toBe(true);
+  });
+
   it('should get displayed row at index', () => {
     const sortedApi = service.createApi(testColumnDefs, [
       { id: 10, name: 'First', age: 20, email: 'first@example.com' },

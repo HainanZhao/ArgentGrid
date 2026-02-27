@@ -11,6 +11,18 @@ import { Subject } from 'rxjs';
       <!-- Header Layer (DOM-based for accessibility) -->
       <div class="argent-grid-header">
         <div class="argent-grid-header-row">
+          <!-- Selection Column Header -->
+          <div
+            *ngIf="showSelectionColumn"
+            class="argent-grid-header-cell argent-grid-selection-header"
+            [style.width.px]="selectionColumnWidth"
+            (click)="onSelectionHeaderClick()">
+            <input type="checkbox"
+                   [checked]="isAllSelected"
+                   [indeterminate]="isIndeterminateSelection"
+                   (change)="onSelectionHeaderChange($event)" />
+          </div>
+        
           <!-- Left Pinned Columns -->
           <div
             *ngFor="let col of getLeftPinnedColumns()"
@@ -193,7 +205,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   @Output() gridReady = new EventEmitter<GridApi<TData>>();
   @Output() rowClicked = new EventEmitter<{ data: TData; node: IRowNode<TData> }>();
   @Output() selectionChanged = new EventEmitter<IRowNode<TData>[]>();
-  
+
   @ViewChild('gridCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('viewport') viewportRef!: ElementRef<HTMLDivElement>;
   @ViewChild('editorInput') editorInputRef!: ElementRef<HTMLInputElement>;
@@ -201,6 +213,12 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   canvasHeight = 0;
   showOverlay = false;
   private viewportHeight = 500;
+
+  // Selection state
+  showSelectionColumn = false;
+  selectionColumnWidth = 50;
+  isAllSelected = false;
+  isIndeterminateSelection = false;
 
   // Cell editing state
   isEditing = false;
@@ -240,6 +258,11 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     // Initialize grid API
     this.gridApi = this.gridService.createApi(this.columnDefs, this.rowData);
 
+    // Check if any column has checkbox selection
+    this.showSelectionColumn = this.columnDefs?.some(col => 
+      !('children' in col) && col.checkboxSelection
+    ) || false;
+
     // Initialize canvas renderer (will be configured in ngAfterViewInit)
     if (this.canvasRef) {
       this.canvasRenderer = new CanvasRenderer(
@@ -247,10 +270,15 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
         this.gridApi,
         this.rowHeight
       );
-      
+
       // Wire up cell editing callback
       this.canvasRenderer.onCellDoubleClick = (rowIndex, colId) => {
         this.startEditing(rowIndex, colId);
+      };
+      
+      // Wire up row click for selection
+      this.canvasRenderer.onRowClick = (rowIndex, event) => {
+        this.onRowClick(rowIndex, event);
       };
     }
 
@@ -259,6 +287,9 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
     // Update overlay state
     this.showOverlay = !this.rowData || this.rowData.length === 0;
+    
+    // Update selection state
+    this.updateSelectionState();
   }
   
   getColumnWidth(col: ColDef<TData> | ColGroupDef<TData>): number {
@@ -480,5 +511,59 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       }
     }
     return null;
+  }
+
+  // Selection Methods
+  onRowClick(rowIndex: number, event: MouseEvent): void {
+    const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
+    if (!rowNode) return;
+
+    // Handle multi-select with Ctrl/Cmd
+    if (event.ctrlKey || event.metaKey) {
+      rowNode.selected = !rowNode.selected;
+    } else if (event.shiftKey) {
+      // Range selection (TODO: implement)
+      rowNode.selected = true;
+    } else {
+      // Single select - deselect all others
+      this.gridApi.deselectAll();
+      rowNode.selected = true;
+    }
+
+    this.updateSelectionState();
+    this.canvasRenderer?.render();
+    this.selectionChanged.emit(this.gridApi.getSelectedRows());
+  }
+
+  onSelectionHeaderClick(): void {
+    // Toggle all
+    if (this.isAllSelected) {
+      this.gridApi.deselectAll();
+    } else {
+      this.gridApi.selectAll();
+    }
+    this.updateSelectionState();
+    this.canvasRenderer?.render();
+    this.selectionChanged.emit(this.gridApi.getSelectedRows());
+  }
+
+  onSelectionHeaderChange(event: Event): void {
+    const checkbox = event.target as HTMLInputElement;
+    if (checkbox.checked) {
+      this.gridApi.selectAll();
+    } else {
+      this.gridApi.deselectAll();
+    }
+    this.updateSelectionState();
+    this.canvasRenderer?.render();
+    this.selectionChanged.emit(this.gridApi.getSelectedRows());
+  }
+
+  updateSelectionState(): void {
+    const selectedCount = this.gridApi.getSelectedRows().length;
+    const totalCount = this.gridApi.getDisplayedRowCount();
+    
+    this.isAllSelected = selectedCount === totalCount && totalCount > 0;
+    this.isIndeterminateSelection = selectedCount > 0 && selectedCount < totalCount;
   }
 }

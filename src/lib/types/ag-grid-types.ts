@@ -173,6 +173,11 @@ export interface ColDef<TData = any, TValue = any> {
   contextMenuItems?: (DefaultMenuItem | MenuItemDef)[] | ((params: any) => (DefaultMenuItem | MenuItemDef)[]);
   context?: any;
 
+  // === SELECTION ===
+  checkboxSelection?: boolean;
+  headerCheckboxSelection?: boolean;
+  headerCheckboxSelectionFilteredOnly?: boolean;
+
   // === ACCESSIBILITY ===
   cellAriaRole?: string;
 
