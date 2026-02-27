@@ -1,0 +1,31 @@
+# Build output
+dist/
+out-tsc/
+
+# Dependencies
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/
+
+# Test
+*.test.js.map
+*.spec.js.map
+
+# Package lock (optional - uncomment if needed)
+# package-lock.json
