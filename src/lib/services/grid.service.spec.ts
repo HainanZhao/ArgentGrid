@@ -601,7 +601,7 @@ describe('GridService', () => {
     
     service.createApi(aggColumnDefs, aggData);
     const agg = service.calculateColumnAggregations(aggData);
-    expect(agg.value).toBe(600);
+    expect(agg['value']).toBe(600);
   });
 
   it('should calculate average aggregation', () => {
@@ -617,7 +617,7 @@ describe('GridService', () => {
     
     service.createApi(aggColumnDefs, aggData);
     const agg = service.calculateColumnAggregations(aggData);
-    expect(agg.value).toBe(200);
+    expect(agg['value']).toBe(200);
   });
 
   it('should calculate min/max aggregation', () => {
@@ -632,7 +632,7 @@ describe('GridService', () => {
     
     service.createApi(aggColumnDefs, aggData);
     const agg = service.calculateColumnAggregations(aggData);
-    expect(agg.value).toBe(50);
+    expect(agg['value']).toBe(50);
   });
 
   it('should calculate max aggregation', () => {
@@ -647,7 +647,7 @@ describe('GridService', () => {
     
     service.createApi(aggColumnDefs, aggData);
     const agg = service.calculateColumnAggregations(aggData);
-    expect(agg.value).toBe(300);
+    expect(agg['value']).toBe(300);
   });
 
   it('should calculate count aggregation', () => {
@@ -662,7 +662,7 @@ describe('GridService', () => {
     
     service.createApi(aggColumnDefs, aggData);
     const agg = service.calculateColumnAggregations(aggData);
-    expect(agg.id).toBe(3);
+    expect(agg['id']).toBe(3);
   });
 
   it('should support custom aggregation function', () => {
@@ -680,7 +680,7 @@ describe('GridService', () => {
     
     service.createApi(aggColumnDefs, aggData);
     const agg = service.calculateColumnAggregations(aggData);
-    expect(agg.value).toBe(1200); // (100+200+300) * 2
+    expect(agg['value']).toBe(1200); // (100+200+300) * 2
   });
 
   // Excel Export Tests

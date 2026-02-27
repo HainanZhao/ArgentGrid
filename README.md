@@ -138,6 +138,25 @@ npm run test:coverage # With coverage
 npm run lint
 ```
 
+## 🎨 Demo App Development
+
+The repository includes a standalone Angular application for visual testing and performance benchmarking. It is configured to import `argentgrid` directly from the `src/` folder using TypeScript path mapping.
+
+**Why this is better:**
+- **No Build Step:** You don't need to run `npm run build` in the root every time you change the library.
+- **HMR / Live Reload:** Changes in `src/` are detected by the Angular dev-server, triggering an immediate browser refresh.
+- **Easier Debugging:** Sourcemaps point directly to your original library source code.
+
+### Run Demo App
+
+```bash
+cd demo-app
+npm install
+npm start
+```
+
+Open [http://localhost:4200](http://localhost:4200) to view the demo.
+
 ## Roadmap
 
 ### Phase I: API Extraction ✅

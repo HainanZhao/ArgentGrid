@@ -18,10 +18,11 @@
     "module": "ES2022",
     "lib": ["ES2022", "dom"],
     "paths": {
-      "argentgrid": ["../dist"],
-      "@argentgrid/*": ["../dist/lib/*"]
+      "argentgrid": ["../src/public-api.ts"],
+      "@argentgrid/*": ["../src/lib/*"]
     }
   },
+  "include": ["src/**/*", "../src/**/*"],
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
     "strictInjectionParameters": true,
