@@ -188,6 +188,13 @@ export class CanvasRenderer<TData = any> {
     this.ctx.font = this.FONT;
     this.ctx.textBaseline = 'middle';
 
+    // Calculate the visual bounds for borders (use consistent y coordinates)
+    const firstRowY = Math.floor(startIndex * this.rowHeight - this.scrollTop);
+    const lastRowY = Math.floor(endIndex * this.rowHeight - this.scrollTop);
+
+    // Collect column X positions for drawing borders in a single pass
+    const columnBorderPositions: { x: number }[] = [];
+
     // Render visible rows
     for (let rowIndex = startIndex; rowIndex < endIndex; rowIndex++) {
       const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
@@ -197,17 +204,18 @@ export class CanvasRenderer<TData = any> {
 
       // 1. Row background
       this.ctx.fillStyle = rowIndex % 2 === 0 ? this.ROW_STRIPING.even : this.ROW_STRIPING.odd;
-      this.ctx.fillRect(0, y, width, this.rowHeight);
+      this.ctx.fillRect(0, Math.floor(y), width, this.rowHeight);
 
       if (rowNode.selected) {
         this.ctx.fillStyle = this.SELECTED_BG_COLOR;
-        this.ctx.fillRect(0, y, width, this.rowHeight);
+        this.ctx.fillRect(0, Math.floor(y), width, this.rowHeight);
       }
 
       // 2. Center columns (with clipping)
       this.ctx.save();
       this.ctx.beginPath();
-      this.ctx.rect(leftWidth, y, width - leftWidth - rightWidth, this.rowHeight);
+      // Use floor for clipping rect to avoid sub-pixel bleed
+      this.ctx.rect(Math.floor(leftWidth), Math.floor(y), Math.floor(width - leftWidth - rightWidth), this.rowHeight);
       this.ctx.clip();
       this.renderColGroup(centerColumns, leftWidth, true, rowNode, y, width, leftWidth, rightWidth, allVisibleColumns);
       this.ctx.restore();
@@ -217,33 +225,59 @@ export class CanvasRenderer<TData = any> {
 
       // 4. Right pinned columns
       this.renderColGroup(rightPinned, width - rightWidth, false, rowNode, y, width, leftWidth, rightWidth, allVisibleColumns);
+    }
 
-      // 5. Row bottom border
-      this.ctx.strokeStyle = this.BORDER_COLOR;
+    // 5. Draw all vertical borders in a single pass for clean alignment
+    this.ctx.strokeStyle = this.BORDER_COLOR;
+    this.ctx.lineWidth = 1;
+
+    // Collect all column border positions
+    this.collectColumnBorderPositions(leftPinned, 0, false, columnBorderPositions);
+    this.collectColumnBorderPositions(centerColumns, leftWidth, true, columnBorderPositions, width, leftWidth, rightWidth);
+    this.collectColumnBorderPositions(rightPinned, width - rightWidth, false, columnBorderPositions);
+
+    // Draw vertical borders spanning all visible rows
+    for (const pos of columnBorderPositions) {
+      const borderX = Math.floor(pos.x) + 0.5; // +0.5 for crisp 1px lines
       this.ctx.beginPath();
-      this.ctx.moveTo(0, y + this.rowHeight);
-      this.ctx.lineTo(width, y + this.rowHeight);
+      this.ctx.moveTo(borderX, firstRowY);
+      this.ctx.lineTo(borderX, lastRowY);
       this.ctx.stroke();
-      
-      // 6. Draw vertical lines separating pinned sections
-      if (leftWidth > 0) {
-        this.ctx.strokeStyle = '#babed1';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(leftWidth, y);
-        this.ctx.lineTo(leftWidth, y + this.rowHeight);
-        this.ctx.stroke();
-        this.ctx.lineWidth = 1;
+    }
+
+    // 6. Draw horizontal row borders in a single pass
+    this.ctx.beginPath();
+    for (let rowIndex = startIndex; rowIndex <= endIndex; rowIndex++) {
+      const borderY = Math.floor(rowIndex * this.rowHeight - this.scrollTop) + 0.5;
+      this.ctx.moveTo(0, borderY);
+      this.ctx.lineTo(width, borderY);
+    }
+    this.ctx.stroke();
+  }
+
+  private collectColumnBorderPositions(
+    cols: Column[],
+    startX: number,
+    isScrollable: boolean,
+    positions: { x: number }[],
+    viewportWidth: number = 0,
+    leftWidth: number = 0,
+    rightWidth: number = 0
+  ): void {
+    let x = startX;
+    for (const col of cols) {
+      const cellX = isScrollable ? x - this.scrollLeft : x;
+      const cellWidth = col.width;
+
+      // For center columns, skip if outside viewport
+      if (isScrollable && (cellX + cellWidth < leftWidth || cellX > viewportWidth - rightWidth)) {
+        x += cellWidth;
+        continue;
       }
-      if (rightWidth > 0) {
-        this.ctx.strokeStyle = '#babed1';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(width - rightWidth, y);
-        this.ctx.lineTo(width - rightWidth, y + this.rowHeight);
-        this.ctx.stroke();
-        this.ctx.lineWidth = 1;
-      }
+
+      // Add right border position
+      positions.push({ x: cellX + cellWidth });
+      x += cellWidth;
     }
   }
 
@@ -270,13 +304,6 @@ export class CanvasRenderer<TData = any> {
       }
 
       const cellValue = (rowNode.data as any)[col.field || ''];
-
-      // Cell border
-      this.ctx.strokeStyle = this.BORDER_COLOR;
-      this.ctx.beginPath();
-      this.ctx.moveTo(cellX + cellWidth, y);
-      this.ctx.lineTo(cellX + cellWidth, y + this.rowHeight);
-      this.ctx.stroke();
 
       // Cell text
       if (cellValue !== null && cellValue !== undefined) {
@@ -309,14 +336,15 @@ export class CanvasRenderer<TData = any> {
           
           if (rowNode.group) {
             this.ctx.beginPath();
+            const chevronY = Math.floor(y + this.rowHeight / 2);
             if (rowNode.expanded) {
-              this.ctx.moveTo(textX, y + this.rowHeight / 2 - 3);
-              this.ctx.lineTo(textX + 8, y + this.rowHeight / 2 - 3);
-              this.ctx.lineTo(textX + 4, y + this.rowHeight / 2 + 3);
+              this.ctx.moveTo(Math.floor(textX), chevronY - 3);
+              this.ctx.lineTo(Math.floor(textX) + 8, chevronY - 3);
+              this.ctx.lineTo(Math.floor(textX) + 4, chevronY + 3);
             } else {
-              this.ctx.moveTo(textX + 2, y + this.rowHeight / 2 - 4);
-              this.ctx.lineTo(textX + 6, y + this.rowHeight / 2);
-              this.ctx.lineTo(textX + 2, y + this.rowHeight / 2 + 4);
+              this.ctx.moveTo(Math.floor(textX) + 2, chevronY - 4);
+              this.ctx.lineTo(Math.floor(textX) + 6, chevronY);
+              this.ctx.lineTo(Math.floor(textX) + 2, chevronY + 4);
             }
             this.ctx.fill();
             textX += 15;
@@ -328,7 +356,7 @@ export class CanvasRenderer<TData = any> {
           cellWidth - (textX - cellX) - this.CELL_PADDING
         );
 
-        this.ctx.fillText(truncatedText, textX, y + this.rowHeight / 2);
+        this.ctx.fillText(truncatedText, Math.floor(textX), Math.floor(y + this.rowHeight / 2));
       }
       x += cellWidth;
     });

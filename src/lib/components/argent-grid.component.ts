@@ -126,20 +126,22 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
           <div *ngIf="showSelectionColumn" class="argent-grid-header-cell" [style.width.px]="selectionColumnWidth"></div>
 
           <!-- Left Pinned Filters -->
-          <div
-            *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
-            class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
-            [style.width.px]="getColumnWidth(col)">
-            <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
-              <input #filterInput
-                     class="floating-filter-input" 
-                     [type]="getFilterInputType(col)" 
-                     [value]="getFloatingFilterValue(col)"
-                     (input)="onFloatingFilterInput($event, col)"
-                     [placeholder]="'Filter...'" />
-              <span class="floating-filter-clear" 
-                    *ngIf="hasFilterValue(col, filterInput)"
-                    (click)="clearFloatingFilter(col, filterInput)">✕</span>
+          <div class="argent-grid-header-pinned-left-container">
+            <div
+              *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
+              class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
+              [style.width.px]="getColumnWidth(col)">
+              <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
+                <input #filterInput
+                       class="floating-filter-input"
+                       [type]="getFilterInputType(col)"
+                       [value]="getFloatingFilterValue(col)"
+                       (input)="onFloatingFilterInput($event, col)"
+                       [placeholder]="'Filter...'" />
+                <span class="floating-filter-clear"
+                      *ngIf="hasFilterValue(col, filterInput)"
+                      (click)="clearFloatingFilter(col, filterInput)">✕</span>
+              </div>
             </div>
           </div>
 
@@ -152,12 +154,12 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
                 [style.width.px]="getColumnWidth(col)">
                 <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
                   <input #filterInput
-                         class="floating-filter-input" 
-                         [type]="getFilterInputType(col)" 
+                         class="floating-filter-input"
+                         [type]="getFilterInputType(col)"
                          [value]="getFloatingFilterValue(col)"
                          (input)="onFloatingFilterInput($event, col)"
                          [placeholder]="'Filter...'" />
-                  <span class="floating-filter-clear" 
+                  <span class="floating-filter-clear"
                         *ngIf="hasFilterValue(col, filterInput)"
                         (click)="clearFloatingFilter(col, filterInput)">✕</span>
                 </div>
@@ -166,20 +168,22 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
           </div>
 
           <!-- Right Pinned Filters -->
-          <div
-            *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
-            class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
-            [style.width.px]="getColumnWidth(col)">
-            <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
-              <input #filterInput
-                     class="floating-filter-input" 
-                     [type]="getFilterInputType(col)" 
-                     [value]="getFloatingFilterValue(col)"
-                     (input)="onFloatingFilterInput($event, col)"
-                     [placeholder]="'Filter...'" />
-              <span class="floating-filter-clear" 
-                    *ngIf="hasFilterValue(col, filterInput)"
-                    (click)="clearFloatingFilter(col, filterInput)">✕</span>
+          <div class="argent-grid-header-pinned-right-container">
+            <div
+              *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
+              class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
+              [style.width.px]="getColumnWidth(col)">
+              <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
+                <input #filterInput
+                       class="floating-filter-input"
+                       [type]="getFilterInputType(col)"
+                       [value]="getFloatingFilterValue(col)"
+                       (input)="onFloatingFilterInput($event, col)"
+                       [placeholder]="'Filter...'" />
+                <span class="floating-filter-clear"
+                      *ngIf="hasFilterValue(col, filterInput)"
+                      (click)="clearFloatingFilter(col, filterInput)">✕</span>
+              </div>
             </div>
           </div>
         </div>
@@ -407,14 +411,6 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
       right: 0;
       z-index: 10;
       background: #f8f9fa;
-    }
-
-    .argent-grid-header-pinned-left-container {
-      border-right: 2px solid #babed1;
-    }
-
-    .argent-grid-header-pinned-right-container {
-      border-left: 2px solid #babed1;
     }
 
     .argent-grid-header-cell.sortable:hover {

@@ -33,3 +33,5 @@ e2e/screenshots/
 
 # Package lock (optional - uncomment if needed)
 # package-lock.json
+
+screenshots/
