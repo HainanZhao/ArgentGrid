@@ -62,7 +62,7 @@ ArgentGrid/
 
 ## Implementation Status
 
-### ✅ Completed (Phase I & II + Core Features)
+### ✅ Completed (Phase I, II & III - Core Features Complete!)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -73,18 +73,19 @@ ArgentGrid/
 | Sorting | ✅ | Client-side, multi-column |
 | Filtering | ✅ | Text, number, date, boolean |
 | Row Grouping | ✅ | Hierarchical, with aggregations |
+| Cell Editing | ✅ | Inline editing, valueParser, valueSetter |
 | Transactions (add/update/remove) | ✅ | Row data transactions |
-| TDD test suite | ✅ | 41 passing tests |
+| TDD test suite | ✅ | 45 passing tests |
 
-### ⏳ Pending (Phase III & IV)
+### ⏳ Pending (Phase IV)
 
 | Feature | Priority | Notes |
 |---------|----------|-------|
-| Cell Editing | High | Inline editing, validation |
-| Column Pinning | Medium | Freeze left/right columns |
-| Full Selection | Medium | Multi-select, keyboard nav |
-| Aggregation (standalone) | Low | Pinned footers with aggregations |
-| Expand/Collapse groups API | Low | Programmatic group control |
+| Column Pinning | High | Freeze left/right columns |
+| Full Selection | High | Multi-select, keyboard nav |
+| Aggregation (standalone) | Medium | Pinned footers with aggregations |
+| Expand/Collapse groups API | Medium | Programmatic group control |
+| Column Virtualization | Low | Horizontal scrolling for wide grids |
 | Web Workers | Deprioritized | Current perf is adequate |
 
 ## Technical Details
@@ -153,7 +154,7 @@ npm run build:watch   # Watch build
 
 ```
 Test Suites: 2 passed, 2 total
-Tests:       4 skipped, 41 passed, 45 total
+Tests:       4 skipped, 45 passed, 49 total
 ```
 
 **Skipped tests:** 4 row grouping tests (test isolation issue with shared service instance)
@@ -195,33 +196,47 @@ npm run build
 
 ## Next Steps (Priority Order)
 
-1. **Cell Editing** - Most requested feature
-   - Add cellEditor, cellEditorParams to ColDef
-   - Implement editing overlay
-   - Add validation callbacks
+1. **Column Pinning** - Freeze columns left/right
+   - Add `pinned: 'left' | 'right'` to ColDef
+   - Render pinned columns in separate containers
+   - Sync scroll between pinned and viewport
 
-2. **Column Pinning** - Common enterprise requirement
-   - Add pinned: 'left' | 'right' support
-   - Render pinned columns separately
-   - Handle scroll synchronization
-
-3. **Full Selection API** - Complete the selection system
+2. **Full Selection API** - Complete selection system
    - Multi-row selection with Ctrl/Cmd
    - Range selection with Shift
    - Select/deselect all APIs
+   - Checkbox column
+
+3. **Aggregation (Standalone)** - Pinned footers
+   - Sum, avg, min, max, count
+   - Pinned footer row
+   - Custom aggregation functions
+
+4. **Expand/Collapse Groups API** - Programmatic control
+   - `api.expandGroup(groupId)`
+   - `api.collapseGroup(groupId)`
+   - `api.expandAll()`, `api.collapseAll()`
 
 ## Git Workflow
 
 ```bash
 # Current branch: main
 git log --oneline -5
-# Latest: e443f06 docs: Update roadmap - row grouping complete
+# Latest: ba88e6b docs: Update roadmap - cell editing complete
 
 # To push changes:
 git add -A
 git commit -m "feat/fix/docs: description"
 git push origin main
 ```
+
+## Recent Changes (Latest Commits)
+
+- **ba88e6b** docs: Update roadmap - cell editing complete
+- **6bdc2b3** feat: Add cell editing support (double-click to edit, valueParser, valueSetter)
+- **d5fdad2** docs: Add AGENTS.md for session continuity
+- **e443f06** docs: Update roadmap - row grouping complete
+- **043c6ef** feat: Implement row grouping (hierarchical, aggregations)
 
 ## Important Notes
 
