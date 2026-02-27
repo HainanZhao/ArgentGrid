@@ -622,7 +622,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   // Resizing state
   isResizing = false;
-  private resizeColumn: Column | null = null;
+  resizeColumn: Column | null = null;
   private resizeStartX = 0;
   private resizeStartWidth = 0;
 
