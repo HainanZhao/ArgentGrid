@@ -315,7 +315,7 @@ import { Subject } from 'rxjs';
     }
 
     .argent-grid-header-menu, .argent-grid-context-menu {
-      position: fixed;
+      position: absolute;
       background: white;
       border: 1px solid #ccc;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -603,14 +603,20 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     // Position menu below the icon
     const target = event.target as HTMLElement;
     const rect = target.getBoundingClientRect();
-    const containerRect = this.viewportRef.nativeElement.parentElement?.getBoundingClientRect() || { top: 0, left: 0 };
+    const containerRect = this.viewportRef.nativeElement.parentElement?.getBoundingClientRect() || { top: 0, left: 0, width: 0, height: 0 };
     
-    this.headerMenuPosition = {
-      x: rect.right - 180 - containerRect.left, // Align right, assuming menu width ~180px
-      y: rect.bottom - containerRect.top + 4
-    };
+    let x = rect.right - 180 - containerRect.left;
+    let y = rect.bottom - containerRect.top + 4;
+
+    // Prevent menu from going off-screen
+    if (x < 0) x = 0;
+    if (x + 180 > containerRect.width) x = containerRect.width - 180;
+    if (y + 200 > containerRect.height) {
+      // Show above the header if it overflows bottom
+      y = rect.top - containerRect.top - 200;
+    }
     
-    if (this.headerMenuPosition.x < 0) this.headerMenuPosition.x = 0;
+    this.headerMenuPosition = { x, y };
     
     this.cdr.detectChanges();
   }
@@ -646,11 +652,19 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     this.activeContextMenu = true;
     
     // Position menu at mouse coordinates relative to viewport
-    const containerRect = this.viewportRef.nativeElement.parentElement?.getBoundingClientRect() || { top: 0, left: 0 };
-    this.contextMenuPosition = {
-      x: event.clientX - containerRect.left,
-      y: event.clientY - containerRect.top
-    };
+    const containerRect = this.viewportRef.nativeElement.parentElement?.getBoundingClientRect() || { top: 0, left: 0, width: 0, height: 0 };
+    let x = event.clientX - containerRect.left;
+    let y = event.clientY - containerRect.top;
+
+    // Prevent menu from going off-screen (right and bottom)
+    if (x + 180 > containerRect.width) {
+      x = containerRect.width - 180;
+    }
+    if (y + 200 > containerRect.height) { // Assuming max menu height ~200px
+      y = containerRect.height - 200;
+    }
+
+    this.contextMenuPosition = { x: Math.max(0, x), y: Math.max(0, y) };
     
     // Select the row
     this.gridApi.deselectAll();
