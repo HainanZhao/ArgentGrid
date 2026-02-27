@@ -24,6 +24,22 @@ The demo showcases:
 - 🧪 **TDD Developed**: Comprehensive test coverage with Jest
 - 🎨 **Hybrid Architecture**: Canvas viewport + DOM headers for accessibility
 
+## Feature Parity Comparison
+
+| Feature | AG Grid Community | AG Grid Enterprise | **ArgentGrid (Current)** |
+| :--- | :--- | :--- | :--- |
+| **Rendering Engine** | DOM-based | DOM-based | **Canvas-based** |
+| **Data Volume Limit** | ~100k rows | Millions (SSRM) | **1M+ rows (Client-side)** |
+| **Sorting & Filtering**| Yes | Yes | **Yes** |
+| **Row Grouping** | No | Yes | **Yes (Basic Hierarchical)** |
+| **Aggregation** | No | Yes | **Yes (Sum/Avg/Min/Max/Count)** |
+| **Export** | CSV only | .xlsx | **HTML-based Excel & CSV** |
+| **Selection** | Row only | Range | **Row (Checkbox/Multi)** |
+| **Header Menus** | Basic | Advanced | **Planned (Phase IV)** |
+| **Context Menus** | No | Yes | **Planned (Phase IV)** |
+| **Drag/Drop Columns**| Yes | Yes | **Planned (Phase IV)** |
+| **Pivoting** | No | Yes | **Planned (Phase V)** |
+
 ## Installation
 
 ```bash

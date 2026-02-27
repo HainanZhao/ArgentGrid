@@ -7,7 +7,7 @@ import { Subject } from 'rxjs';
 @Component({
   selector: 'argent-grid',
   template: `
-    <div class="argent-grid-container" [style.height]="height" [style.width]="width">
+    <div class="argent-grid-container" [style.height]="height" [style.width]="width" (click)="onContainerClick($event)">
       <!-- Header Layer (DOM-based for accessibility) -->
       <div class="argent-grid-header">
         <div class="argent-grid-header-row">
@@ -30,8 +30,13 @@ import { Subject } from 'rxjs';
             [style.width.px]="getColumnWidth(col)"
             [class.sortable]="isSortable(col)"
             (click)="onHeaderClick(col)">
-            {{ getHeaderName(col) }}
-            <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+            <div class="argent-grid-header-content">
+              <span class="header-text">{{ getHeaderName(col) }}</span>
+              <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+            </div>
+            <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
+              &#8942;
+            </div>
           </div>
           
           <!-- Scrollable Columns -->
@@ -43,8 +48,13 @@ import { Subject } from 'rxjs';
                 [style.width.px]="getColumnWidth(col)"
                 [class.sortable]="isSortable(col)"
                 (click)="onHeaderClick(col)">
-                {{ getHeaderName(col) }}
-                <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+                <div class="argent-grid-header-content">
+                  <span class="header-text">{{ getHeaderName(col) }}</span>
+                  <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+                </div>
+                <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
+                  &#8942;
+                </div>
               </div>
             </div>
           </div>
@@ -56,8 +66,13 @@ import { Subject } from 'rxjs';
             [style.width.px]="getColumnWidth(col)"
             [class.sortable]="isSortable(col)"
             (click)="onHeaderClick(col)">
-            {{ getHeaderName(col) }}
-            <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+            <div class="argent-grid-header-content">
+              <span class="header-text">{{ getHeaderName(col) }}</span>
+              <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+            </div>
+            <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
+              &#8942;
+            </div>
           </div>
         </div>
       </div>
@@ -67,7 +82,7 @@ import { Subject } from 'rxjs';
         <!-- Spacer to create scrollbars for virtual scrolling -->
         <div class="argent-grid-scroll-spacer" [style.height.px]="totalHeight" [style.width.px]="totalWidth"></div>
         
-        <canvas #gridCanvas class="argent-grid-canvas"></canvas>
+        <canvas #gridCanvas class="argent-grid-canvas" (contextmenu)="onCanvasContextMenu($event)"></canvas>
         
         <!-- Cell Editor Overlay -->
         <div class="argent-grid-cell-editor" 
@@ -90,6 +105,36 @@ import { Subject } from 'rxjs';
       <!-- Overlay for loading/no rows -->
       <div class="argent-grid-overlay" *ngIf="showOverlay">
         <ng-content select="[overlay]"></ng-content>
+      </div>
+
+      <!-- Header Menu Overlay -->
+      <div class="argent-grid-header-menu" 
+           *ngIf="activeHeaderMenu"
+           [style.top.px]="headerMenuPosition.y"
+           [style.left.px]="headerMenuPosition.x"
+           (click)="$event.stopPropagation()">
+        <div class="menu-item" (click)="sortColumnMenu('asc')">
+          <span class="menu-icon">▲</span> Sort Ascending
+        </div>
+        <div class="menu-item" (click)="sortColumnMenu('desc')">
+          <span class="menu-icon">▼</span> Sort Descending
+        </div>
+        <div class="menu-item" (click)="sortColumnMenu(null)">
+          <span class="menu-icon">✕</span> Clear Sort
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" (click)="hideColumnMenu()">
+          <span class="menu-icon">👁</span> Hide Column
+        </div>
+        <div class="menu-item" (click)="pinColumnMenu('left')">
+          <span class="menu-icon">⇤</span> Pin Left
+        </div>
+        <div class="menu-item" (click)="pinColumnMenu('right')">
+          <span class="menu-icon">⇥</span> Pin Right
+        </div>
+        <div class="menu-item" (click)="pinColumnMenu(null)">
+          <span class="menu-icon">⤤</span> Unpin
+        </div>
       </div>
     </div>
   `,
@@ -129,6 +174,38 @@ import { Subject } from 'rxjs';
       cursor: pointer;
       user-select: none;
       flex-shrink: 0;
+      position: relative;
+    }
+
+    .argent-grid-header-cell:hover .argent-grid-header-menu-icon {
+      opacity: 1;
+    }
+
+    .argent-grid-header-content {
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      flex: 1;
+    }
+    
+    .header-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .argent-grid-header-menu-icon {
+      opacity: 0;
+      padding: 0 6px;
+      color: #666;
+      transition: opacity 0.2s;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .argent-grid-header-menu-icon:hover {
+      color: #000;
+      background: #e0e0e0;
+      border-radius: 4px;
     }
 
     .argent-grid-header-cell-pinned-left {
@@ -136,6 +213,7 @@ import { Subject } from 'rxjs';
       left: 0;
       z-index: 10;
       border-right: 2px solid #ccc;
+      background: #f5f5f5;
     }
 
     .argent-grid-header-cell-pinned-right {
@@ -143,6 +221,7 @@ import { Subject } from 'rxjs';
       right: 0;
       z-index: 10;
       border-left: 2px solid #ccc;
+      background: #f5f5f5;
     }
 
     .argent-grid-header-cell.sortable:hover {
@@ -212,6 +291,42 @@ import { Subject } from 'rxjs';
       font-family: inherit;
       box-sizing: border-box;
     }
+
+    .argent-grid-header-menu {
+      position: fixed;
+      background: white;
+      border: 1px solid #ccc;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      border-radius: 4px;
+      padding: 4px 0;
+      z-index: 1000;
+      min-width: 180px;
+    }
+    
+    .menu-item {
+      padding: 8px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+    
+    .menu-item:hover {
+      background: #f5f5f5;
+    }
+    
+    .menu-icon {
+      width: 20px;
+      text-align: center;
+      margin-right: 8px;
+      color: #666;
+    }
+
+    .menu-divider {
+      height: 1px;
+      background: #eee;
+      margin: 4px 0;
+    }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -256,6 +371,10 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   editorPosition = { x: 0, y: 0, width: 100, height: 32 };
   private editingRowNode: IRowNode<TData> | null = null;
   private editingColDef: ColDef<TData> | null = null;
+
+  // Header Menu state
+  activeHeaderMenu: ColDef<TData> | ColGroupDef<TData> | null = null;
+  headerMenuPosition = { x: 0, y: 0 };
 
   private gridApi!: GridApi<TData>;
   private canvasRenderer!: CanvasRenderer;
@@ -379,6 +498,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     if (!this.columnDefs) return [];
     return this.columnDefs.filter(col => {
       if ('children' in col) return false;
+      if (col.hide) return false;
       return col.pinned === 'left';
     });
   }
@@ -387,6 +507,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     if (!this.columnDefs) return [];
     return this.columnDefs.filter(col => {
       if ('children' in col) return false;
+      if (col.hide) return false;
       return col.pinned === 'right';
     });
   }
@@ -395,6 +516,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     if (!this.columnDefs) return [];
     return this.columnDefs.filter(col => {
       if ('children' in col) return false;
+      if (col.hide) return false;
       return !col.pinned;
     });
   }
@@ -430,6 +552,95 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     const colId = typeof col.colId === 'string' ? col.colId : col.field?.toString() || '';
     this.gridApi.setSortModel(col.sort ? [{ colId, sort: col.sort }] : []);
     this.canvasRenderer?.render();
+  }
+
+  // --- Header Menu Logic ---
+
+  hasHeaderMenu(col: ColDef<TData> | ColGroupDef<TData>): boolean {
+    if ('children' in col) return false;
+    return col.suppressHeaderMenuButton !== true;
+  }
+
+  onHeaderMenuClick(event: MouseEvent, col: ColDef<TData> | ColGroupDef<TData>): void {
+    event.stopPropagation();
+    
+    if (this.activeHeaderMenu === col) {
+      this.closeHeaderMenu();
+      return;
+    }
+
+    this.activeHeaderMenu = col;
+    
+    // Position menu below the icon
+    const target = event.target as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const containerRect = this.viewportRef.nativeElement.parentElement?.getBoundingClientRect() || { top: 0, left: 0 };
+    
+    this.headerMenuPosition = {
+      x: rect.right - 180 - containerRect.left, // Align right, assuming menu width ~180px
+      y: rect.bottom - containerRect.top + 4
+    };
+    
+    if (this.headerMenuPosition.x < 0) this.headerMenuPosition.x = 0;
+    
+    this.cdr.detectChanges();
+  }
+
+  closeHeaderMenu(): void {
+    this.activeHeaderMenu = null;
+    this.cdr.detectChanges();
+  }
+
+  onContainerClick(event: MouseEvent): void {
+    if (this.activeHeaderMenu) {
+      this.closeHeaderMenu();
+    }
+  }
+
+  onCanvasContextMenu(event: MouseEvent): void {
+    // Prevent default context menu on canvas for now, until context menu feature is built
+    event.preventDefault();
+  }
+
+  sortColumnMenu(direction: 'asc' | 'desc' | null): void {
+    if (!this.activeHeaderMenu || 'children' in this.activeHeaderMenu) return;
+    
+    const col = this.activeHeaderMenu as ColDef<TData>;
+    col.sort = direction;
+    col.sortIndex = direction ? 0 : undefined;
+    
+    const colId = typeof col.colId === 'string' ? col.colId : col.field?.toString() || '';
+    this.gridApi.setSortModel(direction ? [{ colId, sort: direction }] : []);
+    this.canvasRenderer?.render();
+    
+    this.closeHeaderMenu();
+  }
+
+  hideColumnMenu(): void {
+    if (!this.activeHeaderMenu || 'children' in this.activeHeaderMenu) return;
+    
+    const col = this.activeHeaderMenu as ColDef<TData>;
+    col.hide = true;
+    
+    // Create new array to trigger change detection
+    if (this.columnDefs) {
+      this.onColumnDefsChanged([...this.columnDefs]);
+    }
+    
+    this.closeHeaderMenu();
+  }
+
+  pinColumnMenu(pin: 'left' | 'right' | null): void {
+    if (!this.activeHeaderMenu || 'children' in this.activeHeaderMenu) return;
+    
+    const col = this.activeHeaderMenu as ColDef<TData>;
+    col.pinned = pin as any;
+    
+    if (this.columnDefs) {
+      this.onColumnDefsChanged([...this.columnDefs]);
+    }
+    
+    this.closeHeaderMenu();
   }
   
   // Public API methods
