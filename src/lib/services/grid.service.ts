@@ -22,6 +22,7 @@ export class GridService<TData = any> {
   private columns: Map<string, Column> = new Map();
   private rowData: TData[] = [];
   private rowNodes: Map<string, IRowNode<TData>> = new Map();
+  private displayedRowNodes: IRowNode<TData>[] = [];
   private columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
   private sortModel: SortModelItem[] = [];
   private filterModel: FilterModel = {};
@@ -39,6 +40,7 @@ export class GridService<TData = any> {
     this.rowData = rowData ? [...rowData] : [];
     this.filteredRowData = [...this.rowData];
     this.groupedRowData = [];
+    this.displayedRowNodes = [];
     this.gridId = this.generateGridId();
 
     this.initializeColumns();
@@ -89,6 +91,7 @@ export class GridService<TData = any> {
   
   private initializeRowNodes(): void {
     this.rowNodes.clear();
+    this.displayedRowNodes = [];
     
     // Separate rows by pinned state
     const pinnedTopRows: TData[] = [];
@@ -132,6 +135,7 @@ export class GridService<TData = any> {
         displayedRowIndex: index
       };
       this.rowNodes.set(id, node);
+      this.displayedRowNodes.push(node);
     });
   }
   
@@ -155,8 +159,7 @@ export class GridService<TData = any> {
       },
       getAllColumns: () => Array.from(this.columns.values()),
       getDisplayedRowAtIndex: (index) => {
-        const node = Array.from(this.rowNodes.values()).find(n => n.displayedRowIndex === index);
-        return node || null;
+        return this.displayedRowNodes[index] || null;
       },
       
       // Row Data API
@@ -531,9 +534,11 @@ export class GridService<TData = any> {
 
   private initializeRowNodesFromGroupedData(): void {
     this.rowNodes.clear();
+    this.displayedRowNodes = [];
     const flatRows = this.flattenGroupedData(this.groupedRowData);
     
     flatRows.forEach((item, index) => {
+      // ... (code omitted for brevity in thought, but I'll provide full function)
       let id: string;
       let data: TData;
       let isGroup = false;
@@ -571,6 +576,7 @@ export class GridService<TData = any> {
         displayedRowIndex: index
       };
       this.rowNodes.set(id, node);
+      this.displayedRowNodes.push(node);
     });
   }
 
@@ -710,6 +716,7 @@ export class GridService<TData = any> {
 
   private initializeRowNodesFromFilteredData(): void {
     this.rowNodes.clear();
+    this.displayedRowNodes = [];
     this.filteredRowData.forEach((data, index) => {
       const id = this.getRowId(data, index);
       const node: IRowNode<TData> = {
@@ -728,6 +735,7 @@ export class GridService<TData = any> {
         displayedRowIndex: index
       };
       this.rowNodes.set(id, node);
+      this.displayedRowNodes.push(node);
     });
   }
   

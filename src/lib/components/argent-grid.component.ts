@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, ChangeDetectionStrategy, AfterViewInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, ChangeDetectionStrategy, AfterViewInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { GridApi, GridOptions, ColDef, ColGroupDef, IRowNode, Column } from '../types/ag-grid-types';
 import { GridService } from '../services/grid.service';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
@@ -64,6 +64,9 @@ import { Subject } from 'rxjs';
 
       <!-- Canvas Layer for Data Viewport with virtual scrolling -->
       <div class="argent-grid-viewport" #viewport>
+        <!-- Spacer to create scrollbars for virtual scrolling -->
+        <div class="argent-grid-scroll-spacer" [style.height.px]="totalHeight" [style.width.px]="totalWidth"></div>
+        
         <canvas #gridCanvas class="argent-grid-canvas"></canvas>
         
         <!-- Cell Editor Overlay -->
@@ -97,6 +100,8 @@ import { Subject } from 'rxjs';
       border: 1px solid #e0e0e0;
       background: #fff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      display: flex;
+      flex-direction: column;
     }
 
     .argent-grid-header {
@@ -150,16 +155,32 @@ import { Subject } from 'rxjs';
     }
 
     .argent-grid-viewport {
+      position: relative;
       overflow: auto;
       contain: strict;
       will-change: scroll-position;
+      flex: 1;
+      min-height: 0;
     }
 
     .argent-grid-canvas {
+      position: sticky;
+      top: 0;
+      left: 0;
       display: block;
       width: 100%;
       image-rendering: -webkit-optimize-contrast;
       image-rendering: crisp-edges;
+      z-index: 1;
+    }
+
+    .argent-grid-scroll-spacer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1px;
+      visibility: hidden;
+      pointer-events: none;
     }
 
     .argent-grid-overlay {
@@ -194,7 +215,7 @@ import { Subject } from 'rxjs';
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, AfterViewInit {
+export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, AfterViewInit, OnChanges {
   @Input() columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
   @Input() rowData: TData[] | null = null;
   @Input() gridOptions: GridOptions<TData> | null = null;
@@ -214,6 +235,15 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   showOverlay = false;
   private viewportHeight = 500;
 
+  get totalHeight(): number {
+    return (this.rowData?.length || 0) * this.rowHeight;
+  }
+
+  get totalWidth(): number {
+    if (!this.columnDefs) return 0;
+    return this.columnDefs.reduce((sum, col) => sum + this.getColumnWidth(col), 0);
+  }
+
   // Selection state
   showSelectionColumn = false;
   selectionColumnWidth = 50;
@@ -232,13 +262,44 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private destroy$ = new Subject<void>();
   private gridService = new GridService<TData>();
 
-  constructor() {}
+  constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
     this.initializeGrid();
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    // Handle rowData changes after initialization
+    if (changes['rowData'] && !changes['rowData'].firstChange) {
+      this.onRowDataChanged(changes['rowData'].currentValue);
+    }
+
+    // Handle columnDefs changes
+    if (changes['columnDefs'] && !changes['columnDefs'].firstChange) {
+      this.onColumnDefsChanged(changes['columnDefs'].currentValue);
+    }
+  }
+
   ngAfterViewInit(): void {
+    // Setup canvas renderer after view is initialized
+    if (this.canvasRef && !this.canvasRenderer) {
+      this.canvasRenderer = new CanvasRenderer(
+        this.canvasRef.nativeElement,
+        this.gridApi,
+        this.rowHeight
+      );
+
+      // Wire up cell editing callback
+      this.canvasRenderer.onCellDoubleClick = (rowIndex, colId) => {
+        this.startEditing(rowIndex, colId);
+      };
+
+      // Wire up row click for selection
+      this.canvasRenderer.onRowClick = (rowIndex, event) => {
+        this.onRowClick(rowIndex, event);
+      };
+    }
+
     // Setup viewport dimensions after view init
     if (this.viewportRef) {
       const rect = this.viewportRef.nativeElement.getBoundingClientRect();
@@ -256,41 +317,52 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   private initializeGrid(): void {
+    console.log('[ArgentGrid] initializeGrid:', { columnDefs: this.columnDefs?.length, rowData: this.rowData?.length });
+
     // Initialize grid API
     this.gridApi = this.gridService.createApi(this.columnDefs, this.rowData);
 
     // Check if any column has checkbox selection
-    this.showSelectionColumn = this.columnDefs?.some(col => 
+    this.showSelectionColumn = this.columnDefs?.some(col =>
       !('children' in col) && col.checkboxSelection
     ) || false;
 
-    // Initialize canvas renderer (will be configured in ngAfterViewInit)
-    if (this.canvasRef) {
-      this.canvasRenderer = new CanvasRenderer(
-        this.canvasRef.nativeElement,
-        this.gridApi,
-        this.rowHeight
-      );
-
-      // Wire up cell editing callback
-      this.canvasRenderer.onCellDoubleClick = (rowIndex, colId) => {
-        this.startEditing(rowIndex, colId);
-      };
-      
-      // Wire up row click for selection
-      this.canvasRenderer.onRowClick = (rowIndex, event) => {
-        this.onRowClick(rowIndex, event);
-      };
-    }
+    // Canvas renderer will be initialized in ngAfterViewInit
 
     // Emit grid ready event
     this.gridReady.emit(this.gridApi);
 
     // Update overlay state
     this.showOverlay = !this.rowData || this.rowData.length === 0;
-    
+
     // Update selection state
     this.updateSelectionState();
+  }
+
+  private onRowDataChanged(newData: TData[] | null): void {
+    console.log('[ArgentGrid] onRowDataChanged:', newData?.length);
+    this.rowData = newData;
+
+    if (this.gridApi) {
+      this.gridApi.setRowData(newData || []);
+      this.canvasRenderer?.setTotalRowCount(newData?.length || 0);
+      this.canvasRenderer?.render();
+    }
+
+    this.showOverlay = !newData || newData.length === 0;
+    this.updateSelectionState();
+
+    // Trigger change detection with OnPush
+    this.cdr.detectChanges();
+  }
+
+  private onColumnDefsChanged(newColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null): void {
+    this.columnDefs = newColumnDefs;
+
+    if (this.gridApi) {
+      this.gridApi.setColumnDefs(newColumnDefs);
+      this.canvasRenderer?.render();
+    }
   }
   
   getColumnWidth(col: ColDef<TData> | ColGroupDef<TData>): number {

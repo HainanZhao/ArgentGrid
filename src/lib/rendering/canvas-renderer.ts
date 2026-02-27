@@ -114,21 +114,14 @@ export class CanvasRenderer<TData = any> {
   private updateCanvasSize(): void {
     const dpr = window.devicePixelRatio || 1;
     
-    // Set canvas size for the full scrollable area
-    const totalHeight = this.totalRowCount * this.rowHeight;
+    // Set canvas size for the visible area (viewport)
     const width = this.viewportWidth || this.canvas.clientWidth;
+    const height = this.viewportHeight || this.canvas.clientHeight || 600;
     
     this.canvas.width = width * dpr;
-    this.canvas.height = Math.min(totalHeight, this.viewportHeight || 600) * dpr;
+    this.canvas.height = height * dpr;
     this.canvas.style.width = `${width}px`;
-    this.canvas.style.height = `${Math.min(totalHeight, this.viewportHeight || 600)}px`;
-    
-    // Set scrollable container height
-    const container = this.canvas.parentElement;
-    if (container && totalHeight > this.viewportHeight) {
-      container.style.height = `${this.viewportHeight}px`;
-      container.style.overflowY = 'auto';
-    }
+    this.canvas.style.height = `${height}px`;
     
     // Scale context for DPR (use setTransform if available, fallback to scale)
     if (typeof this.ctx.setTransform === 'function') {
@@ -169,6 +162,8 @@ export class CanvasRenderer<TData = any> {
     const width = this.viewportWidth || this.canvas.clientWidth;
     const height = this.viewportHeight || this.canvas.clientHeight;
 
+    console.log('[CanvasRenderer] doRender:', { width, height, totalRowCount: this.totalRowCount, scrollTop: this.scrollTop });
+
     // Clear canvas
     this.ctx.clearRect(0, 0, width, height);
 
@@ -179,8 +174,12 @@ export class CanvasRenderer<TData = any> {
       this.totalRowCount || this.gridApi.getDisplayedRowCount()
     );
 
+    console.log('[CanvasRenderer] visible rows:', { startIndex, endIndex });
+
     // Get columns (cache this for performance)
     const columns = this.gridApi.getAllColumns().filter(col => col.visible);
+
+    console.log('[CanvasRenderer] columns:', columns.length);
 
     // Calculate column positions
     let x = 0;
@@ -200,23 +199,23 @@ export class CanvasRenderer<TData = any> {
       const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
       if (!rowNode) continue;
 
-      const y = (rowIndex * this.rowHeight) - this.scrollTop + (this.rowBuffer * this.rowHeight);
+      const y = (rowIndex * this.rowHeight) - this.scrollTop;
 
       // Row background (striping for better readability)
       this.ctx.fillStyle = rowIndex % 2 === 0 ? this.ROW_STRIPING.even : this.ROW_STRIPING.odd;
-      this.ctx.fillRect(0, y, x, this.rowHeight);
+      this.ctx.fillRect(0, y, width, this.rowHeight);
 
       // Selected row overlay
       if (rowNode.selected) {
         this.ctx.fillStyle = this.SELECTED_BG_COLOR;
-        this.ctx.fillRect(0, y, x, this.rowHeight);
+        this.ctx.fillRect(0, y, width, this.rowHeight);
       }
 
       // Row borders
       this.ctx.strokeStyle = this.BORDER_COLOR;
       this.ctx.beginPath();
       this.ctx.moveTo(0, y + this.rowHeight);
-      this.ctx.lineTo(x, y + this.rowHeight);
+      this.ctx.lineTo(width, y + this.rowHeight);
       this.ctx.stroke();
 
       // Render cells
@@ -224,7 +223,11 @@ export class CanvasRenderer<TData = any> {
         const colPos = columnPositions.get(col.colId);
         if (!colPos) return;
 
-        const cellX = colPos.x;
+        const cellX = colPos.x - this.scrollLeft;
+        
+        // Skip rendering if cell is outside horizontal viewport
+        if (cellX + colPos.width < 0 || cellX > width) return;
+
         const cellValue = (rowNode.data as any)[col.field || ''];
 
         // Cell border
@@ -236,6 +239,7 @@ export class CanvasRenderer<TData = any> {
 
         // Cell text with truncation
         if (cellValue !== null && cellValue !== undefined) {
+          this.ctx.fillStyle = this.TEXT_COLOR;
           const text = String(cellValue);
           const truncatedText = this.truncateText(
             text,
