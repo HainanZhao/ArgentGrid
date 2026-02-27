@@ -119,6 +119,7 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
               <input #filterInput
                      class="floating-filter-input" 
                      [type]="getFilterInputType(col)" 
+                     [value]="getFloatingFilterValue(col)"
                      (input)="onFloatingFilterInput($event, col)"
                      [placeholder]="'Filter...'" />
               <span class="floating-filter-clear" 
@@ -138,6 +139,7 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
                   <input #filterInput
                          class="floating-filter-input" 
                          [type]="getFilterInputType(col)" 
+                         [value]="getFloatingFilterValue(col)"
                          (input)="onFloatingFilterInput($event, col)"
                          [placeholder]="'Filter...'" />
                   <span class="floating-filter-clear" 
@@ -157,6 +159,7 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
               <input #filterInput
                      class="floating-filter-input" 
                      [type]="getFilterInputType(col)" 
+                     [value]="getFloatingFilterValue(col)"
                      (input)="onFloatingFilterInput($event, col)"
                      [placeholder]="'Filter...'" />
               <span class="floating-filter-clear" 
@@ -1128,8 +1131,15 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     return 'text';
   }
 
+  getFloatingFilterValue(col: Column | ColDef<TData> | ColGroupDef<TData>): string {
+    if (!this.gridApi) return '';
+    const colId = (col as any).colId || (col as any).field?.toString() || '';
+    const model = this.gridApi.getFilterModel();
+    return model[colId]?.filter || '';
+  }
+
   hasFilterValue(col: Column | ColDef<TData> | ColGroupDef<TData>, input: HTMLInputElement): boolean {
-    return !!input.value;
+    return !!this.getFloatingFilterValue(col);
   }
 
   clearFloatingFilter(col: Column | ColDef<TData> | ColGroupDef<TData>, input: HTMLInputElement): void {
