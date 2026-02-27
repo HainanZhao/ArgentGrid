@@ -41,6 +41,9 @@ jobs:
           cache: 'npm'
           cache-dependency-path: './demo-app/package-lock.json'
 
+      - name: Install root dependencies
+        run: npm install
+
       - name: Install demo app dependencies
         working-directory: ./demo-app
         run: npm install

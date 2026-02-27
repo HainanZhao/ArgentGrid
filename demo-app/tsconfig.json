@@ -21,7 +21,8 @@
     "paths": {
       "argentgrid": ["../src/public-api.ts"],
       "@argentgrid/*": ["../src/lib/*"],
-      "@angular/*": ["./node_modules/@angular/*"]
+      "@angular/*": ["node_modules/@angular/*"],
+      "@angular/cdk/*": ["node_modules/@angular/cdk/*"]
     }
   },
   "include": ["src/**/*", "../src/**/*"],
