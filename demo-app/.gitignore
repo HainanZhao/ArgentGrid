@@ -21,6 +21,9 @@ npm-debug.log*
 # Testing
 coverage/
 .nyc_output/
+e2e/screenshots/
+playwright-report/
+test-results/
 
 # Build
 *.js.map
