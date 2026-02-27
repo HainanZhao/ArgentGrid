@@ -13,7 +13,8 @@ import {
   RowDataTransaction,
   RowDataTransactionResult,
   CsvExportParams,
-  ExcelExportParams
+  ExcelExportParams,
+  GroupRowNode
 } from '../types/ag-grid-types';
 
 @Injectable({
@@ -27,7 +28,9 @@ export class GridService<TData = any> {
   private sortModel: SortModelItem[] = [];
   private filterModel: FilterModel = {};
   private filteredRowData: TData[] = [];
+  private groupedRowData: (TData | GroupRowNode<TData>)[] = [];
   private selectedRows: Set<string> = new Set();
+  private expandedGroups: Set<string> = new Set();
   private gridId: string = '';
   
   createApi(
@@ -36,6 +39,8 @@ export class GridService<TData = any> {
   ): GridApi<TData> {
     this.columnDefs = columnDefs;
     this.rowData = rowData ? [...rowData] : [];
+    this.filteredRowData = [...this.rowData];
+    this.groupedRowData = [];
     this.gridId = this.generateGridId();
 
     this.initializeColumns();
@@ -132,10 +137,11 @@ export class GridService<TData = any> {
       },
       
       // Row Data API
-      getRowData: () => [...this.filteredRowData.length > 0 ? this.filteredRowData : this.rowData],
+      getRowData: () => [...this.filteredRowData],
       setRowData: (rowData) => {
         this.rowData = rowData;
         this.filteredRowData = [...rowData];
+        this.groupedRowData = [];
         this.initializeRowNodes();
       },
       applyTransaction: (transaction) => this.applyTransaction(transaction),
@@ -245,6 +251,7 @@ export class GridService<TData = any> {
       transaction.add.forEach((data, index) => {
         const id = this.getRowId(data, this.rowData.length + index);
         this.rowData.push(data);
+        this.filteredRowData.push(data);
         const node: IRowNode<TData> = {
           id,
           data,
@@ -348,6 +355,9 @@ export class GridService<TData = any> {
       return 0;
     });
 
+    // Also update filtered data
+    this.filteredRowData = [...this.rowData];
+
     // Re-initialize row nodes with sorted data
     this.initializeRowNodes();
   }
@@ -372,8 +382,183 @@ export class GridService<TData = any> {
       });
     }
 
-    // Re-initialize row nodes with filtered data
-    this.initializeRowNodesFromFilteredData();
+    // Apply grouping after filtering
+    this.applyGrouping();
+  }
+
+  private getGroupColumns(): string[] {
+    if (!this.columnDefs) return [];
+    
+    const groupCols: string[] = [];
+    this.columnDefs.forEach(def => {
+      if ('rowGroup' in def && def.rowGroup === true && def.field) {
+        groupCols.push(def.field as string);
+      }
+    });
+    return groupCols;
+  }
+
+  private applyGrouping(): void {
+    const groupColumns = this.getGroupColumns();
+    
+    if (groupColumns.length === 0) {
+      // No grouping, use filtered data
+      this.groupedRowData = [];
+      this.initializeRowNodesFromFilteredData();
+      return;
+    }
+
+    // Group data hierarchically
+    this.groupedRowData = this.groupByColumns(this.filteredRowData, groupColumns, 0);
+    this.initializeRowNodesFromGroupedData();
+  }
+
+  private groupByColumns(
+    data: TData[],
+    groupColumns: string[],
+    level: number
+  ): (TData | GroupRowNode<TData>)[] {
+    if (level >= groupColumns.length || data.length === 0) {
+      return data;
+    }
+
+    const groupField = groupColumns[level];
+    const groups = new Map<any, TData[]>();
+
+    // Group data by the current field
+    data.forEach(item => {
+      const key = (item as any)[groupField];
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)!.push(item);
+    });
+
+    // Create group nodes
+    const result: (TData | GroupRowNode<TData>)[] = [];
+    groups.forEach((items, key) => {
+      const children = this.groupByColumns(items, groupColumns, level + 1);
+      
+      const groupNode: GroupRowNode<TData> = {
+        id: `group-${groupField}-${key}-${level}`,
+        groupKey: key,
+        groupField,
+        level,
+        children,
+        expanded: this.expandedGroups.has(`group-${groupField}-${key}-${level}`),
+        aggregation: this.calculateAggregations(items, groupField)
+      };
+      
+      result.push(groupNode);
+    });
+
+    return result;
+  }
+
+  private calculateAggregations(data: TData[], groupField: string): { [field: string]: any } {
+    const aggregations: { [field: string]: any } = {};
+    
+    if (!this.columnDefs) return aggregations;
+
+    this.columnDefs.forEach(def => {
+      // Skip column groups
+      if ('children' in def) return;
+      
+      if (!def.field || !def.aggFunc) return;
+      
+      const field = def.field as string;
+      const values = data.map(item => (item as any)[field]).filter(v => v !== null && v !== undefined);
+      
+      if (values.length === 0) return;
+
+      switch (def.aggFunc) {
+        case 'sum':
+          aggregations[field] = values.reduce((sum, v) => sum + (Number(v) || 0), 0);
+          break;
+        case 'avg':
+          aggregations[field] = values.reduce((sum, v) => sum + (Number(v) || 0), 0) / values.length;
+          break;
+        case 'min':
+          aggregations[field] = Math.min(...values.map(v => Number(v) || 0));
+          break;
+        case 'max':
+          aggregations[field] = Math.max(...values.map(v => Number(v) || 0));
+          break;
+        case 'count':
+          aggregations[field] = values.length;
+          break;
+        default:
+          aggregations[field] = values[0];
+      }
+    });
+
+    return aggregations;
+  }
+
+  private initializeRowNodesFromGroupedData(): void {
+    this.rowNodes.clear();
+    const flatRows = this.flattenGroupedData(this.groupedRowData);
+    
+    flatRows.forEach((item, index) => {
+      let id: string;
+      let data: TData;
+      let isGroup = false;
+      let level = 0;
+      let expanded = false;
+
+      if (this.isGroupRowNode(item)) {
+        // Group node
+        const groupNode = item;
+        id = groupNode.id;
+        // Create synthetic data for group row
+        data = { [groupNode.groupField]: groupNode.groupKey, ...groupNode.aggregation } as TData;
+        isGroup = true;
+        level = groupNode.level;
+        expanded = groupNode.expanded;
+      } else {
+        // Regular data node
+        id = this.getRowId(item, index);
+        data = item;
+      }
+
+      const node: IRowNode<TData> = {
+        id,
+        data,
+        rowPinned: false,
+        rowHeight: null,
+        displayed: true,
+        selected: this.selectedRows.has(id),
+        expanded,
+        group: isGroup,
+        level,
+        firstChild: index === 0,
+        lastChild: index === flatRows.length - 1,
+        rowIndex: index,
+        displayedRowIndex: index
+      };
+      this.rowNodes.set(id, node);
+    });
+  }
+
+  private isGroupRowNode(item: any): item is GroupRowNode<TData> {
+    return item && 'groupKey' in item;
+  }
+
+  private flattenGroupedData(
+    groupedData: (TData | GroupRowNode<TData>)[],
+    result: (TData | GroupRowNode<TData>)[] = []
+  ): (TData | GroupRowNode<TData>)[] {
+    for (const item of groupedData) {
+      result.push(item);
+      
+      if (this.isGroupRowNode(item)) {
+        const groupNode = item;
+        if (groupNode.expanded) {
+          this.flattenGroupedData(groupNode.children, result);
+        }
+      }
+    }
+    return result;
   }
 
   private matchesFilter(value: any, filterItem: FilterModelItem): boolean {

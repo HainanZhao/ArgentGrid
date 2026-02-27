@@ -439,6 +439,16 @@ export interface IRowNode<TData = any> {
   displayedRowIndex: number;
 }
 
+export interface GroupRowNode<TData = any> {
+  id: string;
+  groupKey: any;
+  groupField: string;
+  level: number;
+  children: (TData | GroupRowNode<TData>)[];
+  expanded: boolean;
+  aggregation?: { [field: string]: any };
+}
+
 export interface FilterModel {
   [key: string]: FilterModelItem | null;
 }
