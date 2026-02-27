@@ -62,38 +62,35 @@ ArgentGrid/
 
 ## Implementation Status
 
-### ✅ Phase I, II & III - COMPLETE! 🎉
+### ✅ Phase I, II, III & IV - COMPLETE! 🚀
 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | AG Grid TypeScript definitions | ✅ | Full GridOptions, ColDef, GridApi |
 | Angular 18 library setup | ✅ | ng-packagr build |
-| Canvas renderer | ✅ | Virtual scrolling, row buffering |
-| GridService (headless logic) | ✅ | Data management, state |
-| Sorting | ✅ | Client-side, multi-column |
+| Canvas renderer | ✅ | Virtual scrolling, row buffering, pinning support |
+| GridService (headless logic) | ✅ | $O(1)$ row lookups, reactive state |
+| Sorting | ✅ | Client-side, multi-column, menu-driven |
 | Filtering | ✅ | Text, number, date, boolean |
-| Row Grouping | ✅ | Hierarchical, with aggregations |
-| Cell Editing | ✅ | Inline editing, valueParser, valueSetter |
-| Column Pinning | ✅ | Left/right sticky columns |
-| Row Pinning | ✅ | Top/bottom pinned rows |
+| Floating Filters | ✅ | Quick headers filters with clear button |
+| Row Grouping | ✅ | Hierarchical, Auto Group column support |
+| Cell Editing | ✅ | Enter/Escape/Tab navigation, group prevention |
+| Column Pinning | ✅ | Left/right sticky columns (Canvas + Header sync) |
+| Column Re-ordering | ✅ | Drag & Drop via Angular CDK |
 | Selection | ✅ | Checkbox, multi-select, header checkbox |
-| Aggregation | ✅ | Sum, avg, min, max, count, custom |
-| Excel/CSV Export | ✅ | CSV with options, Excel via HTML table |
-| Transactions | ✅ | Add/update/remove rows |
-| TDD test suite | ✅ | 69 passing tests |
+| Menus | ✅ | Header menus (ellipsis) and Context menus (right-click) |
+| Guard Rail Tests | ✅ | 7+ passing Playwright E2E scenarios |
 
-### ⏳ Phase IV (Future)
+### ⏳ Phase V (Future)
 
 | Feature | Priority | Notes |
 |---------|----------|-------|
-| Column Virtualization | Medium | Horizontal scrolling for wide grids |
-| Expand/Collapse groups API | Medium | Programmatic group control |
+| Excel-like Range Selection | High | Drag-to-select rectangular ranges |
+| Column Virtualization | Medium | Horizontal scrolling for 50+ columns |
 | Pivot Tables | Low | Complex but powerful |
 | Tree Data | Low | Parent/child relationships |
 | Master/Detail | Low | Nested grids |
-| Integrated Charts | Low | Visual data representation |
-| Excel Export | Low | Requires additional library |
-| Web Workers | Deprioritized | Current perf is adequate |
+| Integrated Sparklines | Low | Mini-charts in cells |
 
 ## Technical Details
 
@@ -110,153 +107,61 @@ ArgentGrid/
 </argent-grid>
 ```
 
-### GridService API
+### GridService API & Reactivity
+
+The grid uses a reactive state model. programmtic changes to filters, sorts, or options via the API are emitted through `gridStateChanged$`, ensuring the Canvas and DOM layers stay synchronized.
 
 ```typescript
-// Create grid instance
-const api = gridService.createApi(columnDefs, rowData);
-
-// Sorting
-api.setSortModel([{ colId: 'age', sort: 'desc' }]);
-
-// Filtering
+// Programmatic filter
 api.setFilterModel({
-  name: { filterType: 'text', type: 'contains', filter: 'John' },
-  age: { filterType: 'number', type: 'greaterThan', filter: 28 }
+  department: { filterType: 'text', type: 'contains', filter: 'Eng' }
 });
 
-// Row grouping (via column defs)
-const columnDefs = [
-  { field: 'department', rowGroup: true },
-  { field: 'salary', aggFunc: 'sum' }
-];
-
-// Transactions
-api.applyTransaction({
-  add: [{ id: 4, name: 'Alice' }],
-  update: [{ id: 1, name: 'Updated' }],
-  remove: [{ id: 2 }]
-});
+// Programmatic option toggle
+api.setGridOption('floatingFilter', true);
 ```
 
-### Canvas Renderer Features
+### Agent Tooling & Verification
 
-- Virtual scrolling with row buffer (5 rows above/below viewport)
-- requestAnimationFrame batching
-- Passive scroll listeners
-- Device pixel ratio support
-- Row striping for readability
-- Binary search text truncation
+Agents working on this repository should utilize the following tools for high-quality contributions:
 
-### Test Commands
-
-```bash
-npm test              # Run tests
-npm run test:watch    # Watch mode
-npm run build         # Build library
-npm run build:watch   # Watch build
-```
-
-## Current Test Status
-
-```
-Test Suites: 2 passed, 2 total
-Tests:       4 skipped, 69 passed, 73 total
-```
-
-**Skipped tests:** 4 row grouping tests (test isolation issue with shared service instance)
-
-## Build Output
-
-```bash
-npm run build
-# Output: dist/
-# - bundles/ (FESM bundles)
-# - argentgrid.d.ts (type definitions)
-# - package.json (distributable package)
-```
-
-## Dependencies
-
-**Peer Dependencies:**
-- @angular/core: ^18.0.0
-- @angular/common: ^18.0.0
-- @angular/cdk: ^18.0.0
-
-**Dev Dependencies:**
-- ng-packagr: ^18.0.0
-- TypeScript: ~5.4.2
-- Jest: ^29.7.0
-- jest-preset-angular: ^14.1.0
+1.  **Playwright Skill**: Used for running the `demo-app` E2E suite (`npm run test:e2e`).
+2.  **Computer Use (Browser Automation)**: Highly recommended for visual verification of Canvas rendering. Always verify menu positioning, scrolling alignment, and interactive states (like editing) in a live browser before concluding a task.
+3.  **TS Strict Mode**: The library is verified against the `demo-app`'s strict TypeScript configuration. Ensure all property accesses (especially dynamic ones in tests) are type-safe.
 
 ## Known Issues / TODOs
 
-1. **Row grouping tests** - Skipped due to service instance sharing between tests. Need to refactor test setup or use fresh service instances.
+1. **Row grouping tests** - Skipped in Jest due to service instance sharing. Playwright E2E tests now cover this logic in a real browser.
 
-2. **Expand/collapse groups API** - Groups are created but no API to programmatically expand/collapse them.
+2. **Column virtualization** - Currently renders all columns; should virtualize horizontal scrolling for wide grids.
 
-3. **Canvas hit testing** - Mouse click detection works but could be optimized.
+3. **Context Menu Customization** - Currently only supports fixed default items (Copy, Export, Reset).
 
-4. **Column virtualization** - Currently renders all columns; should virtualize horizontal scrolling for wide grids.
+4. **Range Selection** - Visual selection box on canvas is not yet implemented.
 
-5. **Excel export** - Stubbed but not implemented (requires additional library).
+## Next Steps (Phase V - Advanced Analysis)
 
-## Next Steps (Phase IV - Future Enhancements)
+1. **Excel-like Range Selection**
+   - Drag-to-select multiple cells
+   - Visual selection overlay on Canvas
+   - Copy-paste range support
 
-1. **Column Virtualization** - Horizontal scrolling optimization
-   - Only render visible columns
-   - Virtual scrolling for wide grids (50+ columns)
+2. **Full-featured Excel Export**
+   - Use `exceljs` for native `.xlsx` files with styles/colors.
 
-2. **Expand/Collapse Groups API** - Programmatic control
-   - `api.expandGroup(groupId)`
-   - `api.collapseGroup(groupId)`
-   - `api.expandAll()`, `api.collapseAll()`
+3. **Column Virtualization**
+   - Only render visible columns in CanvasRenderer.renderColGroup.
 
-3. **Pivot Tables** - Advanced data analysis
-   - Pivot mode toggle
-   - Row/column pivoting
-   - Aggregated pivot results
+## Recent Changes (Phase IV Highlights)
 
-4. **Tree Data** - Hierarchical data display
-   - Parent/child relationships
-   - Tree structure from flat data
-   - Expand/collapse tree nodes
+- **be1273d** fix: resolve editor update issues and Escape key handling
+- **b44ebbd** fix: synchronize floating filter inputs with GridApi
+- **90cca11** feat: implement Auto Group column and AG Grid-compatible grouping
+- **9c7b162** feat: implement column re-ordering via Drag & Drop
+- **72cddb8** feat: implement Header Menus (Sort, Hide, Pin)
+- **ce0139e** feat: implement Context Menus on Canvas
+- **6b540aa** test: add comprehensive Playwright guard rail suite
 
-5. **Master/Detail** - Nested grids
-   - Detail row expansion
-   - Nested grid instances
-   - Detail cell renderer
-
-6. **Integrated Charts** - Visual data representation
-   - Chart range selection
-   - Column, bar, line charts
-   - Chart customization
-
-7. **Excel Export** - Full-featured export
-   - Styled Excel output
-   - Multiple sheets
-   - Requires additional library (exceljs, etc.)
-
-## Git Workflow
-
-```bash
-# Current branch: main
-git log --oneline -5
-# Latest: ba88e6b docs: Update roadmap - cell editing complete
-
-# To push changes:
-git add -A
-git commit -m "feat/fix/docs: description"
-git push origin main
-```
-
-## Recent Changes (Latest Commits)
-
-- **dd63c0a** feat: Add Excel/CSV export support
-- **e34e6ca** docs: Celebrate Phase III COMPLETE! 🎊🎉
-- **905a24e** feat: Add standalone aggregation support (Phase III COMPLETE!)
-- **e03c33d** feat: Add full row selection API
-- **45e22da** feat: Add row pinning support
 
 ## Important Notes
 
