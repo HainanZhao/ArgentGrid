@@ -197,15 +197,15 @@ cd demo-app
 npx playwright test e2e/benchmark.spec.ts --reporter=list
 ```
 
-## Performance Targets
-
-| Metric | Baseline | Target | Status |
-| :--- | :--- | :--- | :--- |
-| **Initial Render (100k rows)** | ~45ms | < 30ms | 🚀 (Optimizing) |
-| **Scroll Frame Time (avg)** | ~3.8ms | < 4ms | ✅ |
-| **Selection Update (All)** | ~12ms | < 20ms | ✅ (Damage Tracking) |
-| **Memory per 100k rows** | ~45MB | < 30MB | 🚀 (Optimizing) |
-| **Max Rows (60fps)** | 1,000,000+ | 1,000,000+ | ✅ |
+-------------------------------------------
+🚀 ArgentGrid Performance Benchmark Results
+-------------------------------------------
+Initial Render      : 2.60ms
+Avg Scroll Frame    : 1.55ms
+Selection All       : 103.70ms
+Grouping Toggle     : 147.10ms
+Total Test Time     : 495.60ms
+-------------------------------------------
 
 ## License
 
