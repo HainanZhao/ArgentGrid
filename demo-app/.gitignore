@@ -1,0 +1,27 @@
+# Node/Angular
+node_modules/
+dist/
+.angular/
+.tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Build
+*.js.map
+*.ts.map

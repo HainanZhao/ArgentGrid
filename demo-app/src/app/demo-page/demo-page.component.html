@@ -1,0 +1,60 @@
+<!-- WIP Banner -->
+<div class="wip-banner">
+  <span class="icon">🚧</span>
+  <span>WORK IN PROGRESS - Canvas-based rendering demo</span>
+  <a href="https://github.com/HainanZhao/ArgentGrid" target="_blank">View on GitHub →</a>
+</div>
+
+<div class="demo-container">
+  <header class="demo-header">
+    <div>
+      <h1>🎨 ArgentGrid - Canvas-Based Grid</h1>
+      <p>Ultra-High Performance - 1,000,000+ Rows at 60fps</p>
+      <div class="feature-list">
+        <span class="feature highlight">✓ Canvas Rendering</span>
+        <span class="feature highlight">✓ Zero DOM Overhead</span>
+        <span class="feature highlight">✓ GPU Accelerated</span>
+        <span class="feature">✓ AG Grid Compatible</span>
+        <span class="feature">✓ < 50KB Bundle</span>
+      </div>
+    </div>
+    <div class="demo-stats">
+      <div class="stat-badge">
+        <strong>{{ rowCount | number }}</strong> rows
+      </div>
+      <div class="stat-badge">
+        <strong>{{ renderTime }}</strong>ms load
+      </div>
+      <div class="stat-badge">
+        <strong>{{ fps }}</strong> FPS
+      </div>
+      <button class="btn" (click)="loadData(100000)" [disabled]="isLoading">
+        {{ isLoading ? 'Loading...' : '100K' }}
+      </button>
+      <button class="btn" (click)="loadData(500000)" [disabled]="isLoading">
+        {{ isLoading ? 'Loading...' : '500K' }}
+      </button>
+      <button class="btn" (click)="loadData(1000000)" [disabled]="isLoading">
+        {{ isLoading ? 'Loading...' : '1M' }}
+      </button>
+    </div>
+  </header>
+
+  <div class="grid-wrapper">
+    @if (isLoading) {
+      <div class="loading">
+        <div class="loading-spinner"></div>
+        <p>Loading {{ rowCount | number }} rows...</p>
+      </div>
+    } @else {
+      <canvas #gridCanvas class="grid-canvas"></canvas>
+    }
+  </div>
+
+  <div class="footer">
+    <span>Built with Angular 18 + Canvas 2D API</span>
+    <span>
+      <a href="https://github.com/HainanZhao/ArgentGrid" target="_blank">View on GitHub →</a>
+    </span>
+  </div>
+</div>
