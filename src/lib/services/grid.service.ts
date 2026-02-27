@@ -62,20 +62,50 @@ export class GridService<TData = any> {
     }
     
     this.columns.clear();
+
+    const groupColumns = this.getGroupColumns();
+    const isGrouping = groupColumns.length > 0;
+    const groupDisplayType = this.gridOptions?.groupDisplayType || 'singleColumn';
+
+    // 1. Handle Auto Group Column (for singleColumn display)
+    if (isGrouping && (groupDisplayType === 'singleColumn' || !this.gridOptions?.groupDisplayType)) {
+      const autoGroupDef = this.gridOptions?.autoGroupColumnDef || {};
+      const autoGroupCol: Column = {
+        colId: 'ag-Grid-AutoColumn',
+        field: 'ag-Grid-AutoColumn',
+        headerName: autoGroupDef.headerName || 'Group',
+        width: autoGroupDef.width || 200,
+        minWidth: autoGroupDef.minWidth,
+        maxWidth: autoGroupDef.maxWidth,
+        pinned: autoGroupDef.pinned || 'left',
+        visible: true,
+        sort: null
+      };
+      this.columns.set(autoGroupCol.colId, autoGroupCol);
+    }
+
+    // 2. Process regular columns
     this.columnDefs.forEach((def, index) => {
       if ('children' in def) {
         // Column group
         def.children.forEach((child, childIndex) => {
-          this.addColumn(child, index * 100 + childIndex);
+          this.addColumn(child, index * 100 + childIndex, isGrouping);
         });
       } else {
-        this.addColumn(def, index);
+        this.addColumn(def, index, isGrouping);
       }
     });
   }
   
-  private addColumn(def: ColDef<TData>, index: number): void {
+  private addColumn(def: ColDef<TData>, index: number, isGrouping: boolean): void {
     const colId = def.colId || def.field?.toString() || `col-${index}`;
+    
+    // Auto-hide columns that are being grouped (AG Grid default)
+    let visible = !def.hide;
+    if (isGrouping && def.rowGroup && visible && this.gridOptions?.groupHideOpenParents !== false) {
+      visible = false;
+    }
+
     const column: Column = {
       colId,
       field: def.field?.toString(),
@@ -84,7 +114,7 @@ export class GridService<TData = any> {
       minWidth: def.minWidth,
       maxWidth: def.maxWidth,
       pinned: def.pinned === true ? 'left' : (def.pinned || false),
-      visible: !def.hide,
+      visible: visible,
       sort: (typeof def.sort === 'object' && def.sort !== null) ? (def.sort as any).sort : def.sort || null,
       sortIndex: def.sortIndex ?? undefined,
       aggFunc: typeof def.aggFunc === 'string' ? def.aggFunc : null
@@ -572,14 +602,18 @@ export class GridService<TData = any> {
         const groupNode = item;
         id = groupNode.id;
         // Create synthetic data for group row
-        data = { [groupNode.groupField]: groupNode.groupKey, ...groupNode.aggregation } as TData;
+        data = { 
+          ...groupNode.aggregation,
+          [groupNode.groupField]: groupNode.groupKey,
+          'ag-Grid-AutoColumn': groupNode.groupKey 
+        } as TData;
         isGroup = true;
         level = groupNode.level;
         expanded = groupNode.expanded;
       } else {
         // Regular data node
         id = this.getRowId(item, index);
-        data = item;
+        data = { ...item, 'ag-Grid-AutoColumn': '' } as any;
       }
 
       const node: IRowNode<TData> = {

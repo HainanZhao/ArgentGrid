@@ -59,7 +59,12 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
   ];
 
   gridOptions: any = {
-    floatingFilter: true
+    floatingFilter: true,
+    autoGroupColumnDef: {
+      headerName: 'Organization',
+      width: 250,
+      pinned: 'left'
+    }
   };
 
   private gridApi?: GridApi<Employee>;

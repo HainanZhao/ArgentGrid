@@ -209,9 +209,11 @@ export class CanvasRenderer<TData = any> {
           let text = String(cellValue);
           let textX = cellX + this.CELL_PADDING;
           
-          // Add indentation and indicator for group rows (usually in the first column or group column)
-          // For simplicity, we apply it to the first column overall if it's visible
-          if (col === allVisibleColumns[0] && (rowNode.group || rowNode.level > 0)) {
+          // Add indentation and indicator for group rows
+          const isAutoGroupCol = col.colId === 'ag-Grid-AutoColumn';
+          const isFirstColIfNoAutoGroup = !allVisibleColumns.some(c => c.colId === 'ag-Grid-AutoColumn') && col === allVisibleColumns[0];
+
+          if ((isAutoGroupCol || isFirstColIfNoAutoGroup) && (rowNode.group || rowNode.level > 0)) {
             const indent = rowNode.level * 20;
             textX += indent;
             
@@ -360,21 +362,28 @@ export class CanvasRenderer<TData = any> {
     // Handle expand/collapse toggle if it's a group row and clicked near the indicator
     if (rowNode.group && columnIndex !== -1) {
       const columns = this.gridApi.getAllColumns().filter(col => col.visible);
-      // Group indicator is always in the first column in our current implementation
-      if (columns[columnIndex] === columns[0]) {
+      const clickedCol = columns[columnIndex];
+      
+      const isAutoGroupCol = clickedCol.colId === 'ag-Grid-AutoColumn';
+      const isFirstColIfNoAutoGroup = !columns.some(c => c.colId === 'ag-Grid-AutoColumn') && columnIndex === 0;
+
+      if (isAutoGroupCol || isFirstColIfNoAutoGroup) {
         const rect = this.canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
         
         // Account for pinning in click detection
         let colX = 0;
-        const col = columns[0];
-        if (col.pinned === 'left') {
-          // colX remains 0
-        } else if (col.pinned === 'right') {
-          colX = this.viewportWidth - columns.filter(c => c.pinned === 'right').reduce((sum, c) => sum + c.width, 0);
+        if (clickedCol.pinned === 'left') {
+          // Calculate start X of this left-pinned column
+          const leftPinned = columns.filter(c => c.pinned === 'left');
+          for (let i = 0; i < columns.indexOf(clickedCol); i++) {
+            if (columns[i].pinned === 'left') colX += columns[i].width;
+          }
+        } else if (clickedCol.pinned === 'right') {
+          colX = this.viewportWidth - columns.filter(c => c.pinned === 'right').reduce((sum, c, i) => i >= columns.indexOf(clickedCol) ? sum + c.width : sum, 0);
         } else {
           const leftWidth = columns.filter(c => c.pinned === 'left').reduce((sum, c) => sum + c.width, 0);
-          colX = leftWidth + this.getCenterColumnOffset(col) - this.scrollLeft;
+          colX = leftWidth + this.getCenterColumnOffset(clickedCol) - this.scrollLeft;
         }
 
         const indent = rowNode.level * 20;
