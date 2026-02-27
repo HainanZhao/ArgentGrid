@@ -30,24 +30,27 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
   isGrouped = false;
 
   columnDefs: ColDef<Employee>[] = [
-    { field: 'id', headerName: 'ID', width: 80, sortable: true, filter: 'number' },
-    { field: 'name', headerName: 'Name', width: 200, sortable: true, filter: 'text' },
-    { field: 'department', headerName: 'Department', width: 180, sortable: true, filter: 'text', rowGroup: false },
-    { field: 'role', headerName: 'Role', width: 250, filter: 'text' },
+    { field: 'id', headerName: 'ID', width: 80, sortable: true, filter: 'number', floatingFilter: true },
+    { field: 'name', headerName: 'Name', width: 200, sortable: true, filter: 'text', floatingFilter: true },
+    { field: 'department', headerName: 'Department', width: 180, sortable: true, filter: 'text', rowGroup: false, floatingFilter: true },
+    { field: 'role', headerName: 'Role', width: 250, filter: 'text', floatingFilter: true },
     {
       field: 'salary',
       headerName: 'Salary',
       width: 120,
       sortable: true,
       filter: 'number',
+      floatingFilter: true,
       valueFormatter: (params: any) => `$${params.value?.toLocaleString()}`,
     },
-    { field: 'location', headerName: 'Location', width: 150, filter: 'text' },
-    { field: 'startDate', headerName: 'Start Date', width: 130, filter: 'date' },
+    { field: 'location', headerName: 'Location', width: 150, filter: 'text', floatingFilter: true },
+    { field: 'startDate', headerName: 'Start Date', width: 130, filter: 'date', floatingFilter: true },
     {
       field: 'performance',
       headerName: 'Performance',
       width: 120,
+      filter: 'number',
+      floatingFilter: true,
       cellRenderer: (params: any) => {
         const value = params.value;
         const color = value >= 80 ? '#22c55e' : value >= 60 ? '#eab308' : '#ef4444';

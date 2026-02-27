@@ -10,6 +10,7 @@ import { Subject } from 'rxjs';
     <div class="argent-grid-container" [style.height]="height" [style.width]="width" (click)="onContainerClick($event)">
       <!-- Header Layer (DOM-based for accessibility) -->
       <div class="argent-grid-header">
+        <!-- Main Header Row -->
         <div class="argent-grid-header-row">
           <!-- Selection Column Header -->
           <div
@@ -75,6 +76,55 @@ import { Subject } from 'rxjs';
             </div>
           </div>
         </div>
+
+        <!-- Floating Filter Row -->
+        <div class="argent-grid-header-row floating-filter-row" *ngIf="hasFloatingFilters()">
+          <!-- Selection Column Padding -->
+          <div *ngIf="showSelectionColumn" class="argent-grid-header-cell" [style.width.px]="selectionColumnWidth"></div>
+
+          <!-- Left Pinned Filters -->
+          <div
+            *ngFor="let col of getLeftPinnedColumns()"
+            class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
+            [style.width.px]="getColumnWidth(col)">
+            <div class="floating-filter-container" *ngIf="isFilterable(col)">
+              <input class="floating-filter-input" 
+                     [type]="getFilterInputType(col)" 
+                     (input)="onFloatingFilterInput($event, col)"
+                     [placeholder]="'Filter...'" />
+            </div>
+          </div>
+
+          <!-- Scrollable Filters -->
+          <div class="argent-grid-header-scrollable">
+            <div class="argent-grid-header-row">
+              <div
+                *ngFor="let col of getNonPinnedColumns()"
+                class="argent-grid-header-cell"
+                [style.width.px]="getColumnWidth(col)">
+                <div class="floating-filter-container" *ngIf="isFilterable(col)">
+                  <input class="floating-filter-input" 
+                         [type]="getFilterInputType(col)" 
+                         (input)="onFloatingFilterInput($event, col)"
+                         [placeholder]="'Filter...'" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Pinned Filters -->
+          <div
+            *ngFor="let col of getRightPinnedColumns()"
+            class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
+            [style.width.px]="getColumnWidth(col)">
+            <div class="floating-filter-container" *ngIf="isFilterable(col)">
+              <input class="floating-filter-input" 
+                     [type]="getFilterInputType(col)" 
+                     (input)="onFloatingFilterInput($event, col)"
+                     [placeholder]="'Filter...'" />
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Canvas Layer for Data Viewport with virtual scrolling -->
@@ -114,26 +164,26 @@ import { Subject } from 'rxjs';
            [style.left.px]="headerMenuPosition.x"
            (click)="$event.stopPropagation()">
         <div class="menu-item" (click)="sortColumnMenu('asc')">
-          <span class="menu-icon">▲</span> Sort Ascending
+          <span class="menu-icon">↑</span> Sort Ascending
         </div>
         <div class="menu-item" (click)="sortColumnMenu('desc')">
-          <span class="menu-icon">▼</span> Sort Descending
+          <span class="menu-icon">↓</span> Sort Descending
         </div>
         <div class="menu-item" (click)="sortColumnMenu(null)">
           <span class="menu-icon">✕</span> Clear Sort
         </div>
         <div class="menu-divider"></div>
         <div class="menu-item" (click)="hideColumnMenu()">
-          <span class="menu-icon">👁</span> Hide Column
+          <span class="menu-icon">ø</span> Hide Column
         </div>
         <div class="menu-item" (click)="pinColumnMenu('left')">
-          <span class="menu-icon">⇤</span> Pin Left
+          <span class="menu-icon">«</span> Pin Left
         </div>
         <div class="menu-item" (click)="pinColumnMenu('right')">
-          <span class="menu-icon">⇥</span> Pin Right
+          <span class="menu-icon">»</span> Pin Right
         </div>
         <div class="menu-item" (click)="pinColumnMenu(null)">
-          <span class="menu-icon">⤤</span> Unpin
+          <span class="menu-icon">↺</span> Unpin
         </div>
       </div>
 
@@ -144,18 +194,18 @@ import { Subject } from 'rxjs';
            [style.left.px]="contextMenuPosition.x"
            (click)="$event.stopPropagation()">
         <div class="menu-item" (click)="copyContextMenuCell()">
-          <span class="menu-icon">⎘</span> Copy Cell
+          <span class="menu-icon">📋</span> Copy Cell
         </div>
         <div class="menu-divider"></div>
         <div class="menu-item" (click)="exportCSV()">
-          <span class="menu-icon">⬇</span> Export CSV
+          <span class="menu-icon">⤓</span> Export CSV
         </div>
         <div class="menu-item" (click)="exportExcel()">
-          <span class="menu-icon">⬇</span> Export Excel
+          <span class="menu-icon">⤓</span> Export Excel
         </div>
         <div class="menu-divider"></div>
         <div class="menu-item" (click)="resetColumns()">
-          <span class="menu-icon">↺</span> Reset Columns
+          <span class="menu-icon">⟲</span> Reset Columns
         </div>
       </div>
     </div>
@@ -213,6 +263,7 @@ import { Subject } from 'rxjs';
     .header-text {
       overflow: hidden;
       text-overflow: ellipsis;
+      padding-right: 4px;
     }
 
     .argent-grid-header-menu-icon {
@@ -316,38 +367,71 @@ import { Subject } from 'rxjs';
 
     .argent-grid-header-menu, .argent-grid-context-menu {
       position: absolute;
-      background: white;
-      border: 1px solid #ccc;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      border-radius: 4px;
+      background: #ffffff;
+      border: 1px solid #babed1;
+      box-shadow: 0 3px 10px 0 rgba(0, 0, 0, 0.2);
+      border-radius: 3px;
       padding: 4px 0;
       z-index: 1000;
-      min-width: 180px;
+      min-width: 200px;
+      font-size: 13px;
+      color: #181d1f;
     }
     
     .menu-item {
-      padding: 8px 16px;
-      font-size: 13px;
+      padding: 6px 12px;
       cursor: pointer;
       display: flex;
       align-items: center;
+      transition: background-color 0.1s;
     }
     
     .menu-item:hover {
-      background: #f5f5f5;
+      background-color: #f0f2f5;
     }
     
     .menu-icon {
-      width: 20px;
-      text-align: center;
+      width: 24px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
       margin-right: 8px;
-      color: #666;
+      font-size: 14px;
+      color: #555;
     }
 
     .menu-divider {
       height: 1px;
-      background: #eee;
+      background-color: #babed1;
       margin: 4px 0;
+      opacity: 0.5;
+    }
+
+    .floating-filter-row {
+      background: #fafafa;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .floating-filter-container {
+      width: 100%;
+      padding: 2px 4px;
+      box-sizing: border-box;
+    }
+
+    .floating-filter-input {
+      width: 100%;
+      height: 24px;
+      border: 1px solid #d0d0d0;
+      border-radius: 2px;
+      padding: 0 6px;
+      font-size: 12px;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    .floating-filter-input:focus {
+      border-color: #2196f3;
+      box-shadow: 0 0 2px rgba(33, 150, 243, 0.2);
     }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -755,6 +839,67 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     }
     
     this.closeHeaderMenu();
+  }
+
+  // --- Floating Filter Logic ---
+
+  hasFloatingFilters(): boolean {
+    if (!this.columnDefs) return false;
+    return this.columnDefs.some(col => {
+      if ('children' in col) {
+        return col.children.some(child => 'floatingFilter' in child && child.floatingFilter);
+      }
+      return col.floatingFilter;
+    });
+  }
+
+  isFilterable(col: ColDef<TData> | ColGroupDef<TData>): boolean {
+    if ('children' in col) return false;
+    return !!col.filter;
+  }
+
+  getFilterInputType(col: ColDef<TData> | ColGroupDef<TData>): string {
+    if ('children' in col) return 'text';
+    const filter = col.filter;
+    if (filter === 'number') return 'number';
+    if (filter === 'date') return 'date';
+    return 'text';
+  }
+
+  private filterTimeout: any;
+  onFloatingFilterInput(event: Event, col: ColDef<TData> | ColGroupDef<TData>): void {
+    if ('children' in col) return;
+    
+    const input = event.target as HTMLInputElement;
+    const value = input.value;
+    const colId = typeof col.colId === 'string' ? col.colId : col.field?.toString() || '';
+
+    clearTimeout(this.filterTimeout);
+    this.filterTimeout = setTimeout(() => {
+      const currentModel = this.gridApi.getFilterModel();
+      
+      if (!value) {
+        delete currentModel[colId];
+      } else {
+        const filterType = this.getFilterTypeFromCol(col);
+        currentModel[colId] = {
+          filterType: filterType as any,
+          type: filterType === 'text' ? 'contains' : 'equals',
+          filter: value
+        };
+      }
+
+      this.gridApi.setFilterModel(currentModel);
+      this.canvasRenderer?.render();
+    }, 300);
+  }
+
+  private getFilterTypeFromCol(col: ColDef<TData>): string {
+    const filter = col.filter;
+    if (filter === 'number') return 'number';
+    if (filter === 'date') return 'date';
+    if (filter === 'boolean') return 'boolean';
+    return 'text';
   }
   
   // Public API methods
