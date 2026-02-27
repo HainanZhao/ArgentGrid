@@ -37,6 +37,7 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
   isMasterDetail = false;
   isPivotMode = false;
   isSideBarVisible = true;
+  isFiltered = false;
   benchmarkResults: any = null;
 
   columnDefs: ColDef<Employee>[] = [
@@ -170,18 +171,16 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  applyFilter(): void {
+  toggleFilter(): void {
+    this.isFiltered = !this.isFiltered;
     if (this.gridApi) {
-      this.gridApi.setFilterModel({
-        department: { filterType: 'text', type: 'contains', filter: 'Eng' }
-      });
-    }
-    this.cdr.detectChanges();
-  }
-
-  clearFilters(): void {
-    if (this.gridApi) {
-      this.gridApi.setFilterModel({});
+      if (this.isFiltered) {
+        this.gridApi.setFilterModel({
+          department: { filterType: 'text', type: 'contains', filter: 'Eng' }
+        });
+      } else {
+        this.gridApi.setFilterModel({});
+      }
     }
     this.cdr.detectChanges();
   }

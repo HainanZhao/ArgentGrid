@@ -240,7 +240,10 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     // Listen for grid state changes from API (filters, sorts, options)
     this.gridService.gridStateChanged$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
+      .subscribe((event) => {
+        if (event.type === 'optionChanged' && event.key === 'sideBar') {
+          this.sideBarVisible = !!event.value;
+        }
         this.canvasRenderer?.render();
         this.cdr.detectChanges();
       });

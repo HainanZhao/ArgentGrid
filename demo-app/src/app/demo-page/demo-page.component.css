@@ -101,28 +101,33 @@
 
 .stat-badge {
   background: rgba(255, 255, 255, 0.1);
-  padding: 10px 16px;
+  padding: 0 16px;
   border-radius: 8px;
   font-size: 14px;
   backdrop-filter: blur(10px);
   min-width: 100px;
   text-align: center;
+  height: 42px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .stat-badge strong {
   color: #4ade80;
-  font-size: 18px;
+  font-size: 16px;
   display: block;
+  line-height: 1.2;
 }
 
 .btn-benchmark {
-  background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
-  box-shadow: 0 4px 12px rgba(225, 29, 72, 0.3);
+  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 
 .btn-benchmark:hover:not(:disabled) {
-  background: linear-gradient(135deg, #fb7185 0%, #f43f5e 100%);
-  transform: scale(1.05);
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
 }
 
 .benchmark-results {
@@ -186,7 +191,8 @@
 }
 
 .btn {
-  padding: 10px 20px;
+  height: 42px;
+  padding: 0 20px;
   background: #4f46e5;
   color: white;
   border: none;
@@ -195,6 +201,10 @@
   font-size: 14px;
   font-weight: 600;
   transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .btn-secondary {
