@@ -18,7 +18,7 @@ import { ArgentGridComponent } from '../components/argent-grid.component';
  * [columnDefs] and [rowData] inputs to ArgentGrid's internal format.
  */
 @Directive({
-  selector: '[argentGrid], argent-grid'
+  selector: '[argentGrid], ag-grid-angular'
 })
 export class AgGridCompatibilityDirective<TData = any> implements OnInit, OnDestroy {
   @Input('columnDefs') set columnDefs(value: (ColDef<TData> | ColGroupDef<TData>)[] | null) {
@@ -66,9 +66,7 @@ export class AgGridCompatibilityDirective<TData = any> implements OnInit, OnDest
   
   private createGridComponent(): void {
     // Create ArgentGrid component
-    this.gridComponentRef = this.viewContainerRef.createComponent(
-      this.viewContainerRef.createComponent(ArgentGridComponent as any).componentType
-    );
+    this.gridComponentRef = this.viewContainerRef.createComponent(ArgentGridComponent as any);
     
     this.updateGrid();
   }
