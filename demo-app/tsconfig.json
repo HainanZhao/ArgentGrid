@@ -18,21 +18,10 @@
     "target": "ES2022",
     "module": "ES2022",
     "lib": ["ES2022", "dom"],
-    "paths": {
-      "argentgrid": ["../src/public-api.ts"],
-      "@argentgrid/*": ["../src/lib/*"],
-      "@angular/core": ["./node_modules/@angular/core"],
-      "@angular/common": ["./node_modules/@angular/common"],
-      "@angular/compiler": ["./node_modules/@angular/compiler"],
-      "@angular/platform-browser": ["./node_modules/@angular/platform-browser"],
-      "@angular/platform-browser-dynamic": ["./node_modules/@angular/platform-browser-dynamic"],
-      "@angular/router": ["./node_modules/@angular/router"],
-      "@angular/cdk/*": ["./node_modules/@angular/cdk/*"],
-      "tslib": ["./node_modules/tslib"]
-    }
+    "paths": {}
   },
-  "include": ["src/**/*", "../src/**/*"],
-  "exclude": ["src/**/*.spec.ts", "../src/**/*.spec.ts"],
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.spec.ts"],
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
     "strictInjectionParameters": true,

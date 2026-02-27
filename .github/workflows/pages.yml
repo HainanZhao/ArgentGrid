@@ -39,10 +39,13 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: './demo-app/package-lock.json'
+          cache-dependency-path: './package-lock.json'
 
       - name: Install root dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Build ArgentGrid library
+        run: npm run build
 
       - name: Install demo app dependencies
         working-directory: ./demo-app
