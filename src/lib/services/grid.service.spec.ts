@@ -447,6 +447,63 @@ describe('GridService', () => {
     expect(state.columnPinning?.right).toContain('value');
   });
 
+  // Row Pinning Tests
+  it('should pin row to top', () => {
+    const rowData: any[] = [
+      { id: 1, name: 'Row 1' },
+      { id: 2, name: 'Row 2', pinned: 'top' },
+      { id: 3, name: 'Row 3' }
+    ];
+    
+    const pinApi = service.createApi(testColumnDefs.slice(0, 2), rowData);
+    const displayedCount = pinApi.getDisplayedRowCount();
+    
+    // Should have 3 rows total
+    expect(displayedCount).toBe(3);
+    
+    // First row should be the pinned top one
+    const firstRow = pinApi.getDisplayedRowAtIndex(0);
+    expect(firstRow?.rowPinned).toBe('top');
+  });
+
+  it('should pin row to bottom', () => {
+    const rowData: any[] = [
+      { id: 1, name: 'Row 1' },
+      { id: 2, name: 'Row 2', pinned: 'bottom' },
+      { id: 3, name: 'Row 3' }
+    ];
+    
+    const pinApi = service.createApi(testColumnDefs.slice(0, 2), rowData);
+    
+    // Last row should be the pinned bottom one
+    const lastRowIndex = pinApi.getDisplayedRowCount() - 1;
+    const lastRow = pinApi.getDisplayedRowAtIndex(lastRowIndex);
+    expect(lastRow?.rowPinned).toBe('bottom');
+  });
+
+  it('should order pinned rows correctly', () => {
+    const rowData: any[] = [
+      { id: 1, name: 'Normal 1' },
+      { id: 2, name: 'Top 1', pinned: 'top' },
+      { id: 3, name: 'Normal 2' },
+      { id: 4, name: 'Bottom 1', pinned: 'bottom' },
+      { id: 5, name: 'Top 2', pinned: 'top' }
+    ];
+    
+    const pinApi = service.createApi(testColumnDefs.slice(0, 2), rowData);
+    
+    // Pinned top rows should come first
+    expect(pinApi.getDisplayedRowAtIndex(0)?.rowPinned).toBe('top');
+    expect(pinApi.getDisplayedRowAtIndex(1)?.rowPinned).toBe('top');
+    
+    // Normal rows in middle
+    expect(pinApi.getDisplayedRowAtIndex(2)?.rowPinned).toBe(false);
+    expect(pinApi.getDisplayedRowAtIndex(3)?.rowPinned).toBe(false);
+    
+    // Pinned bottom rows at end
+    expect(pinApi.getDisplayedRowAtIndex(4)?.rowPinned).toBe('bottom');
+  });
+
   it('should get displayed row count', () => {
     const freshApi = service.createApi(testColumnDefs, [...testRowData]);
     expect(freshApi.getDisplayedRowCount()).toBe(3);

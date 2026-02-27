@@ -91,12 +91,37 @@ export class GridService<TData = any> {
   
   private initializeRowNodes(): void {
     this.rowNodes.clear();
-    this.rowData.forEach((data, index) => {
+    
+    // Separate rows by pinned state
+    const pinnedTopRows: TData[] = [];
+    const pinnedBottomRows: TData[] = [];
+    const normalRows: TData[] = [];
+    
+    this.rowData.forEach(data => {
+      const anyData = data as any;
+      const pinned = anyData?.pinned;
+      
+      if (pinned === 'top') {
+        pinnedTopRows.push(data);
+      } else if (pinned === 'bottom') {
+        pinnedBottomRows.push(data);
+      } else {
+        normalRows.push(data);
+      }
+    });
+    
+    // Combine in order: pinned top, normal, pinned bottom
+    const orderedRows = [...pinnedTopRows, ...normalRows, ...pinnedBottomRows];
+    
+    orderedRows.forEach((data, index) => {
       const id = this.getRowId(data, index);
+      const anyData = data as any;
+      const rowPinned = anyData?.pinned || false;
+      
       const node: IRowNode<TData> = {
         id,
         data,
-        rowPinned: false,
+        rowPinned,
         rowHeight: null,
         displayed: true,
         selected: this.selectedRows.has(id),
@@ -104,7 +129,7 @@ export class GridService<TData = any> {
         group: false,
         level: 0,
         firstChild: index === 0,
-        lastChild: index === this.rowData.length - 1,
+        lastChild: index === orderedRows.length - 1,
         rowIndex: index,
         displayedRowIndex: index
       };
