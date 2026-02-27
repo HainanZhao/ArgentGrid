@@ -1,12 +1,14 @@
 # ArgentGrid
 
+> ⚠️ **WORK IN PROGRESS** - This project is under active development. The API is not stable and some features are not yet implemented. Use at your own risk in production environments.
+
 A **free, high-performance** alternative to AG Grid Enterprise built with Angular and Canvas rendering.
 
 ## Features
 
 - 🚀 **High Performance**: Canvas-based rendering for 100,000+ rows at 60fps
 - 🎯 **AG Grid Compatible**: Drop-in replacement with 1:1 API compatibility
-- 📦 **Angular Native**: Built with Angular 17+ using modern best practices
+- 📦 **Angular Native**: Built with Angular 18+ using modern best practices
 - 🧪 **TDD Developed**: Comprehensive test coverage with Jest
 - 🎨 **Hybrid Architecture**: Canvas viewport + DOM headers for accessibility
 
@@ -138,13 +140,13 @@ npm run lint
 - [ ] Virtual scrolling optimization
 
 ### Phase III: Features
-- [ ] Sorting
+- [x] Basic sorting (client-side)
 - [ ] Filtering
 - [ ] Row Grouping
 - [ ] Aggregation
 - [ ] Cell Editing
 - [ ] Column Pinning
-- [ ] Selection
+- [ ] Selection (full implementation)
 
 ### Phase IV: Advanced Features
 - [ ] Pivot Tables
