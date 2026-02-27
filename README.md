@@ -4,6 +4,18 @@
 
 A **free, high-performance** alternative to AG Grid Enterprise built with Angular and Canvas rendering.
 
+## 🌐 Live Demo
+
+Check out the interactive demo: **[https://hainanzhao.github.io/ArgentGrid/](https://hainanzhao.github.io/ArgentGrid/)**
+
+The demo showcases:
+- Canvas-based rendering with 100,000+ rows
+- Virtual scrolling
+- Sorting, filtering, and selection
+- Cell editing
+- Column and row pinning
+- Excel/CSV export
+
 ## Features
 
 - 🚀 **High Performance**: Canvas-based rendering for 100,000+ rows at 60fps

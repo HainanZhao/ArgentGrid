@@ -3,7 +3,10 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - demo-app
+      - main
+    paths:
+      - 'demo-app/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -29,12 +32,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './demo-app/package-lock.json'
 
-      - name: Install dependencies
+      - name: Install demo app dependencies
         working-directory: ./demo-app
         run: npm install
 
-      - name: Build
+      - name: Build ArgentGrid library
+        run: npm install && npm run build
+
+      - name: Build demo app
         working-directory: ./demo-app
         run: npm run build:gh-pages
 
