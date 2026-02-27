@@ -42,6 +42,9 @@
       <button class="btn btn-secondary" (click)="toggleGrouping()">
         {{ isGrouped ? 'Ungroup' : 'Group by Dept' }}
       </button>
+      <button class="btn btn-secondary" (click)="toggleFloatingFilter()">
+        {{ isFloatingFilterShown ? 'Hide Filters' : 'Show Filters' }}
+      </button>
       <button class="btn btn-secondary" (click)="applyFilter()">
         Filter 'Engineering'
       </button>
@@ -61,6 +64,7 @@
       <argent-grid
         [columnDefs]="columnDefs"
         [rowData]="rowData"
+        [gridOptions]="gridOptions"
         [rowHeight]="32"
         [height]="'100%'"
         [width]="'100%'"

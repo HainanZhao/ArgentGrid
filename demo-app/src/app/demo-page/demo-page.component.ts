@@ -28,29 +28,28 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
   isLoading = false;
   rowCount = 100000;
   isGrouped = false;
+  isFloatingFilterShown = true;
 
   columnDefs: ColDef<Employee>[] = [
-    { field: 'id', headerName: 'ID', width: 80, sortable: true, filter: 'number', floatingFilter: true },
-    { field: 'name', headerName: 'Name', width: 200, sortable: true, filter: 'text', floatingFilter: true },
-    { field: 'department', headerName: 'Department', width: 180, sortable: true, filter: 'text', rowGroup: false, floatingFilter: true },
-    { field: 'role', headerName: 'Role', width: 250, filter: 'text', floatingFilter: true },
+    { field: 'id', headerName: 'ID', width: 80, sortable: true, filter: 'number' },
+    { field: 'name', headerName: 'Name', width: 200, sortable: true, filter: 'text' },
+    { field: 'department', headerName: 'Department', width: 180, sortable: true, filter: 'text', rowGroup: false },
+    { field: 'role', headerName: 'Role', width: 250, filter: 'text' },
     {
       field: 'salary',
       headerName: 'Salary',
       width: 120,
       sortable: true,
       filter: 'number',
-      floatingFilter: true,
       valueFormatter: (params: any) => `$${params.value?.toLocaleString()}`,
     },
-    { field: 'location', headerName: 'Location', width: 150, filter: 'text', floatingFilter: true },
-    { field: 'startDate', headerName: 'Start Date', width: 130, filter: 'date', floatingFilter: true },
+    { field: 'location', headerName: 'Location', width: 150, filter: 'text' },
+    { field: 'startDate', headerName: 'Start Date', width: 130, filter: 'date' },
     {
       field: 'performance',
       headerName: 'Performance',
       width: 120,
       filter: 'number',
-      floatingFilter: true,
       cellRenderer: (params: any) => {
         const value = params.value;
         const color = value >= 80 ? '#22c55e' : value >= 60 ? '#eab308' : '#ef4444';
@@ -58,6 +57,10 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
       },
     },
   ];
+
+  gridOptions: any = {
+    floatingFilter: true
+  };
 
   private gridApi?: GridApi<Employee>;
   private fpsInterval?: number;
@@ -84,6 +87,13 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.gridApi) {
       this.gridApi.setColumnDefs(this.columnDefs);
       this.gridApi.onFilterChanged(); // Trigger re-processing
+    }
+  }
+
+  toggleFloatingFilter(): void {
+    this.isFloatingFilterShown = !this.isFloatingFilterShown;
+    if (this.gridApi) {
+      this.gridApi.setGridOption('floatingFilter', this.isFloatingFilterShown);
     }
   }
 

@@ -31,10 +31,12 @@ export class GridService<TData = any> {
   private selectedRows: Set<string> = new Set();
   private expandedGroups: Set<string> = new Set();
   private gridId: string = '';
+  private gridOptions: GridOptions<TData> | null = null;
   
   createApi(
     columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null,
-    rowData: TData[] | null
+    rowData: TData[] | null,
+    gridOptions?: GridOptions<TData> | null
   ): GridApi<TData> {
     this.columnDefs = columnDefs;
     this.rowData = rowData ? [...rowData] : [];
@@ -42,6 +44,7 @@ export class GridService<TData = any> {
     this.groupedRowData = [];
     this.displayedRowNodes = [];
     this.gridId = this.generateGridId();
+    this.gridOptions = gridOptions || null;
 
     this.initializeColumns();
     this.initializeRowNodes();
@@ -263,7 +266,14 @@ export class GridService<TData = any> {
       
       // Grid Information
       getGridId: () => this.gridId,
-      getGridOption: (key) => undefined as any,
+      getGridOption: (key) => this.gridOptions ? this.gridOptions[key] : undefined as any,
+      setGridOption: (key, value) => {
+        if (this.gridOptions) {
+          this.gridOptions[key] = value;
+        } else {
+          this.gridOptions = { [key]: value } as GridOptions<TData>;
+        }
+      },
       
       // Group Expansion
       setRowNodeExpanded: (node, expanded) => {

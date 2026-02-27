@@ -87,7 +87,7 @@ import { Subject } from 'rxjs';
             *ngFor="let col of getLeftPinnedColumns()"
             class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
             [style.width.px]="getColumnWidth(col)">
-            <div class="floating-filter-container" *ngIf="isFilterable(col)">
+            <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
               <input #filterInput
                      class="floating-filter-input" 
                      [type]="getFilterInputType(col)" 
@@ -106,7 +106,7 @@ import { Subject } from 'rxjs';
                 *ngFor="let col of getNonPinnedColumns()"
                 class="argent-grid-header-cell"
                 [style.width.px]="getColumnWidth(col)">
-                <div class="floating-filter-container" *ngIf="isFilterable(col)">
+                <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
                   <input #filterInput
                          class="floating-filter-input" 
                          [type]="getFilterInputType(col)" 
@@ -125,7 +125,7 @@ import { Subject } from 'rxjs';
             *ngFor="let col of getRightPinnedColumns()"
             class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
             [style.width.px]="getColumnWidth(col)">
-            <div class="floating-filter-container" *ngIf="isFilterable(col)">
+            <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
               <input #filterInput
                      class="floating-filter-input" 
                      [type]="getFilterInputType(col)" 
@@ -545,6 +545,11 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     if (changes['columnDefs'] && !changes['columnDefs'].firstChange) {
       this.onColumnDefsChanged(changes['columnDefs'].currentValue);
     }
+
+    // Handle gridOptions changes
+    if (changes['gridOptions'] && !changes['gridOptions'].firstChange) {
+      this.onGridOptionsChanged(changes['gridOptions'].currentValue);
+    }
   }
 
   ngAfterViewInit(): void {
@@ -587,7 +592,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     console.log('[ArgentGrid] initializeGrid:', { columnDefs: this.columnDefs?.length, rowData: this.rowData?.length });
 
     // Initialize grid API
-    this.gridApi = this.gridService.createApi(this.columnDefs, this.rowData);
+    this.gridApi = this.gridService.createApi(this.columnDefs, this.rowData, this.gridOptions);
 
     // Check if any column has checkbox selection
     this.showSelectionColumn = this.columnDefs?.some(col =>
@@ -631,6 +636,18 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       this.canvasRenderer?.render();
     }
     
+    this.cdr.detectChanges();
+  }
+
+  private onGridOptionsChanged(newOptions: GridOptions<TData> | null): void {
+    this.gridOptions = newOptions;
+    if (this.gridApi && newOptions) {
+      // Update all options in the API
+      Object.keys(newOptions).forEach(key => {
+        this.gridApi.setGridOption(key as any, (newOptions as any)[key]);
+      });
+      this.canvasRenderer?.render();
+    }
     this.cdr.detectChanges();
   }
   
@@ -879,6 +896,8 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   // --- Floating Filter Logic ---
 
   hasFloatingFilters(): boolean {
+    if (this.gridApi?.getGridOption('floatingFilter')) return true;
+    
     if (!this.columnDefs) return false;
     return this.columnDefs.some(col => {
       if ('children' in col) {
@@ -886,6 +905,16 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       }
       return col.floatingFilter;
     });
+  }
+
+  isFloatingFilterEnabled(col: ColDef<TData> | ColGroupDef<TData>): boolean {
+    if ('children' in col) return false;
+    if (!col.filter) return false;
+    
+    if (col.floatingFilter === true) return true;
+    if (col.floatingFilter === false) return false;
+    
+    return !!this.gridApi?.getGridOption('floatingFilter');
   }
 
   isFilterable(col: ColDef<TData> | ColGroupDef<TData>): boolean {
