@@ -373,7 +373,7 @@ export class CanvasRenderer<TData = any> {
     }
   }
 
-  private getHitTestResult(event: MouseEvent): { rowIndex: number; columnIndex: number } {
+  getHitTestResult(event: MouseEvent): { rowIndex: number; columnIndex: number } {
     const rect = this.canvas.getBoundingClientRect();
     const y = event.clientY - rect.top + this.scrollTop;
     const x = event.clientX - rect.left + this.scrollLeft;

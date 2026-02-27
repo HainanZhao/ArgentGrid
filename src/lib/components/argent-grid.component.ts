@@ -136,6 +136,28 @@ import { Subject } from 'rxjs';
           <span class="menu-icon">⤤</span> Unpin
         </div>
       </div>
+
+      <!-- Context Menu Overlay -->
+      <div class="argent-grid-context-menu" 
+           *ngIf="activeContextMenu"
+           [style.top.px]="contextMenuPosition.y"
+           [style.left.px]="contextMenuPosition.x"
+           (click)="$event.stopPropagation()">
+        <div class="menu-item" (click)="copyContextMenuCell()">
+          <span class="menu-icon">⎘</span> Copy Cell
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" (click)="exportCSV()">
+          <span class="menu-icon">⬇</span> Export CSV
+        </div>
+        <div class="menu-item" (click)="exportExcel()">
+          <span class="menu-icon">⬇</span> Export Excel
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" (click)="resetColumns()">
+          <span class="menu-icon">↺</span> Reset Columns
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -292,7 +314,7 @@ import { Subject } from 'rxjs';
       box-sizing: border-box;
     }
 
-    .argent-grid-header-menu {
+    .argent-grid-header-menu, .argent-grid-context-menu {
       position: fixed;
       background: white;
       border: 1px solid #ccc;
@@ -376,6 +398,12 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   activeHeaderMenu: ColDef<TData> | ColGroupDef<TData> | null = null;
   headerMenuPosition = { x: 0, y: 0 };
 
+  // Context Menu state
+  activeContextMenu = false;
+  contextMenuPosition = { x: 0, y: 0 };
+  private contextMenuCell: { rowNode: IRowNode<TData>, column: Column } | null = null;
+  private initialColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
+
   private gridApi!: GridApi<TData>;
   private canvasRenderer!: CanvasRenderer;
   private destroy$ = new Subject<void>();
@@ -384,6 +412,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
+    this.initialColumnDefs = this.columnDefs ? JSON.parse(JSON.stringify(this.columnDefs)) : null;
     this.initializeGrid();
   }
 
@@ -595,11 +624,82 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     if (this.activeHeaderMenu) {
       this.closeHeaderMenu();
     }
+    if (this.activeContextMenu) {
+      this.closeContextMenu();
+    }
   }
 
   onCanvasContextMenu(event: MouseEvent): void {
-    // Prevent default context menu on canvas for now, until context menu feature is built
     event.preventDefault();
+    
+    // Get hit test from canvas renderer to know which cell was clicked
+    const hitTest = this.canvasRenderer.getHitTestResult(event);
+    if (!hitTest || hitTest.rowIndex === -1) return;
+    
+    const rowNode = this.gridApi.getDisplayedRowAtIndex(hitTest.rowIndex);
+    const columns = this.gridApi.getAllColumns().filter(col => col.visible);
+    const column = columns[hitTest.columnIndex];
+    
+    if (!rowNode || !column) return;
+    
+    this.contextMenuCell = { rowNode, column };
+    this.activeContextMenu = true;
+    
+    // Position menu at mouse coordinates relative to viewport
+    const containerRect = this.viewportRef.nativeElement.parentElement?.getBoundingClientRect() || { top: 0, left: 0 };
+    this.contextMenuPosition = {
+      x: event.clientX - containerRect.left,
+      y: event.clientY - containerRect.top
+    };
+    
+    // Select the row
+    this.gridApi.deselectAll();
+    rowNode.selected = true;
+    this.updateSelectionState();
+    this.canvasRenderer?.render();
+    this.selectionChanged.emit(this.gridApi.getSelectedRows());
+    
+    this.cdr.detectChanges();
+  }
+
+  closeContextMenu(): void {
+    this.activeContextMenu = false;
+    this.contextMenuCell = null;
+    this.cdr.detectChanges();
+  }
+
+  copyContextMenuCell(): void {
+    if (!this.contextMenuCell || !this.contextMenuCell.column.field) return;
+    
+    const val = (this.contextMenuCell.rowNode.data as any)[this.contextMenuCell.column.field];
+    if (val !== undefined && val !== null) {
+      navigator.clipboard.writeText(String(val)).catch(err => {
+        console.error('Failed to copy text: ', err);
+      });
+    }
+    this.closeContextMenu();
+  }
+
+  exportCSV(): void {
+    this.gridApi.exportDataAsCsv();
+    this.closeContextMenu();
+  }
+
+  exportExcel(): void {
+    this.gridApi.exportDataAsExcel();
+    this.closeContextMenu();
+  }
+
+  resetColumns(): void {
+    if (this.initialColumnDefs) {
+      // Deep copy back the original defs
+      const restored = JSON.parse(JSON.stringify(this.initialColumnDefs));
+      this.onColumnDefsChanged(restored);
+      
+      // Also clear sort model
+      this.gridApi.setSortModel([]);
+    }
+    this.closeContextMenu();
   }
 
   sortColumnMenu(direction: 'asc' | 'desc' | null): void {
