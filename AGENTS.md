@@ -78,8 +78,9 @@ ArgentGrid/
 | Row Pinning | ✅ | Top/bottom pinned rows |
 | Selection | ✅ | Checkbox, multi-select, header checkbox |
 | Aggregation | ✅ | Sum, avg, min, max, count, custom |
+| Excel/CSV Export | ✅ | CSV with options, Excel via HTML table |
 | Transactions | ✅ | Add/update/remove rows |
-| TDD test suite | ✅ | 64 passing tests |
+| TDD test suite | ✅ | 69 passing tests |
 
 ### ⏳ Phase IV (Future)
 
@@ -160,7 +161,7 @@ npm run build:watch   # Watch build
 
 ```
 Test Suites: 2 passed, 2 total
-Tests:       4 skipped, 64 passed, 68 total
+Tests:       4 skipped, 69 passed, 73 total
 ```
 
 **Skipped tests:** 4 row grouping tests (test isolation issue with shared service instance)
@@ -251,11 +252,11 @@ git push origin main
 
 ## Recent Changes (Latest Commits)
 
+- **dd63c0a** feat: Add Excel/CSV export support
 - **e34e6ca** docs: Celebrate Phase III COMPLETE! 🎊🎉
 - **905a24e** feat: Add standalone aggregation support (Phase III COMPLETE!)
 - **e03c33d** feat: Add full row selection API
 - **45e22da** feat: Add row pinning support
-- **e944010** feat: Add column pinning support
 
 ## Important Notes
 

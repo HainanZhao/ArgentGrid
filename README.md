@@ -149,6 +149,7 @@ All core features implemented:
 - [x] Row Pinning (top/bottom pinned rows)
 - [x] Selection (full implementation with checkbox)
 - [x] Aggregation (sum, avg, min, max, count, custom)
+- [x] Excel/CSV Export (with formatting options)
 
 ### Phase IV: Advanced Features
 - [ ] Pivot Tables
