@@ -359,21 +359,18 @@ export class GridService<TData = any> {
     
     if (transaction.update) {
       transaction.update.forEach(data => {
-        const anyData = data as any;
-        const dataId = anyData?.id;
+        const id = this.getRowId(data, 0); // Note: index doesn't matter for id lookup if data has id
         
-        // First try direct lookup by data id
-        let existingNode: IRowNode<TData> | undefined;
-        for (const [nodeId, node] of this.rowNodes.entries()) {
-          const nodeDataId = (node.data as any)?.id;
-          if (nodeDataId === dataId) {
-            existingNode = node;
-            break;
-          }
-        }
-        
+        const existingNode = this.rowNodes.get(id);
         if (existingNode) {
           existingNode.data = data;
+          
+          // Also update in the original rowData array to persist across sorts/filters
+          const index = this.rowData.findIndex(r => this.getRowId(r, 0) === id);
+          if (index !== -1) {
+            this.rowData[index] = data;
+          }
+          
           result.update.push(existingNode);
         }
       });

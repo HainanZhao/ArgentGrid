@@ -1,4 +1,4 @@
-import { GridApi, IRowNode, Column } from '../types/ag-grid-types';
+import { GridApi, IRowNode, Column, ColDef } from '../types/ag-grid-types';
 
 /**
  * CanvasRenderer - High-performance canvas rendering engine for ArgentGrid
@@ -210,7 +210,21 @@ export class CanvasRenderer<TData = any> {
         if (cellValue !== null && cellValue !== undefined) {
           this.ctx.fillStyle = this.TEXT_COLOR;
           
-          let text = String(cellValue);
+          let text = '';
+          const colDef = this.getColumnDef(col);
+          
+          if (colDef && typeof colDef.valueFormatter === 'function') {
+            text = colDef.valueFormatter({
+              value: cellValue,
+              data: rowNode.data,
+              node: rowNode,
+              colDef,
+              api: this.gridApi
+            });
+          } else {
+            text = String(cellValue);
+          }
+
           let textX = cellX + this.CELL_PADDING;
           
           // Add indentation and indicator for group rows
@@ -482,6 +496,27 @@ export class CanvasRenderer<TData = any> {
       offset += col.width;
     }
     return offset;
+  }
+
+  private getColumnDef(column: Column): ColDef<TData> | null {
+    const allDefs = this.gridApi.getColumnDefs();
+    if (!allDefs) return null;
+
+    for (const def of allDefs) {
+      if ('children' in def) {
+        const found = def.children.find(c => {
+          const cDef = c as ColDef;
+          return cDef.colId === column.colId || cDef.field?.toString() === column.colId || cDef.field?.toString() === column.field;
+        });
+        if (found) return found as ColDef<TData>;
+      } else {
+        const cDef = def as ColDef;
+        if (cDef.colId === column.colId || cDef.field?.toString() === column.colId || cDef.field?.toString() === column.field) {
+          return def as ColDef<TData>;
+        }
+      }
+    }
+    return null;
   }
 
   /**

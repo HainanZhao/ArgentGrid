@@ -1319,15 +1319,24 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     }
   }
 
-  private getColumnDefForColumn(column: Column): ColDef<TData> | null {
+  private getColumnDefForColumn(column: Column | ColDef<TData> | ColGroupDef<TData>): ColDef<TData> | null {
     if (!this.columnDefs) return null;
     
+    const colId = (column as any).colId || (column as any).field?.toString();
+    if (!colId) return null;
+
     for (const def of this.columnDefs) {
       if ('children' in def) {
-        const found = def.children.find(c => 'colId' in c && c.colId === column.colId);
-        if (found && 'colId' in found) return found as ColDef<TData>;
-      } else if (def.colId === column.colId) {
-        return def;
+        const found = def.children.find(c => {
+          const cDef = c as ColDef;
+          return cDef.colId === colId || cDef.field?.toString() === colId;
+        });
+        if (found) return found as ColDef<TData>;
+      } else {
+        const cDef = def as ColDef;
+        if (cDef.colId === colId || cDef.field?.toString() === colId) {
+          return def as ColDef<TData>;
+        }
       }
     }
     return null;
