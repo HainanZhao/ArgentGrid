@@ -1,9 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, ChangeDetectionStrategy, AfterViewInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { GridApi, GridOptions, ColDef, ColGroupDef, IRowNode, Column } from '../types/ag-grid-types';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { GridService } from '../services/grid.service';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
-import { Subject } from 'rxjs';
 
 @Component({
   selector: 'argent-grid',
@@ -669,6 +670,14 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private initializeGrid(): void {
     // Initialize grid API
     this.gridApi = this.gridService.createApi(this.columnDefs, this.rowData, this.gridOptions);
+
+    // Listen for grid option changes from API
+    this.gridService.gridOptionsChanged$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.canvasRenderer?.render();
+        this.cdr.detectChanges();
+      });
 
     // Check if any column has checkbox selection
     this.showSelectionColumn = this.columnDefs?.some(col =>

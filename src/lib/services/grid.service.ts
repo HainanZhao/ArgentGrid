@@ -1,6 +1,6 @@
 import { Injectable, Inject, Optional } from '@angular/core';
-import {
-  GridApi,
+import { Subject } from 'rxjs';
+import {  GridApi,
   GridOptions,
   ColDef,
   ColGroupDef,
@@ -32,6 +32,7 @@ export class GridService<TData = any> {
   private expandedGroups: Set<string> = new Set();
   private gridId: string = '';
   private gridOptions: GridOptions<TData> | null = null;
+  public gridOptionsChanged$ = new Subject<{ key: string, value: any }>();
   
   createApi(
     columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null,
@@ -44,7 +45,7 @@ export class GridService<TData = any> {
     this.groupedRowData = [];
     this.displayedRowNodes = [];
     this.gridId = this.generateGridId();
-    this.gridOptions = gridOptions || null;
+    this.gridOptions = gridOptions ? { ...gridOptions } : {};
 
     this.initializeColumns();
     this.initializeRowNodes();
@@ -304,11 +305,11 @@ export class GridService<TData = any> {
       getGridId: () => this.gridId,
       getGridOption: (key) => this.gridOptions ? this.gridOptions[key] : undefined as any,
       setGridOption: (key, value) => {
-        if (this.gridOptions) {
-          this.gridOptions[key] = value;
-        } else {
-          this.gridOptions = { [key]: value } as GridOptions<TData>;
+        if (!this.gridOptions) {
+          this.gridOptions = {} as GridOptions<TData>;
         }
+        this.gridOptions[key] = value;
+        this.gridOptionsChanged$.next({ key: key as string, value });
       },
       
       // Group Expansion
