@@ -12,12 +12,12 @@ import { GridService } from './services/grid.service';
   imports: [
     CommonModule
   ],
+  providers: [
+    GridService
+  ],
   exports: [
     ArgentGridComponent,
     AgGridCompatibilityDirective
-  ],
-  providers: [
-    GridService
   ]
 })
 export class ArgentGridModule {}

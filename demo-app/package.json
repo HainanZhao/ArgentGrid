@@ -28,6 +28,7 @@
     "@angular-devkit/build-angular": "^18.0.0",
     "@angular/cli": "^18.0.0",
     "@angular/compiler-cli": "^18.0.0",
+    "@playwright/test": "^1.58.2",
     "typescript": "~5.4.0"
   }
 }

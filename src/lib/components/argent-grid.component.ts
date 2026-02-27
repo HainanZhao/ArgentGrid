@@ -230,8 +230,9 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private gridApi!: GridApi<TData>;
   private canvasRenderer!: CanvasRenderer;
   private destroy$ = new Subject<void>();
+  private gridService = new GridService<TData>();
 
-  constructor(private gridService: GridService<TData>) {}
+  constructor() {}
 
   ngOnInit(): void {
     this.initializeGrid();

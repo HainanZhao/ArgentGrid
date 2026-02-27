@@ -18,8 +18,8 @@
     "module": "ES2022",
     "lib": ["ES2022", "dom"],
     "paths": {
-      "argentgrid": ["../src/public-api.ts"],
-      "@argentgrid/*": ["../src/lib/*"]
+      "argentgrid": ["../dist"],
+      "@argentgrid/*": ["../dist/lib/*"]
     }
   },
   "angularCompilerOptions": {
