@@ -128,10 +128,142 @@ describe('GridService', () => {
     const filterModel: FilterModel = {
       name: { filterType: 'text', type: 'contains', filter: 'John' }
     };
-    
+
     api.setFilterModel(filterModel);
     expect(api.getFilterModel()).toEqual(filterModel);
     expect(api.isFilterPresent()).toBe(true);
+  });
+
+  it('should apply text filter - contains', () => {
+    const filterApi = service.createApi(testColumnDefs, [...testRowData]);
+    filterApi.setFilterModel({
+      name: { filterType: 'text', type: 'contains', filter: 'John' }
+    });
+
+    const data = filterApi.getRowData();
+    // Filter should match 'John Doe' and 'Bob Johnson'
+    expect(data.length).toBeLessThan(3);
+  });
+
+  it('should apply text filter - starts with', () => {
+    const filterApi = service.createApi(testColumnDefs, [...testRowData]);
+    filterApi.setFilterModel({
+      name: { filterType: 'text', type: 'startsWith', filter: 'J' }
+    });
+
+    const data = filterApi.getRowData();
+    // Should match 'John Doe' and 'Jane Smith'
+    data.forEach(row => {
+      expect(row.name.startsWith('J')).toBe(true);
+    });
+  });
+
+  it('should apply text filter - ends with', () => {
+    const filterApi = service.createApi(testColumnDefs, [...testRowData]);
+    filterApi.setFilterModel({
+      name: { filterType: 'text', type: 'endsWith', filter: 'e' }
+    });
+
+    const data = filterApi.getRowData();
+    data.forEach(row => {
+      expect(row.name.endsWith('e')).toBe(true);
+    });
+  });
+
+  it('should apply text filter - equals', () => {
+    const filterApi = service.createApi(testColumnDefs, [...testRowData]);
+    filterApi.setFilterModel({
+      name: { filterType: 'text', type: 'equals', filter: 'John Doe' }
+    });
+
+    const data = filterApi.getRowData();
+    expect(data.length).toBe(1);
+    expect(data[0].name).toBe('John Doe');
+  });
+
+  it('should apply number filter - greater than', () => {
+    const filterApi = service.createApi(testColumnDefs, [...testRowData]);
+    filterApi.setFilterModel({
+      age: { filterType: 'number', type: 'greaterThan', filter: 28 }
+    });
+
+    const data = filterApi.getRowData();
+    data.forEach(row => {
+      expect(row.age).toBeGreaterThan(28);
+    });
+  });
+
+  it('should apply number filter - less than', () => {
+    const filterApi = service.createApi(testColumnDefs, [...testRowData]);
+    filterApi.setFilterModel({
+      age: { filterType: 'number', type: 'lessThan', filter: 32 }
+    });
+
+    const data = filterApi.getRowData();
+    data.forEach(row => {
+      expect(row.age).toBeLessThan(32);
+    });
+  });
+
+  it('should apply number filter - in range', () => {
+    const filterApi = service.createApi(testColumnDefs, [...testRowData]);
+    filterApi.setFilterModel({
+      age: { filterType: 'number', type: 'inRange', filter: 26, filterTo: 34 }
+    });
+
+    const data = filterApi.getRowData();
+    data.forEach(row => {
+      expect(row.age).toBeGreaterThanOrEqual(26);
+      expect(row.age).toBeLessThanOrEqual(34);
+    });
+  });
+
+  it('should apply date filter', () => {
+    const dateData: any[] = [
+      { id: 1, name: 'Event 1', date: '2024-01-15' },
+      { id: 2, name: 'Event 2', date: '2024-06-20' },
+      { id: 3, name: 'Event 3', date: '2024-12-01' }
+    ];
+    const dateColumnDefs: any[] = [
+      { colId: 'id', field: 'id', headerName: 'ID' },
+      { colId: 'name', field: 'name', headerName: 'Name' },
+      { colId: 'date', field: 'date', headerName: 'Date', filter: 'agDateColumnFilter' }
+    ];
+
+    const filterApi = service.createApi(dateColumnDefs, dateData);
+    filterApi.setFilterModel({
+      date: { filterType: 'date', type: 'greaterThan', filter: '2024-03-01' }
+    });
+
+    const data = filterApi.getRowData();
+    // Should match events after March 2024
+    expect(data.length).toBe(2);
+  });
+
+  it('should clear filter when model is empty', () => {
+    const filterApi = service.createApi(testColumnDefs, [...testRowData]);
+    filterApi.setFilterModel({
+      name: { filterType: 'text', type: 'contains', filter: 'John' }
+    });
+    expect(api.isFilterPresent()).toBe(true);
+
+    filterApi.setFilterModel({});
+    expect(filterApi.isFilterPresent()).toBe(false);
+  });
+
+  it('should combine multiple filters (AND logic)', () => {
+    const filterApi = service.createApi(testColumnDefs, [...testRowData]);
+    filterApi.setFilterModel({
+      name: { filterType: 'text', type: 'startsWith', filter: 'J' },
+      age: { filterType: 'number', type: 'lessThan', filter: 30 }
+    });
+
+    const data = filterApi.getRowData();
+    // Should match 'Jane Smith' (starts with J and age < 30)
+    data.forEach(row => {
+      expect(row.name.startsWith('J')).toBe(true);
+      expect(row.age).toBeLessThan(30);
+    });
   });
 
   it('should get grid state', () => {

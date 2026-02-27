@@ -26,6 +26,7 @@ export class GridService<TData = any> {
   private columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
   private sortModel: SortModelItem[] = [];
   private filterModel: FilterModel = {};
+  private filteredRowData: TData[] = [];
   private selectedRows: Set<string> = new Set();
   private gridId: string = '';
   
@@ -131,9 +132,10 @@ export class GridService<TData = any> {
       },
       
       // Row Data API
-      getRowData: () => [...this.rowData],
+      getRowData: () => [...this.filteredRowData.length > 0 ? this.filteredRowData : this.rowData],
       setRowData: (rowData) => {
         this.rowData = rowData;
+        this.filteredRowData = [...rowData];
         this.initializeRowNodes();
       },
       applyTransaction: (transaction) => this.applyTransaction(transaction),
@@ -159,11 +161,11 @@ export class GridService<TData = any> {
       // Filter API
       setFilterModel: (model) => {
         this.filterModel = model;
-        // TODO: Apply filtering logic
+        this.applyFiltering();
       },
       getFilterModel: () => ({ ...this.filterModel }),
       onFilterChanged: () => {
-        // TODO: Trigger filter update
+        this.applyFiltering();
       },
       isFilterPresent: () => Object.keys(this.filterModel).length > 0,
       
@@ -327,17 +329,17 @@ export class GridService<TData = any> {
     if (this.sortModel.length === 0) {
       return;
     }
-    
+
     // Sort rowData based on sort model
     this.rowData.sort((a, b) => {
       for (const sortItem of this.sortModel) {
         const column = this.columns.get(sortItem.colId);
         if (!column?.field) continue;
-        
+
         const field = column.field as keyof TData;
         const valueA = a[field] as any;
         const valueB = b[field] as any;
-        
+
         const comparison = this.compareValues(valueA, valueB);
         if (comparison !== 0) {
           return sortItem.sort === 'desc' ? -comparison : comparison;
@@ -345,9 +347,169 @@ export class GridService<TData = any> {
       }
       return 0;
     });
-    
+
     // Re-initialize row nodes with sorted data
     this.initializeRowNodes();
+  }
+
+  private applyFiltering(): void {
+    if (Object.keys(this.filterModel).length === 0) {
+      // No filters, use all data
+      this.filteredRowData = [...this.rowData];
+    } else {
+      // Apply filters with AND logic
+      this.filteredRowData = this.rowData.filter(row => {
+        return Object.keys(this.filterModel).every(colId => {
+          const filterItem = this.filterModel[colId];
+          if (!filterItem) return true;
+
+          const column = this.columns.get(colId);
+          if (!column?.field) return true;
+
+          const value = (row as any)[column.field];
+          return this.matchesFilter(value, filterItem);
+        });
+      });
+    }
+
+    // Re-initialize row nodes with filtered data
+    this.initializeRowNodesFromFilteredData();
+  }
+
+  private matchesFilter(value: any, filterItem: FilterModelItem): boolean {
+    if (value === null || value === undefined) {
+      return false;
+    }
+
+    const { filterType, type, filter, filterTo } = filterItem;
+
+    switch (filterType) {
+      case 'text':
+        return this.matchesTextFilter(String(value), type, filter);
+      case 'number':
+        return this.matchesNumberFilter(Number(value), type, filter, filterTo);
+      case 'date':
+        return this.matchesDateFilter(String(value), type, filter, filterTo);
+      case 'boolean':
+        return this.matchesBooleanFilter(value, filter);
+      default:
+        return true;
+    }
+  }
+
+  private matchesTextFilter(value: string, type: string | undefined, filter: any): boolean {
+    if (!type || filter === null || filter === undefined) {
+      return true;
+    }
+
+    const lowerValue = String(value).toLowerCase();
+    const lowerFilter = String(filter).toLowerCase();
+
+    switch (type) {
+      case 'contains':
+        return lowerValue.includes(lowerFilter);
+      case 'notContains':
+        return !lowerValue.includes(lowerFilter);
+      case 'startsWith':
+        return lowerValue.startsWith(lowerFilter);
+      case 'endsWith':
+        return lowerValue.endsWith(lowerFilter);
+      case 'equals':
+        return lowerValue === lowerFilter;
+      case 'notEqual':
+        return lowerValue !== lowerFilter;
+      default:
+        return true;
+    }
+  }
+
+  private matchesNumberFilter(value: number, type: string | undefined, filter: any, filterTo?: any): boolean {
+    if (type === undefined || filter === null || filter === undefined || isNaN(value)) {
+      return true;
+    }
+
+    const filterNum = Number(filter);
+
+    switch (type) {
+      case 'equals':
+        return value === filterNum;
+      case 'notEqual':
+        return value !== filterNum;
+      case 'greaterThan':
+        return value > filterNum;
+      case 'greaterThanOrEqual':
+        return value >= filterNum;
+      case 'lessThan':
+        return value < filterNum;
+      case 'lessThanOrEqual':
+        return value <= filterNum;
+      case 'inRange':
+        const filterToNum = Number(filterTo);
+        return value >= filterNum && value <= filterToNum;
+      default:
+        return true;
+    }
+  }
+
+  private matchesDateFilter(value: string, type: string | undefined, filter: any, filterTo?: any): boolean {
+    if (!type || !filter) {
+      return true;
+    }
+
+    const valueDate = new Date(value).getTime();
+    const filterDate = new Date(filter).getTime();
+
+    if (type === 'inRange' && filterTo) {
+      const filterToDate = new Date(filterTo).getTime();
+      return valueDate >= filterDate && valueDate <= filterToDate;
+    }
+
+    switch (type) {
+      case 'equals':
+        return valueDate === filterDate;
+      case 'notEqual':
+        return valueDate !== filterDate;
+      case 'greaterThan':
+        return valueDate > filterDate;
+      case 'greaterThanOrEqual':
+        return valueDate >= filterDate;
+      case 'lessThan':
+        return valueDate < filterDate;
+      case 'lessThanOrEqual':
+        return valueDate <= filterDate;
+      default:
+        return true;
+    }
+  }
+
+  private matchesBooleanFilter(value: any, filter: any): boolean {
+    if (filter === null || filter === undefined) {
+      return true;
+    }
+    return Boolean(value) === Boolean(filter);
+  }
+
+  private initializeRowNodesFromFilteredData(): void {
+    this.rowNodes.clear();
+    this.filteredRowData.forEach((data, index) => {
+      const id = this.getRowId(data, index);
+      const node: IRowNode<TData> = {
+        id,
+        data,
+        rowPinned: false,
+        rowHeight: null,
+        displayed: true,
+        selected: this.selectedRows.has(id),
+        expanded: false,
+        group: false,
+        level: 0,
+        firstChild: index === 0,
+        lastChild: index === this.filteredRowData.length - 1,
+        rowIndex: index,
+        displayedRowIndex: index
+      };
+      this.rowNodes.set(id, node);
+    });
   }
   
   private compareValues(a: any, b: any): number {
