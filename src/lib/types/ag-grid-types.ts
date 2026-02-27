@@ -404,6 +404,9 @@ export interface GridApi<TData = any> {
   // === GRID INFORMATION ===
   getGridId(): string;
   getGridOption<K extends keyof GridOptions<TData>>(key: K): GridOptions<TData>[K];
+
+  // === GROUP EXPANSION ===
+  setRowNodeExpanded(node: IRowNode<TData>, expanded: boolean): void;
 }
 
 // ============================================================================

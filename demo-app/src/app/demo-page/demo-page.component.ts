@@ -27,21 +27,23 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
   fps = 0;
   isLoading = false;
   rowCount = 100000;
+  isGrouped = false;
 
   columnDefs: ColDef<Employee>[] = [
-    { field: 'id', headerName: 'ID', width: 80, sortable: true },
-    { field: 'name', headerName: 'Name', width: 200, sortable: true },
-    { field: 'department', headerName: 'Department', width: 180, sortable: true, filter: true },
-    { field: 'role', headerName: 'Role', width: 250 },
+    { field: 'id', headerName: 'ID', width: 80, sortable: true, filter: 'number' },
+    { field: 'name', headerName: 'Name', width: 200, sortable: true, filter: 'text' },
+    { field: 'department', headerName: 'Department', width: 180, sortable: true, filter: 'text', rowGroup: false },
+    { field: 'role', headerName: 'Role', width: 250, filter: 'text' },
     {
       field: 'salary',
       headerName: 'Salary',
       width: 120,
       sortable: true,
+      filter: 'number',
       valueFormatter: (params: any) => `$${params.value?.toLocaleString()}`,
     },
-    { field: 'location', headerName: 'Location', width: 150 },
-    { field: 'startDate', headerName: 'Start Date', width: 130 },
+    { field: 'location', headerName: 'Location', width: 150, filter: 'text' },
+    { field: 'startDate', headerName: 'Start Date', width: 130, filter: 'date' },
     {
       field: 'performance',
       headerName: 'Performance',
@@ -65,6 +67,35 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     // Grid is ready after view init
+  }
+
+  toggleGrouping(): void {
+    this.isGrouped = !this.isGrouped;
+    this.columnDefs = this.columnDefs.map(col => {
+      if (col.field === 'department') {
+        return { ...col, rowGroup: this.isGrouped };
+      }
+      return col;
+    });
+    
+    if (this.gridApi) {
+      this.gridApi.setColumnDefs(this.columnDefs);
+      this.gridApi.onFilterChanged(); // Trigger re-processing
+    }
+  }
+
+  applyFilter(): void {
+    if (this.gridApi) {
+      this.gridApi.setFilterModel({
+        department: { filterType: 'text', type: 'contains', filter: 'Eng' }
+      });
+    }
+  }
+
+  clearFilters(): void {
+    if (this.gridApi) {
+      this.gridApi.setFilterModel({});
+    }
   }
 
   startFPSCounter(): void {

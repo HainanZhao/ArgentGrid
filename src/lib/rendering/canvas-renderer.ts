@@ -17,7 +17,6 @@ export class CanvasRenderer<TData = any> {
   private ctx: CanvasRenderingContext2D;
   private gridApi: GridApi<TData>;
   private rowHeight: number;
-  private visibleRows: IRowNode<TData>[] = [];
   private scrollTop = 0;
   private scrollLeft = 0;
   private animationFrameId: number | null = null;
@@ -219,7 +218,7 @@ export class CanvasRenderer<TData = any> {
       this.ctx.stroke();
 
       // Render cells
-      columns.forEach(col => {
+      columns.forEach((col, colIndex) => {
         const colPos = columnPositions.get(col.colId);
         if (!colPos) return;
 
@@ -240,28 +239,47 @@ export class CanvasRenderer<TData = any> {
         // Cell text with truncation
         if (cellValue !== null && cellValue !== undefined) {
           this.ctx.fillStyle = this.TEXT_COLOR;
-          const text = String(cellValue);
+          
+          let text = String(cellValue);
+          let textX = cellX + this.CELL_PADDING;
+          
+          // Add indentation and indicator for group rows in the first visible column
+          if (colIndex === 0 && (rowNode.group || rowNode.level > 0)) {
+            const indent = rowNode.level * 20;
+            textX += indent;
+            
+            if (rowNode.group) {
+              // Render chevron
+              this.ctx.beginPath();
+              this.ctx.fillStyle = this.TEXT_COLOR;
+              if (rowNode.expanded) {
+                // Down chevron
+                this.ctx.moveTo(textX, y + this.rowHeight / 2 - 3);
+                this.ctx.lineTo(textX + 8, y + this.rowHeight / 2 - 3);
+                this.ctx.lineTo(textX + 4, y + this.rowHeight / 2 + 3);
+              } else {
+                // Right chevron
+                this.ctx.moveTo(textX + 2, y + this.rowHeight / 2 - 4);
+                this.ctx.lineTo(textX + 6, y + this.rowHeight / 2);
+                this.ctx.lineTo(textX + 2, y + this.rowHeight / 2 + 4);
+              }
+              this.ctx.fill();
+              textX += 15;
+            }
+          }
+
           const truncatedText = this.truncateText(
             text,
-            colPos.width - (this.CELL_PADDING * 2)
+            colPos.width - (textX - cellX) - this.CELL_PADDING
           );
 
           this.ctx.fillText(
             truncatedText,
-            cellX + this.CELL_PADDING,
+            textX,
             y + this.rowHeight / 2
           );
         }
       });
-    }
-
-    // Store visible rows for hit testing (adjust for scroll offset)
-    this.visibleRows = [];
-    for (let rowIndex = startIndex; rowIndex < endIndex; rowIndex++) {
-      const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
-      if (rowNode) {
-        this.visibleRows.push(rowNode);
-      }
     }
   }
 
@@ -289,9 +307,8 @@ export class CanvasRenderer<TData = any> {
 
   private handleMouseDown(event: MouseEvent): void {
     const { rowIndex } = this.getHitTestResult(event);
-    if (rowIndex === -1 || rowIndex >= this.visibleRows.length) return;
-
-    const rowNode = this.visibleRows[rowIndex];
+    
+    const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
 
     // Handle selection
@@ -313,10 +330,24 @@ export class CanvasRenderer<TData = any> {
 
   private handleClick(event: MouseEvent): void {
     const { rowIndex, columnIndex } = this.getHitTestResult(event);
-    if (rowIndex === -1 || rowIndex >= this.visibleRows.length) return;
-
-    const rowNode = this.visibleRows[rowIndex];
+    
+    const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
+
+    // Handle expand/collapse toggle if it's a group row and clicked near the indicator
+    if (rowNode.group && columnIndex === 0) {
+      // Check if click was roughly in the indentation/chevron area
+      const rect = this.canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left + this.scrollLeft;
+      const indent = rowNode.level * 20;
+      const indicatorAreaWidth = this.CELL_PADDING + indent + 20;
+
+      if (x < indicatorAreaWidth) {
+        this.gridApi.setRowNodeExpanded(rowNode, !rowNode.expanded);
+        this.render();
+        return;
+      }
+    }
 
     // Emit row click event for selection handling
     if (this.onRowClick) {
@@ -326,9 +357,8 @@ export class CanvasRenderer<TData = any> {
 
   private handleDoubleClick(event: MouseEvent): void {
     const { rowIndex, columnIndex } = this.getHitTestResult(event);
-    if (rowIndex === -1 || rowIndex >= this.visibleRows.length) return;
-
-    const rowNode = this.visibleRows[rowIndex];
+    
+    const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
 
     // Get column at index

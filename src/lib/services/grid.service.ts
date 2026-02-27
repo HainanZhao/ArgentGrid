@@ -263,7 +263,19 @@ export class GridService<TData = any> {
       
       // Grid Information
       getGridId: () => this.gridId,
-      getGridOption: (key) => undefined as any
+      getGridOption: (key) => undefined as any,
+      
+      // Group Expansion
+      setRowNodeExpanded: (node, expanded) => {
+        if (node.id && node.group) {
+          if (expanded) {
+            this.expandedGroups.add(node.id);
+          } else {
+            this.expandedGroups.delete(node.id);
+          }
+          this.applyGrouping();
+        }
+      }
     };
   }
   

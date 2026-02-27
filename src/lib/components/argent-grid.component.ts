@@ -236,7 +236,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private viewportHeight = 500;
 
   get totalHeight(): number {
-    return (this.rowData?.length || 0) * this.rowHeight;
+    return (this.gridApi?.getDisplayedRowCount() || 0) * this.rowHeight;
   }
 
   get totalWidth(): number {
@@ -363,6 +363,8 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       this.gridApi.setColumnDefs(newColumnDefs);
       this.canvasRenderer?.render();
     }
+    
+    this.cdr.detectChanges();
   }
   
   getColumnWidth(col: ColDef<TData> | ColGroupDef<TData>): number {
