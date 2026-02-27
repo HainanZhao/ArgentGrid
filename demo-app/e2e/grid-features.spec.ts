@@ -224,6 +224,42 @@ test.describe('ArgentGrid Feature Guard Rails', () => {
     // Should be roughly initialWidth + 100 (allow 10px margin)
     expect(Math.abs(idBoxAfter!.width - (initialWidth + 100))).toBeLessThanOrEqual(10);
   });
+
+  test('should support Excel-like range selection by dragging', async ({ page }) => {
+    const canvas = page.locator('canvas');
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Canvas box not found');
+
+    // 1. Start drag at cell (row 1, col 'name')
+    // Name column starts at x=80 (if selection col hidden) or x=112 (if selection col shown)
+    // selectionColumnWidth is 32. 
+    // ID column is 80.
+    // Name column starts around x = 32 + 80 = 112.
+    const startX = 150;
+    const startY = 16; // Middle of first row (32px high)
+
+    await page.mouse.move(box.x + startX, box.y + startY);
+    await page.mouse.down();
+
+    // 2. Drag to cell (row 3, col 'department')
+    // Row 3 is at y = 32 * 2 + 16 = 80.
+    // Dept column is 180 wide.
+    const endX = 350;
+    const endY = 80;
+
+    await page.mouse.move(box.x + endX, box.y + endY, { steps: 10 });
+    await page.mouse.up();
+
+    // 3. Verify range selection via API
+    const ranges = await page.evaluate(() => window.gridApi.getCellRanges());
+    expect(ranges).toBeTruthy();
+    expect(ranges.length).toBe(1);
+    
+    const range = ranges[0];
+    expect(range.startRow).toBe(0);
+    expect(range.endRow).toBe(2); // row 1 to 3
+    expect(range.columns.length).toBeGreaterThan(1);
+  });
 });
 
 declare global {

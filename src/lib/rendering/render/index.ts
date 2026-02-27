@@ -84,6 +84,7 @@ export {
   measureText,
   calculateColumnWidth,
   getFormattedValue,
+  getValueByPath,
   renderRow,
 } from './cells';
 

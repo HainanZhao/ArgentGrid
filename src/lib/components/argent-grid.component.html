@@ -1,0 +1,303 @@
+<div class="argent-grid-container" [style.height]="height" [style.width]="width" (click)="onContainerClick($event)">
+  <div class="argent-grid-main-layout">
+    <div class="argent-grid-content-area">
+      <!-- Header Layer (DOM-based for accessibility) -->
+      <div class="argent-grid-header">
+        <!-- Main Header Row -->
+        <div class="argent-grid-header-row">
+          <!-- Selection Column Header -->
+          <div
+            *ngIf="showSelectionColumn"
+            class="argent-grid-header-cell argent-grid-selection-header"
+            [style.width.px]="selectionColumnWidth"
+            (click)="onSelectionHeaderClick()">
+            <input type="checkbox"
+                   [checked]="isAllSelected"
+                   [indeterminate]="isIndeterminateSelection"
+                   (change)="onSelectionHeaderChange($event)" />
+          </div>
+        
+          <!-- Left Pinned Columns -->
+          <div class="argent-grid-header-pinned-left-container"
+               cdkDropList
+               id="left-pinned"
+               [cdkDropListConnectedTo]="['scrollable', 'right-pinned']"
+               cdkDropListOrientation="horizontal"
+               (cdkDropListDropped)="onColumnDropped($event, 'left')">
+            <div
+              *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
+              class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
+              [style.width.px]="getColumnWidth(col)"
+              [class.sortable]="isSortable(col)"
+              (click)="onHeaderClick(col)"
+              cdkDrag
+              [cdkDragData]="col">
+              <div class="argent-grid-header-content" cdkDragHandle>
+                <span class="header-text">{{ getHeaderName(col) }}</span>
+                <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+              </div>
+              <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
+                &#8942;
+              </div>
+              <div class="argent-grid-header-resize-handle" 
+                   *ngIf="isResizable(col)" 
+                   [class.resizing]="isResizing && resizeColumn === col"
+                   (mousedown)="onResizeMouseDown($event, col)">
+              </div>
+            </div>
+          </div>
+          
+          <!-- Scrollable Columns -->
+          <div class="argent-grid-header-scrollable"
+               #headerScrollable
+               cdkDropList
+               id="scrollable"
+               [cdkDropListConnectedTo]="['left-pinned', 'right-pinned']"
+               cdkDropListOrientation="horizontal"
+               (cdkDropListDropped)="onColumnDropped($event, 'none')">
+            <div class="argent-grid-header-row">
+              <div
+                *ngFor="let col of getNonPinnedColumns(); trackBy: trackByColumn"
+                class="argent-grid-header-cell"
+                [style.width.px]="getColumnWidth(col)"
+                [class.sortable]="isSortable(col)"
+                (click)="onHeaderClick(col)"
+                cdkDrag
+                [cdkDragData]="col">
+                <div class="argent-grid-header-content" cdkDragHandle>
+                  <span class="header-text">{{ getHeaderName(col) }}</span>
+                  <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+                </div>
+                <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
+                  &#8942;
+                </div>
+                <div class="argent-grid-header-resize-handle" 
+                     *ngIf="isResizable(col)" 
+                     [class.resizing]="isResizing && resizeColumn === col"
+                     (mousedown)="onResizeMouseDown($event, col)">
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Right Pinned Columns -->
+          <div class="argent-grid-header-pinned-right-container"
+               cdkDropList
+               id="right-pinned"
+               [cdkDropListConnectedTo]="['left-pinned', 'scrollable']"
+               cdkDropListOrientation="horizontal"
+               (cdkDropListDropped)="onColumnDropped($event, 'right')">
+            <div
+              *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
+              class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
+              [style.width.px]="getColumnWidth(col)"
+              [class.sortable]="isSortable(col)"
+              (click)="onHeaderClick(col)"
+              cdkDrag
+              [cdkDragData]="col">
+              <div class="argent-grid-header-content" cdkDragHandle>
+                <span class="header-text">{{ getHeaderName(col) }}</span>
+                <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+              </div>
+              <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
+                &#8942;
+              </div>
+              <div class="argent-grid-header-resize-handle" 
+                   *ngIf="isResizable(col)" 
+                   [class.resizing]="isResizing && resizeColumn === col"
+                   (mousedown)="onResizeMouseDown($event, col)">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Floating Filter Row -->
+        <div class="argent-grid-header-row floating-filter-row" *ngIf="hasFloatingFilters()">
+          <!-- Selection Column Padding -->
+          <div *ngIf="showSelectionColumn" class="argent-grid-header-cell" [style.width.px]="selectionColumnWidth"></div>
+
+          <!-- Left Pinned Filters -->
+          <div class="argent-grid-header-pinned-left-container">
+            <div
+              *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
+              class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
+              [style.width.px]="getColumnWidth(col)">
+              <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
+                <input #filterInput
+                       class="floating-filter-input"
+                       [type]="getFilterInputType(col)"
+                       [value]="getFloatingFilterValue(col)"
+                       (input)="onFloatingFilterInput($event, col)"
+                       [placeholder]="'Filter...'" />
+                <span class="floating-filter-clear"
+                      *ngIf="hasFilterValue(col, filterInput)"
+                      (click)="clearFloatingFilter(col, filterInput)">✕</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Scrollable Filters -->
+          <div class="argent-grid-header-scrollable" #headerScrollableFilter>
+            <div class="argent-grid-header-row">
+              <div
+                *ngFor="let col of getNonPinnedColumns(); trackBy: trackByColumn"
+                class="argent-grid-header-cell"
+                [style.width.px]="getColumnWidth(col)">
+                <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
+                  <input #filterInput
+                         class="floating-filter-input"
+                         [type]="getFilterInputType(col)"
+                         [value]="getFloatingFilterValue(col)"
+                         (input)="onFloatingFilterInput($event, col)"
+                         [placeholder]="'Filter...'" />
+                  <span class="floating-filter-clear"
+                        *ngIf="hasFilterValue(col, filterInput)"
+                        (click)="clearFloatingFilter(col, filterInput)">✕</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Pinned Filters -->
+          <div class="argent-grid-header-pinned-right-container">
+            <div
+              *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
+              class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
+              [style.width.px]="getColumnWidth(col)">
+              <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
+                <input #filterInput
+                       class="floating-filter-input"
+                       [type]="getFilterInputType(col)"
+                       [value]="getFloatingFilterValue(col)"
+                       (input)="onFloatingFilterInput($event, col)"
+                       [placeholder]="'Filter...'" />
+                <span class="floating-filter-clear"
+                      *ngIf="hasFilterValue(col, filterInput)"
+                      (click)="clearFloatingFilter(col, filterInput)">✕</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Canvas Layer for Data Viewport with virtual scrolling -->
+      <div class="argent-grid-viewport" #viewport>
+        <!-- Spacer to create scrollbars for virtual scrolling -->
+        <div class="argent-grid-scroll-spacer" [style.height.px]="totalHeight" [style.width.px]="totalWidth"></div>
+        
+        <canvas #gridCanvas class="argent-grid-canvas" (contextmenu)="onCanvasContextMenu($event)"></canvas>
+        
+        <!-- Cell Editor Overlay -->
+        <div class="argent-grid-cell-editor" 
+             *ngIf="isEditing"
+             [style.top.px]="editorPosition.y"
+             [style.left.px]="editorPosition.x"
+             [style.width.px]="editorPosition.width"
+             [style.height.px]="editorPosition.height"
+             (click)="$event.stopPropagation()">
+          <input #editorInput
+                 type="text"
+                 class="argent-grid-editor-input"
+                 [value]="editingValue"
+                 (input)="onEditorInput($event)"
+                 (keydown)="onEditorKeydown($event)"
+                 (blur)="onEditorBlur()"
+                 autofocus />
+        </div>
+      </div>
+    </div>
+
+    <!-- Side Bar / Tool Panels -->
+    <div class="argent-grid-side-bar" *ngIf="sideBarVisible" [class.has-active-panel]="!!activeToolPanel">
+      <div class="side-bar-buttons">
+        <div class="side-bar-button" [class.active]="activeToolPanel === 'columns'" (click)="toggleToolPanel('columns')">
+          Columns
+        </div>
+        <div class="side-bar-button" [class.active]="activeToolPanel === 'filters'" (click)="toggleToolPanel('filters')">
+          Filters
+        </div>
+      </div>
+      
+      <div class="tool-panel-content" *ngIf="activeToolPanel">
+        <!-- Columns Tool Panel -->
+        <div class="columns-tool-panel" *ngIf="activeToolPanel === 'columns'">
+          <h3>Columns</h3>
+          <div class="column-list">
+            <div *ngFor="let col of getAllColumns()" class="column-item">
+              <input type="checkbox" [checked]="col.visible" (change)="toggleColumnVisibility(col)" />
+              <span>{{ getHeaderName(col) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filters Tool Panel -->
+        <div class="filters-tool-panel" *ngIf="activeToolPanel === 'filters'">
+          <h3>Filters</h3>
+          <div class="filter-placeholder">
+            Filters coming soon...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay for loading/no rows -->
+  <div class="argent-grid-overlay" *ngIf="showOverlay">
+    <ng-content select="[overlay]"></ng-content>
+  </div>
+
+  <!-- Header Menu Overlay -->
+  <div class="argent-grid-header-menu" 
+       *ngIf="activeHeaderMenu"
+       [style.top.px]="headerMenuPosition.y"
+       [style.left.px]="headerMenuPosition.x"
+       (click)="$event.stopPropagation()">
+    <div class="menu-item" (click)="sortColumnMenu('asc')">
+      <span class="menu-icon">↑</span> Sort Ascending
+    </div>
+    <div class="menu-item" (click)="sortColumnMenu('desc')">
+      <span class="menu-icon">↓</span> Sort Descending
+    </div>
+    <div class="menu-item" (click)="sortColumnMenu(null)">
+      <span class="menu-icon">✕</span> Clear Sort
+    </div>
+    <div class="menu-divider"></div>
+    <div class="menu-item" (click)="hideColumnMenu()">
+      <span class="menu-icon">ø</span> Hide Column
+    </div>
+    <div class="menu-item" (click)="pinColumnMenu('left')">
+      <span class="menu-icon">«</span> Pin Left
+    </div>
+    <div class="menu-item" (click)="pinColumnMenu('right')">
+      <span class="menu-icon">»</span> Pin Right
+    </div>
+    <div class="menu-item" (click)="pinColumnMenu(null)">
+      <span class="menu-icon">↺</span> Unpin
+    </div>
+  </div>
+
+  <!-- Context Menu Overlay -->
+  <div class="argent-grid-context-menu" 
+       *ngIf="activeContextMenu"
+       [style.top.px]="contextMenuPosition.y"
+       [style.left.px]="contextMenuPosition.x"
+       (click)="$event.stopPropagation()">
+    <div class="menu-item" (click)="copyContextMenuCell()">
+      <span class="menu-icon">📋</span> Copy Cell
+    </div>
+    <div class="menu-item" *ngIf="hasRangeSelection()" (click)="copyRangeWithHeaders()">
+      <span class="menu-icon">📋</span> Copy with Headers
+    </div>
+    <div class="menu-divider"></div>
+    <div class="menu-item" (click)="exportCSV()">
+      <span class="menu-icon">⤓</span> Export CSV
+    </div>
+    <div class="menu-item" (click)="exportExcel()">
+      <span class="menu-icon">⤓</span> Export Excel
+    </div>
+    <div class="menu-divider"></div>
+    <div class="menu-item" (click)="resetColumns()">
+      <span class="menu-icon">⟲</span> Reset Columns
+    </div>
+  </div>
+</div>

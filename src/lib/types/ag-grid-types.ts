@@ -44,6 +44,7 @@ export interface GridOptions<TData = any> {
   // === SELECTION ===
   rowSelection?: RowSelectionOptions | 'single' | 'multiple';
   cellSelection?: boolean | CellSelectionOptions;
+  enableRangeSelection?: boolean;
   selectionColumnDef?: SelectionColumnDef;
   suppressCellFocus?: boolean;
   suppressHeaderFocus?: boolean;
@@ -120,6 +121,7 @@ export interface GridOptions<TData = any> {
   isRowMaster?: (data: TData) => boolean;
   detailCellRenderer?: any;
   detailCellRendererParams?: any;
+  detailRowHeight?: number;
 
   // === PINNING ===
   enableRowPinning?: boolean | 'top' | 'bottom';
@@ -133,6 +135,7 @@ export interface GridOptions<TData = any> {
   // === STYLING ===
   icons?: Icons;
   theme?: Theme | 'legacy';
+  sideBar?: any;
   overlayComponent?: any;
   loading?: boolean;
 
@@ -266,6 +269,9 @@ export interface ColDef<TData = any, TValue = any> {
   rowDrag?: boolean | ((params: RowDragCallbackParams<TData>) => boolean);
   rowDragText?: (params: any) => string;
   dndSource?: boolean | ((params: any) => boolean);
+
+  // === SPARKLINE ===
+  sparklineOptions?: SparklineOptions;
 
   // === ROW GROUPING ===
   rowGroup?: boolean | null;
@@ -409,6 +415,20 @@ export interface GridApi<TData = any> {
 
   // === GROUP EXPANSION ===
   setRowNodeExpanded(node: IRowNode<TData>, expanded: boolean): void;
+
+  // === ROW HEIGHT API ===
+  getRowY(index: number): number;
+  getRowAtY(y: number): number;
+  getTotalHeight(): number;
+
+  // === PIVOT API ===
+  setPivotMode(pivotMode: boolean): void;
+  isPivotMode(): boolean;
+
+  // === RANGE SELECTION ===
+  getCellRanges(): CellRange[] | null;
+  addCellRange(params: CellRange): void;
+  clearRangeSelection(): void;
 }
 
 // ============================================================================
@@ -438,6 +458,9 @@ export interface IRowNode<TData = any> {
   selected: boolean;
   expanded: boolean;
   group: boolean;
+  master?: boolean;
+  detail?: boolean;
+  masterRowNode?: IRowNode<TData>;
   level: number;
   parent?: IRowNode<TData>;
   children?: IRowNode<TData>[];
@@ -458,6 +481,7 @@ export interface GroupRowNode<TData = any> {
   children: (TData | GroupRowNode<TData>)[];
   expanded: boolean;
   aggregation?: { [field: string]: any };
+  pivotData?: { [pivotKey: string]: { [field: string]: any } };
 }
 
 export interface FilterModel {
@@ -545,6 +569,14 @@ export interface RowSelectionState {
   rowKeys: string[];
 }
 
+export interface CellRange {
+  startRow: number;
+  endRow: number;
+  startColumn: string; // colId
+  endColumn: string;   // colId
+  columns: Column[];
+}
+
 export interface RowDataTransaction<TData = any> {
   add?: TData[];
   update?: TData[];
@@ -556,6 +588,35 @@ export interface RowDataTransactionResult {
   add: IRowNode[];
   update: IRowNode[];
   remove: IRowNode[];
+}
+
+export interface SparklineOptions {
+  type?: 'line' | 'area' | 'column' | 'bar';
+  line?: {
+    stroke?: string;
+    strokeWidth?: number;
+  };
+  area?: {
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+  };
+  column?: {
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+    padding?: number;
+  };
+  padding?: {
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+  };
+  axis?: {
+    stroke?: string;
+    strokeWidth?: number;
+  };
 }
 
 export interface CsvExportParams {

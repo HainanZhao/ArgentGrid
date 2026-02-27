@@ -1,5 +1,6 @@
 import { Injectable, Inject, Optional } from '@angular/core';
 import { Subject } from 'rxjs';
+import { Workbook } from 'exceljs';
 import {  GridApi,
   GridOptions,
   ColDef,
@@ -14,7 +15,8 @@ import {  GridApi,
   RowDataTransactionResult,
   CsvExportParams,
   ExcelExportParams,
-  GroupRowNode
+  GroupRowNode,
+  CellRange
 } from '../types/ag-grid-types';
 
 @Injectable()
@@ -29,13 +31,22 @@ export class GridService<TData = any> {
   private filteredRowData: TData[] = [];
   private selectedRows: Set<string> = new Set();
   private expandedGroups: Set<string> = new Set();
+  private cellRanges: CellRange[] = [];
   private gridId: string = '';
   private gridOptions: GridOptions<TData> | null = null;
   public gridStateChanged$ = new Subject<{ type: string, key?: string, value?: any }>();
 
+  // Row height cache
+  private cumulativeRowHeights: number[] = [];
+  private totalHeight = 0;
+
   // Grouping cache
   private cachedGroupedData: (TData | GroupRowNode<TData>)[] | null = null;
   private groupingDirty = true;
+
+  // Pivoting state
+  private pivotColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
+  private isPivotMode = false;
   
   createApi(
     columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null,
@@ -48,6 +59,7 @@ export class GridService<TData = any> {
     this.displayedRowNodes = [];
     this.gridId = this.generateGridId();
     this.gridOptions = gridOptions ? { ...gridOptions } : {};
+    this.isPivotMode = !!this.gridOptions.pivotMode;
 
     this.initializeColumns();
     
@@ -91,7 +103,11 @@ export class GridService<TData = any> {
     }
 
     // 2. Process regular columns
-    this.columnDefs.forEach((def, index) => {
+    const columnsToProcess = (this.isPivotMode && this.pivotColumnDefs) ? 
+      [...this.columnDefs, ...this.pivotColumnDefs] : 
+      this.columnDefs;
+
+    columnsToProcess.forEach((def, index) => {
       if ('children' in def) {
         // Column group
         def.children.forEach((child, childIndex) => {
@@ -115,6 +131,21 @@ export class GridService<TData = any> {
     // Auto-hide columns that are being grouped (AG Grid default)
     let visible = !def.hide;
     if (isGrouping && def.rowGroup && visible && this.gridOptions?.groupHideOpenParents !== false) {
+      visible = false;
+    }
+
+    // Auto-hide columns that are being pivoted
+    if (this.isPivotMode && def.pivot && visible) {
+      visible = false;
+    }
+
+    // Auto-hide value columns if in pivot mode (they appear under pivot keys)
+    if (this.isPivotMode && def.aggFunc && visible && !colId.startsWith('pivot_')) {
+      visible = false;
+    }
+
+    // In pivot mode, hide columns that are not part of grouping or pivot results
+    if (this.isPivotMode && visible && !def.rowGroup && !colId.startsWith('pivot_') && colId !== 'ag-Grid-AutoColumn') {
       visible = false;
     }
 
@@ -284,14 +315,51 @@ export class GridService<TData = any> {
       
       // Group Expansion
       setRowNodeExpanded: (node, expanded) => {
-        if (node.id && node.group) {
+        if (node.id && (node.group || node.master)) {
           if (expanded) {
             this.expandedGroups.add(node.id);
           } else {
             this.expandedGroups.delete(node.id);
           }
-          this.applyGrouping();
+          
+          if (node.group) {
+            this.applyGrouping();
+          } else {
+            this.initializeRowNodesFromFilteredData();
+          }
+          
           this.gridStateChanged$.next({ type: 'groupExpanded', value: expanded });
+        }
+      },
+
+      // Row Height API
+      getRowY: (index) => this.getRowY(index),
+      getRowAtY: (y) => this.getRowAtY(y),
+      getTotalHeight: () => this.getTotalHeight(),
+
+      // Pivot API
+      setPivotMode: (pivotMode) => {
+        if (this.isPivotMode !== pivotMode) {
+          this.isPivotMode = pivotMode;
+          this.groupingDirty = true;
+          this.cachedGroupedData = null;
+          this.applyGrouping();
+          this.initializeColumns();
+          this.gridStateChanged$.next({ type: 'pivotModeChanged', value: pivotMode });
+        }
+      },
+      isPivotMode: () => this.isPivotMode,
+      
+      // Range Selection API
+      getCellRanges: () => this.cellRanges.length > 0 ? [...this.cellRanges] : null,
+      addCellRange: (range) => {
+        this.cellRanges = [range]; // For now only support single range
+        this.gridStateChanged$.next({ type: 'rangeSelectionChanged' });
+      },
+      clearRangeSelection: () => {
+        if (this.cellRanges.length > 0) {
+          this.cellRanges = [];
+          this.gridStateChanged$.next({ type: 'rangeSelectionChanged' });
         }
       }
     };
@@ -429,6 +497,54 @@ export class GridService<TData = any> {
     this.applyGrouping();
   }
 
+  private updateRowHeightCache(): void {
+    const defaultHeight = this.gridOptions?.rowHeight || 32;
+    this.cumulativeRowHeights = [];
+    let currentTotal = 0;
+
+    this.displayedRowNodes.forEach(node => {
+      this.cumulativeRowHeights.push(currentTotal);
+      const height = node.rowHeight || defaultHeight;
+      currentTotal += height;
+    });
+
+    this.totalHeight = currentTotal;
+  }
+
+  private getRowY(index: number): number {
+    if (index < 0 || index >= this.cumulativeRowHeights.length) return 0;
+    return this.cumulativeRowHeights[index];
+  }
+
+  private getRowAtY(y: number): number {
+    if (this.cumulativeRowHeights.length === 0) return 0;
+    
+    // Binary search for the row at position y
+    let low = 0;
+    let high = this.cumulativeRowHeights.length - 1;
+    
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const rowY = this.cumulativeRowHeights[mid];
+      const nextRowY = mid < this.cumulativeRowHeights.length - 1 ? 
+                       this.cumulativeRowHeights[mid + 1] : this.totalHeight;
+      
+      if (y >= rowY && y < nextRowY) {
+        return mid;
+      } else if (y < rowY) {
+        high = mid - 1;
+      } else {
+        low = mid + 1;
+      }
+    }
+    
+    return low >= this.cumulativeRowHeights.length ? this.cumulativeRowHeights.length - 1 : low;
+  }
+
+  private getTotalHeight(): number {
+    return this.totalHeight;
+  }
+
   private getGroupColumns(): string[] {
     if (!this.columnDefs) return [];
     
@@ -439,6 +555,71 @@ export class GridService<TData = any> {
       }
     });
     return groupCols;
+  }
+
+  private getPivotColumns(): string[] {
+    if (!this.columnDefs) return [];
+    
+    const pivotCols: string[] = [];
+    this.columnDefs.forEach(def => {
+      if ('pivot' in def && def.pivot === true && def.field) {
+        pivotCols.push(def.field as string);
+      }
+    });
+    return pivotCols;
+  }
+
+  private getValueColumns(): ColDef<TData>[] {
+    if (!this.columnDefs) return [];
+    
+    const valueCols: ColDef<TData>[] = [];
+    this.columnDefs.forEach(def => {
+      if (!('children' in def) && def.aggFunc && def.field) {
+        valueCols.push(def);
+      }
+    });
+    return valueCols;
+  }
+
+  private generatePivotColumnDefs(): void {
+    const pivotColumns = this.getPivotColumns();
+    const valueColumns = this.getValueColumns();
+    
+    if (pivotColumns.length === 0 || valueColumns.length === 0) {
+      this.pivotColumnDefs = null;
+      return;
+    }
+
+    // 1. Find all unique pivot keys
+    const pivotKeys = new Set<string>();
+    this.filteredRowData.forEach(row => {
+      const key = pivotColumns.map(col => (row as any)[col]).join('_');
+      pivotKeys.add(key);
+    });
+
+    const sortedPivotKeys = Array.from(pivotKeys).sort();
+
+    // 2. Generate column groups for each pivot key
+    const newPivotColDefs: (ColDef<TData> | ColGroupDef<TData>)[] = [];
+
+    sortedPivotKeys.forEach(pivotKey => {
+      const children: ColDef<TData>[] = valueColumns.map(valCol => ({
+        ...valCol,
+        colId: `pivot_${pivotKey}_${String(valCol.field)}`,
+        headerName: valCol.headerName || String(valCol.field),
+        // We use a custom field accessor for pivoted data
+        field: `pivotData.${pivotKey}.${String(valCol.field)}` as any,
+        pivot: false, // These are the results, not the pivot sources
+        rowGroup: false
+      }));
+
+      newPivotColDefs.push({
+        headerName: pivotKey,
+        children: children
+      });
+    });
+
+    this.pivotColumnDefs = newPivotColDefs;
   }
 
   private applyGrouping(): void {
@@ -455,6 +636,13 @@ export class GridService<TData = any> {
     // Only re-group if filters or data changed
     if (this.groupingDirty || !this.cachedGroupedData) {
       this.cachedGroupedData = this.groupByColumns(this.filteredRowData, groupColumns, 0);
+      
+      if (this.isPivotMode) {
+        this.generatePivotColumnDefs();
+        this.initializeColumns(); // Re-initialize with new pivot columns
+        this.gridStateChanged$.next({ type: 'columnsChanged' });
+      }
+      
       this.groupingDirty = false;
     }
 
@@ -505,7 +693,8 @@ export class GridService<TData = any> {
         level,
         children,
         expanded: this.expandedGroups.has(`group-${groupField}-${key}-${level}`),
-        aggregation: this.calculateAggregations(items, groupField)
+        aggregation: this.calculateAggregations(items, groupField),
+        pivotData: this.isPivotMode ? this.calculatePivotData(items) : undefined
       };
       
       result.push(groupNode);
@@ -516,6 +705,27 @@ export class GridService<TData = any> {
 
   private calculateAggregations(data: TData[], groupField: string): { [field: string]: any } {
     return this.calculateColumnAggregations(data);
+  }
+
+  private calculatePivotData(data: TData[]): { [pivotKey: string]: { [field: string]: any } } {
+    const pivotColumns = this.getPivotColumns();
+    const pivotGroups = new Map<string, TData[]>();
+
+    // Sub-group by pivot columns within this row group
+    data.forEach(item => {
+      const key = pivotColumns.map(col => (item as any)[col]).join('_');
+      if (!pivotGroups.has(key)) {
+        pivotGroups.set(key, []);
+      }
+      pivotGroups.get(key)!.push(item);
+    });
+
+    const pivotData: { [pivotKey: string]: { [field: string]: any } } = {};
+    pivotGroups.forEach((items, key) => {
+      pivotData[key] = this.calculateColumnAggregations(items);
+    });
+
+    return pivotData;
   }
 
   public calculateColumnAggregations(data: TData[]): { [field: string]: any } {
@@ -582,6 +792,7 @@ export class GridService<TData = any> {
         // Re-use aggregation data from the group node
         data = { 
           ...item.aggregation,
+          pivotData: item.pivotData,
           [item.groupField]: item.groupKey,
           'ag-Grid-AutoColumn': item.groupKey 
         } as TData;
@@ -627,6 +838,8 @@ export class GridService<TData = any> {
       
       this.displayedRowNodes.push(node);
     });
+
+    this.updateRowHeightCache();
   }
 
   private isGroupRowNode(item: any): item is GroupRowNode<TData> {
@@ -792,13 +1005,17 @@ export class GridService<TData = any> {
       const id = this.getRowId(data, index);
       const anyData = data as any;
       const rowPinned = anyData?.pinned || false;
+      const isMaster = this.gridOptions?.masterDetail && 
+                      (this.gridOptions.isRowMaster ? this.gridOptions.isRowMaster(data) : true);
 
       let node = this.rowNodes.get(id);
       if (node) {
         node.data = data;
         node.rowPinned = rowPinned;
+        node.master = isMaster;
+        node.expanded = this.expandedGroups.has(id);
         node.rowIndex = index;
-        node.displayedRowIndex = index;
+        node.displayedRowIndex = this.displayedRowNodes.length;
         node.firstChild = index === 0;
         node.lastChild = index === orderedRows.length - 1;
       } else {
@@ -809,18 +1026,51 @@ export class GridService<TData = any> {
           rowHeight: null,
           displayed: true,
           selected: this.selectedRows.has(id),
-          expanded: false,
+          expanded: this.expandedGroups.has(id!),
           group: false,
+          master: isMaster,
           level: 0,
           firstChild: index === 0,
           lastChild: index === orderedRows.length - 1,
           rowIndex: index,
-          displayedRowIndex: index
+          displayedRowIndex: this.displayedRowNodes.length
         };
-        this.rowNodes.set(id, node);
+        this.rowNodes.set(id!, node);
       }
+      
       this.displayedRowNodes.push(node);
+
+      // If master row is expanded, insert a detail node
+      if (isMaster && node.expanded) {
+        const detailId = `${id}-detail`;
+        let detailNode = this.rowNodes.get(detailId);
+        if (!detailNode) {
+          detailNode = {
+            id: detailId,
+            data: data, // Detail node shares master data
+            rowPinned: false,
+            rowHeight: this.gridOptions?.detailRowHeight || 200,
+            displayed: true,
+            selected: false,
+            expanded: false,
+            group: false,
+            detail: true,
+            masterRowNode: node,
+            level: 1,
+            firstChild: false,
+            lastChild: false,
+            rowIndex: null,
+            displayedRowIndex: this.displayedRowNodes.length
+          };
+          this.rowNodes.set(detailId, detailNode);
+        } else {
+          detailNode.displayedRowIndex = this.displayedRowNodes.length;
+        }
+        this.displayedRowNodes.push(detailNode);
+      }
     });
+
+    this.updateRowHeightCache();
   }
   
   private compareValues(a: any, b: any): number {
@@ -946,61 +1196,51 @@ export class GridService<TData = any> {
       columnsToExport = columnsToExport.filter(col => params.columnKeys!.includes(col.colId));
     }
 
-    // Build HTML table (Excel can open this as .xlsx)
-    let htmlContent = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" 
-            xmlns:x="urn:schemas-microsoft-com:office:excel" 
-            xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="UTF-8">
-        <!--[if gte mso 9]>
-        <xml>
-          <x:ExcelWorkbook>
-            <x:ExcelWorksheets>
-              <x:ExcelWorksheet>
-                <x:Name>${sheetName}</x:Name>
-                <x:WorksheetOptions>
-                  <x:DisplayGridlines/>
-                </x:WorksheetOptions>
-              </x:ExcelWorksheet>
-            </x:ExcelWorksheets>
-          </x:ExcelWorkbook>
-        </xml>
-        <![endif]-->
-        <style>
-          table { border-collapse: collapse; }
-          th, td { border: 1px solid #000; padding: 4px 8px; }
-          th { background-color: #f0f0f0; font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <table>
-    `;
+    const workbook = new Workbook();
+    const worksheet = workbook.addWorksheet(sheetName);
 
     // Add headers
     if (!skipHeader) {
-      htmlContent += '<thead><tr>';
-      columnsToExport.forEach(col => {
-        htmlContent += `<th>${col.headerName || col.colId}</th>`;
-      });
-      htmlContent += '</tr></thead>';
+      const headerRow = worksheet.addRow(columnsToExport.map(col => col.headerName || col.colId));
+      headerRow.font = { bold: true };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF0F0F0' }
+      };
     }
 
-    // Add rows
-    htmlContent += '<tbody>';
+    // Add data
     this.rowData.forEach(data => {
-      htmlContent += '<tr>';
-      columnsToExport.forEach(col => {
+      const rowValues = columnsToExport.map(col => {
         const value = (data as any)[col.field!];
-        const cellValue = value !== null && value !== undefined ? String(value) : '';
-        htmlContent += `<td>${cellValue}</td>`;
+        return value !== null && value !== undefined ? value : '';
       });
-      htmlContent += '</tr>';
+      worksheet.addRow(rowValues);
     });
-    htmlContent += '</tbody></table></body></html>';
 
-    // Download as .xlsx (Excel will open the HTML table)
-    this.downloadFile(htmlContent, fileName, 'application/vnd.ms-excel;charset=utf-8;');
+    // Auto-fit columns (basic implementation)
+    worksheet.columns.forEach((column, i) => {
+      let maxLength = 0;
+      column.eachCell!({ includeEmpty: true }, (cell) => {
+        const columnLength = cell.value ? cell.value.toString().length : 10;
+        if (columnLength > maxLength) {
+          maxLength = columnLength;
+        }
+      });
+      column.width = Math.min(50, Math.max(10, maxLength + 2));
+    });
+
+    // Generate buffer and download
+    workbook.xlsx.writeBuffer().then(buffer => {
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    });
   }
   
   private getAllColumns(): Column[] {

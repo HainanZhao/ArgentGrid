@@ -8,6 +8,16 @@ import { Column, IRowNode, ColDef, GridApi } from '../../types/ag-grid-types';
 import { CellDrawContext, ColumnPrepResult, GridTheme } from './types';
 import { getFontFromTheme } from './theme';
 
+/**
+ * Get value from object using path (e.g. 'pivotData.NY.salary')
+ */
+export function getValueByPath(obj: any, path: string): any {
+  if (!path || !obj) return undefined;
+  if (!path.includes('.')) return obj[path];
+  
+  return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+}
+
 // ============================================================================
 // CELL PREP PHASE
 // ============================================================================
@@ -327,7 +337,7 @@ export function renderRow<TData = any>(
     if (!prep) continue;
 
     const x = getCellX(column);
-    const value = (rowNode.data as any)?.[column.field || ''];
+    const value = column.field ? getValueByPath(rowNode.data, column.field) : undefined;
     const formattedValue = getFormattedValue(
       value,
       prep.colDef,
