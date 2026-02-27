@@ -118,12 +118,14 @@ export function walkRows(
   scrollTop: number,
   rowHeight: number,
   getRowNode: (index: number) => IRowNode | null,
-  callback: RowWalkCallback
+  callback: RowWalkCallback,
+  api?: GridApi
 ): void {
   for (let rowIndex = startRow; rowIndex < endRow; rowIndex++) {
-    const y = rowIndex * rowHeight - scrollTop;
+    const y = api ? api.getRowY(rowIndex) - scrollTop : rowIndex * rowHeight - scrollTop;
     const rowNode = getRowNode(rowIndex);
-    callback(rowIndex, y, rowHeight, rowNode);
+    const height = (api && rowNode) ? (rowNode.rowHeight || rowHeight) : rowHeight;
+    callback(rowIndex, y, height, rowNode);
   }
 }
 
@@ -135,8 +137,18 @@ export function getVisibleRowRange(
   viewportHeight: number,
   rowHeight: number,
   totalRowCount: number,
-  buffer: number = 5
+  buffer: number = 5,
+  api?: GridApi
 ): { startRow: number; endRow: number } {
+  if (api) {
+    const startRow = Math.max(0, api.getRowAtY(scrollTop) - buffer);
+    const endRow = Math.min(
+      totalRowCount,
+      api.getRowAtY(scrollTop + viewportHeight) + buffer + 1
+    );
+    return { startRow, endRow };
+  }
+
   const startRow = Math.max(0, Math.floor(scrollTop / rowHeight) - buffer);
   const visibleRowCount = Math.ceil(viewportHeight / rowHeight);
   const endRow = Math.min(

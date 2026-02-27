@@ -48,6 +48,15 @@
       <button class="btn btn-secondary" (click)="toggleGrouping()">
         {{ isGrouped ? 'Ungroup' : 'Group by Dept' }}
       </button>
+      <button class="btn btn-secondary" (click)="toggleMasterDetail()">
+        {{ isMasterDetail ? 'Disable Detail' : 'Master/Detail' }}
+      </button>
+      <button class="btn btn-secondary" (click)="togglePivotMode()">
+        {{ isPivotMode ? 'Disable Pivot' : 'Pivot Mode' }}
+      </button>
+      <button class="btn btn-secondary" (click)="toggleSideBar()">
+        {{ isSideBarVisible ? 'Hide Sidebar' : 'Show Sidebar' }}
+      </button>
       <button class="btn btn-secondary" (click)="toggleFloatingFilter()">
         {{ isFloatingFilterShown ? 'Hide Filters' : 'Show Filters' }}
       </button>

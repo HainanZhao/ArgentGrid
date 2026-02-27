@@ -9,6 +9,7 @@ interface Employee {
   department: string;
   role: string;
   salary: number;
+  salaryTrend: number[];
   location: string;
   startDate: string;
   performance: number;
@@ -33,6 +34,9 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
   isGrouped = false;
   isFloatingFilterShown = true;
   isBenchmarking = false;
+  isMasterDetail = false;
+  isPivotMode = false;
+  isSideBarVisible = true;
   benchmarkResults: any = null;
 
   columnDefs: ColDef<Employee>[] = [
@@ -47,6 +51,19 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
       sortable: true,
       filter: 'number',
       valueFormatter: (params: any) => `$${params.value?.toLocaleString()}`,
+    },
+    {
+      field: 'salaryTrend',
+      headerName: 'Salary Trend',
+      width: 150,
+      sparklineOptions: {
+        type: 'area',
+        area: {
+          fill: 'rgba(74, 222, 128, 0.2)',
+          stroke: '#4ade80',
+          strokeWidth: 2
+        }
+      }
     },
     { field: 'location', headerName: 'Location', width: 150, filter: 'text' },
     { field: 'startDate', headerName: 'Start Date', width: 130, filter: 'date' },
@@ -65,6 +82,8 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
 
   gridOptions: any = {
     floatingFilter: true,
+    enableRangeSelection: true,
+    sideBar: true,
     autoGroupColumnDef: {
       headerName: 'Organization',
       width: 250,
@@ -111,6 +130,42 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
     this.isFloatingFilterShown = !this.isFloatingFilterShown;
     if (this.gridApi) {
       this.gridApi.setGridOption('floatingFilter', this.isFloatingFilterShown);
+    }
+    this.cdr.detectChanges();
+  }
+
+  toggleMasterDetail(): void {
+    this.isMasterDetail = !this.isMasterDetail;
+    if (this.gridApi) {
+      this.gridApi.setGridOption('masterDetail', this.isMasterDetail);
+      this.gridApi.setGridOption('isRowMaster', (data: any) => data.id % 2 === 0);
+      this.gridApi.setRowData([...this.rowData]); // Force refresh
+    }
+    this.cdr.detectChanges();
+  }
+
+  togglePivotMode(): void {
+    this.isPivotMode = !this.isPivotMode;
+    if (this.gridApi) {
+      this.columnDefs = this.columnDefs.map(col => {
+        if (col.field === 'location') {
+          return { ...col, pivot: this.isPivotMode };
+        }
+        if (col.field === 'salary') {
+          return { ...col, aggFunc: 'sum' };
+        }
+        return col;
+      });
+      this.gridApi.setColumnDefs(this.columnDefs);
+      this.gridApi.setPivotMode(this.isPivotMode);
+    }
+    this.cdr.detectChanges();
+  }
+
+  toggleSideBar(): void {
+    this.isSideBarVisible = !this.isSideBarVisible;
+    if (this.gridApi) {
+      this.gridApi.setGridOption('sideBar', this.isSideBarVisible);
     }
     this.cdr.detectChanges();
   }
@@ -275,6 +330,7 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
         department: dept,
         role: `${dept} - ${role}`,
         salary: Math.floor(Math.random() * 150000) + 50000,
+        salaryTrend: Array.from({ length: 10 }, () => Math.floor(Math.random() * 100)),
         location,
         startDate: new Date(Date.now() - Math.random() * 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         performance: Math.floor(Math.random() * 40) + 60,

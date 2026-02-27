@@ -1,4 +1,4 @@
-import { GridApi, IRowNode, Column, ColDef } from '../types/ag-grid-types';
+import { GridApi, IRowNode, Column, ColDef, SparklineOptions } from '../types/ag-grid-types';
 
 // Import new rendering modules from the index
 import {
@@ -25,9 +25,11 @@ import {
   truncateText,
   prepColumn,
   getFormattedValue,
+  getValueByPath,
   // Lines
   drawRowLines,
   drawColumnLines,
+  drawRangeSelectionBorder,
   getColumnBorderPositions,
 } from './render';
 import { DamageTracker } from './utils/damage-tracker';
@@ -87,10 +89,14 @@ export class CanvasRenderer<TData = any> {
   private mousemoveListener?: (e: MouseEvent) => void;
   private clickListener?: (e: MouseEvent) => void;
   private dblclickListener?: (e: MouseEvent) => void;
+  private mouseupListener?: (e: MouseEvent) => void;
 
   // Callbacks
   onCellDoubleClick?: (rowIndex: number, colId: string) => void;
   onRowClick?: (rowIndex: number, event: MouseEvent) => void;
+  onMouseDown?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
+  onMouseMove?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
+  onMouseUp?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -135,11 +141,13 @@ export class CanvasRenderer<TData = any> {
     this.mousemoveListener = this.handleMouseMove.bind(this);
     this.clickListener = this.handleClick.bind(this);
     this.dblclickListener = this.handleDoubleClick.bind(this);
+    this.mouseupListener = this.handleMouseUp.bind(this);
 
     this.canvas.addEventListener('mousedown', this.mousedownListener);
     this.canvas.addEventListener('mousemove', this.mousemoveListener);
     this.canvas.addEventListener('click', this.clickListener);
     this.canvas.addEventListener('dblclick', this.dblclickListener);
+    this.canvas.addEventListener('mouseup', this.mouseupListener);
 
     let resizeTimeout: number;
     this.resizeListener = () => {
@@ -244,6 +252,10 @@ export class CanvasRenderer<TData = any> {
     });
   }
 
+  getAllColumns(): Column[] {
+    return this.getVisibleColumns();
+  }
+
   private getVisibleColumns(): Column[] {
     return this.gridApi.getAllColumns().filter(col => col.visible);
   }
@@ -277,7 +289,8 @@ export class CanvasRenderer<TData = any> {
       height,
       this.rowHeight,
       totalRows,
-      this.rowBuffer
+      this.rowBuffer,
+      this.gridApi
     );
 
     // Prepare columns (sets font, caches colDef)
@@ -293,11 +306,15 @@ export class CanvasRenderer<TData = any> {
       (rowIndex, y, rowHeight, rowNode) => {
         if (!rowNode) return;
         this.renderRow(rowIndex, y, rowNode, allVisibleColumns, width, leftWidth, rightWidth);
-      }
+      },
+      this.gridApi
     );
 
     // Draw grid lines
     this.drawGridLines(allVisibleColumns, startRow, endRow, width, height, leftWidth, rightWidth);
+
+    // Draw range selections
+    this.drawRangeSelections(allVisibleColumns, leftWidth, rightWidth, width);
 
     // Store current frame for blitting
     this.blitState.setLastCanvas(this.canvas);
@@ -306,6 +323,84 @@ export class CanvasRenderer<TData = any> {
     this.damageTracker.clear();
     
     this.lastRenderDuration = performance.now() - startTime;
+  }
+
+  private drawRangeSelections(
+    allVisibleColumns: Column[],
+    leftPinnedWidth: number,
+    rightPinnedWidth: number,
+    viewportWidth: number
+  ): void {
+    const ranges = this.gridApi.getCellRanges();
+    if (!ranges) return;
+
+    for (const range of ranges) {
+      // Calculate Y boundaries
+      const startY = range.startRow * this.rowHeight - this.scrollTop;
+      const endY = (range.endRow + 1) * this.rowHeight - this.scrollTop;
+      
+      // Calculate X boundaries
+      const startColIdx = allVisibleColumns.findIndex(c => c.colId === range.startColumn);
+      const endColIdx = allVisibleColumns.findIndex(c => c.colId === range.endColumn);
+      
+      if (startColIdx === -1 || endColIdx === -1) continue;
+
+      let minX = Infinity;
+      let maxX = -Infinity;
+
+      // Calculate the total bounding box of all columns in the range
+      range.columns.forEach(col => {
+        const xPos = this.getColumnX(col, allVisibleColumns, leftPinnedWidth, rightPinnedWidth, viewportWidth);
+        minX = Math.min(minX, xPos);
+        maxX = Math.max(maxX, xPos + col.width);
+      });
+
+      if (minX === Infinity) continue;
+
+      drawRangeSelectionBorder(this.ctx, {
+        x: minX,
+        y: startY,
+        width: maxX - minX,
+        height: endY - startY
+      }, {
+        color: this.theme.bgSelection,
+        fillColor: this.theme.bgSelection + '40', // 25% opacity
+        lineWidth: 2
+      });
+    }
+  }
+
+  private getColumnX(
+    targetCol: Column,
+    allVisibleColumns: Column[],
+    leftPinnedWidth: number,
+    rightPinnedWidth: number,
+    viewportWidth: number
+  ): number {
+    if (targetCol.pinned === 'left') {
+      let x = 0;
+      for (const col of allVisibleColumns) {
+        if (col.colId === targetCol.colId) return x;
+        if (col.pinned === 'left') x += col.width;
+      }
+    } else if (targetCol.pinned === 'right') {
+      let x = viewportWidth - rightPinnedWidth;
+      for (const col of allVisibleColumns) {
+        if (col.pinned === 'right') {
+          if (col.colId === targetCol.colId) return x;
+          x += col.width;
+        }
+      }
+    } else {
+      let x = leftPinnedWidth - this.scrollLeft;
+      for (const col of allVisibleColumns) {
+        if (!col.pinned) {
+          if (col.colId === targetCol.colId) return x;
+          x += col.width;
+        }
+      }
+    }
+    return 0;
   }
 
   private renderRow(
@@ -317,6 +412,11 @@ export class CanvasRenderer<TData = any> {
     leftWidth: number,
     rightWidth: number
   ): void {
+    if (rowNode.detail) {
+      this.renderDetailRow(rowIndex, y, rowNode, viewportWidth);
+      return;
+    }
+
     const isEvenRow = rowIndex % 2 === 0;
 
     // Draw row background
@@ -351,6 +451,31 @@ export class CanvasRenderer<TData = any> {
     // Render right pinned columns
     const rightPinned = allVisibleColumns.filter(c => c.pinned === 'right');
     this.renderColumns(rightPinned, viewportWidth - rightWidth, false, rowNode, y, viewportWidth, leftWidth, rightWidth, allVisibleColumns);
+  }
+
+  private renderDetailRow(
+    rowIndex: number,
+    y: number,
+    rowNode: IRowNode<TData>,
+    viewportWidth: number
+  ): void {
+    const rowHeight = rowNode.rowHeight || 200;
+    
+    // Draw detail background
+    this.ctx.fillStyle = '#f0f0f0';
+    this.ctx.fillRect(0, Math.floor(y), viewportWidth, rowHeight);
+
+    // Draw placeholder text
+    this.ctx.fillStyle = '#666';
+    this.ctx.font = `italic ${this.theme.fontSize}px ${this.theme.fontFamily}`;
+    this.ctx.fillText(
+      'Detail View Placeholder (Master/Detail support implemented)',
+      Math.floor(this.theme.cellPadding * 4),
+      Math.floor(y + rowHeight / 2)
+    );
+    
+    // Reset font
+    this.ctx.font = getFontFromTheme(this.theme);
   }
 
   private renderColumns(
@@ -392,7 +517,13 @@ export class CanvasRenderer<TData = any> {
     const prep = this.columnPreps.get(column.colId);
     if (!prep) return;
 
-    const cellValue = (rowNode.data as any)?.[column.field || ''];
+    const cellValue = column.field ? getValueByPath(rowNode.data, column.field) : undefined;
+    // Check for sparkline
+    if (prep.colDef?.sparklineOptions) {
+      this.drawSparkline(cellValue, x, y, width, this.rowHeight, prep.colDef.sparklineOptions);
+      return;
+    }
+
     const formattedValue = getFormattedValue(
       cellValue,
       prep.colDef,
@@ -411,12 +542,12 @@ export class CanvasRenderer<TData = any> {
     const isAutoGroupCol = column.colId === 'ag-Grid-AutoColumn';
     const isFirstColIfNoAutoGroup = !allVisibleColumns.some(c => c.colId === 'ag-Grid-AutoColumn') && column === allVisibleColumns[0];
 
-    if ((isAutoGroupCol || isFirstColIfNoAutoGroup) && (rowNode.group || rowNode.level > 0)) {
+    if ((isAutoGroupCol || isFirstColIfNoAutoGroup) && (rowNode.group || rowNode.master || rowNode.level > 0)) {
       const indent = rowNode.level * this.theme.groupIndentWidth;
       textX += indent;
 
       // Draw expand/collapse indicator
-      if (rowNode.group) {
+      if (rowNode.group || rowNode.master) {
         this.drawGroupIndicator(textX, y, rowNode.expanded);
         textX += this.theme.groupIndicatorSize + 3;
       }
@@ -431,6 +562,86 @@ export class CanvasRenderer<TData = any> {
     if (truncatedText) {
       this.ctx.fillText(truncatedText, Math.floor(textX), Math.floor(y + this.rowHeight / 2));
     }
+  }
+
+  private drawSparkline(
+    data: any[], 
+    x: number, 
+    y: number, 
+    width: number, 
+    height: number, 
+    options: SparklineOptions
+  ): void {
+    if (!Array.isArray(data) || data.length === 0) return;
+
+    const padding = options.padding || { top: 4, bottom: 4, left: 4, right: 4 };
+    const drawX = x + (padding.left || 0);
+    const drawY = y + (padding.top || 0);
+    const drawWidth = width - (padding.left || 0) - (padding.right || 0);
+    const drawHeight = height - (padding.top || 0) - (padding.bottom || 0);
+
+    if (drawWidth <= 0 || drawHeight <= 0) return;
+
+    const min = Math.min(...data);
+    const max = Math.max(...data);
+    const range = max - min || 1;
+
+    const type = options.type || 'line';
+
+    this.ctx.save();
+    
+    if (type === 'line' || type === 'area') {
+      this.ctx.beginPath();
+      for (let i = 0; i < data.length; i++) {
+        const px = drawX + (i / (data.length - 1)) * drawWidth;
+        const py = drawY + drawHeight - ((data[i] - min) / range) * drawHeight;
+        
+        if (i === 0) this.ctx.moveTo(px, py);
+        else this.ctx.lineTo(px, py);
+      }
+
+      if (type === 'area') {
+        const areaOptions = options.area || {};
+        this.ctx.lineTo(drawX + drawWidth, drawY + drawHeight);
+        this.ctx.lineTo(drawX, drawY + drawHeight);
+        this.ctx.closePath();
+        this.ctx.fillStyle = areaOptions.fill || 'rgba(33, 150, 243, 0.3)';
+        this.ctx.fill();
+        
+        // Stroke the top line
+        this.ctx.beginPath();
+        for (let i = 0; i < data.length; i++) {
+          const px = drawX + (i / (data.length - 1)) * drawWidth;
+          const py = drawY + drawHeight - ((data[i] - min) / range) * drawHeight;
+          if (i === 0) this.ctx.moveTo(px, py);
+          else this.ctx.lineTo(px, py);
+        }
+      }
+
+      const lineOptions = (type === 'area' ? options.area : options.line) || {};
+      this.ctx.strokeStyle = lineOptions.stroke || '#2196f3';
+      this.ctx.lineWidth = lineOptions.strokeWidth || 1.5;
+      this.ctx.lineJoin = 'round';
+      this.ctx.lineCap = 'round';
+      this.ctx.stroke();
+    } else if (type === 'column' || type === 'bar') {
+      const colOptions = options.column || {};
+      const colPadding = colOptions.padding || 0.1;
+      const colWidth = drawWidth / data.length;
+      const barWidth = colWidth * (1 - colPadding);
+
+      this.ctx.fillStyle = colOptions.fill || '#2196f3';
+      
+      for (let i = 0; i < data.length; i++) {
+        const px = drawX + i * colWidth + (colWidth * colPadding) / 2;
+        const valHeight = ((data[i] - min) / range) * drawHeight;
+        const py = drawY + drawHeight - valHeight;
+        
+        this.ctx.fillRect(Math.floor(px), Math.floor(py), Math.floor(barWidth), Math.ceil(valHeight));
+      }
+    }
+
+    this.ctx.restore();
   }
 
   private drawGroupIndicator(x: number, y: number, expanded: boolean): void {
@@ -495,7 +706,14 @@ export class CanvasRenderer<TData = any> {
   // ============================================================================
 
   private handleMouseDown(event: MouseEvent): void {
-    const { rowIndex } = this.getHitTestResult(event);
+    const { rowIndex, columnIndex } = this.getHitTestResult(event);
+    const columns = this.getVisibleColumns();
+    const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
+
+    if (this.onMouseDown) {
+      this.onMouseDown(event, rowIndex, colId);
+    }
+
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
 
@@ -527,7 +745,24 @@ export class CanvasRenderer<TData = any> {
   }
 
   private handleMouseMove(event: MouseEvent): void {
+    const { rowIndex, columnIndex } = this.getHitTestResult(event);
+    const columns = this.getVisibleColumns();
+    const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
+
+    if (this.onMouseMove) {
+      this.onMouseMove(event, rowIndex, colId);
+    }
     // TODO: Implement hover state
+  }
+
+  private handleMouseUp(event: MouseEvent): void {
+    const { rowIndex, columnIndex } = this.getHitTestResult(event);
+    const columns = this.getVisibleColumns();
+    const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
+
+    if (this.onMouseUp) {
+      this.onMouseUp(event, rowIndex, colId);
+    }
   }
 
   private handleClick(event: MouseEvent): void {
@@ -536,7 +771,7 @@ export class CanvasRenderer<TData = any> {
     if (!rowNode) return;
 
     // Handle expand/collapse
-    if (rowNode.group && columnIndex !== -1) {
+    if ((rowNode.group || rowNode.master) && columnIndex !== -1) {
       const columns = this.getVisibleColumns();
       const clickedCol = columns[columnIndex];
 
@@ -714,6 +949,7 @@ export class CanvasRenderer<TData = any> {
     if (this.mousemoveListener) this.canvas.removeEventListener('mousemove', this.mousemoveListener);
     if (this.clickListener) this.canvas.removeEventListener('click', this.clickListener);
     if (this.dblclickListener) this.canvas.removeEventListener('dblclick', this.dblclickListener);
+    if (this.mouseupListener) this.canvas.removeEventListener('mouseup', this.mouseupListener);
     
     if (this.resizeListener) {
       window.removeEventListener('resize', this.resizeListener);

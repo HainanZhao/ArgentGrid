@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, ChangeDetectionStrategy, AfterViewInit, OnChanges, SimpleChanges, ChangeDetectorRef, Inject } from '@angular/core';
 import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
-import { GridApi, GridOptions, ColDef, ColGroupDef, IRowNode, Column } from '../types/ag-grid-types';
+import { GridApi, GridOptions, ColDef, ColGroupDef, IRowNode, Column, CellRange } from '../types/ag-grid-types';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { GridService } from '../services/grid.service';
@@ -8,571 +8,8 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
 
 @Component({
   selector: 'argent-grid',
-  template: `
-    <div class="argent-grid-container" [style.height]="height" [style.width]="width" (click)="onContainerClick($event)">
-      <!-- Header Layer (DOM-based for accessibility) -->
-      <div class="argent-grid-header">
-        <!-- Main Header Row -->
-        <div class="argent-grid-header-row">
-          <!-- Selection Column Header -->
-          <div
-            *ngIf="showSelectionColumn"
-            class="argent-grid-header-cell argent-grid-selection-header"
-            [style.width.px]="selectionColumnWidth"
-            (click)="onSelectionHeaderClick()">
-            <input type="checkbox"
-                   [checked]="isAllSelected"
-                   [indeterminate]="isIndeterminateSelection"
-                   (change)="onSelectionHeaderChange($event)" />
-          </div>
-        
-          <!-- Left Pinned Columns -->
-          <div class="argent-grid-header-pinned-left-container"
-               cdkDropList
-               id="left-pinned"
-               [cdkDropListConnectedTo]="['scrollable', 'right-pinned']"
-               cdkDropListOrientation="horizontal"
-               (cdkDropListDropped)="onColumnDropped($event, 'left')">
-            <div
-              *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
-              class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
-              [style.width.px]="getColumnWidth(col)"
-              [class.sortable]="isSortable(col)"
-              (click)="onHeaderClick(col)"
-              cdkDrag
-              [cdkDragData]="col">
-              <div class="argent-grid-header-content" cdkDragHandle>
-                <span class="header-text">{{ getHeaderName(col) }}</span>
-                <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
-              </div>
-              <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
-                &#8942;
-              </div>
-              <div class="argent-grid-header-resize-handle" 
-                   *ngIf="isResizable(col)" 
-                   [class.resizing]="isResizing && resizeColumn === col"
-                   (mousedown)="onResizeMouseDown($event, col)">
-              </div>
-            </div>
-          </div>
-          
-          <!-- Scrollable Columns -->
-          <div class="argent-grid-header-scrollable"
-               #headerScrollable
-               cdkDropList
-               id="scrollable"
-               [cdkDropListConnectedTo]="['left-pinned', 'right-pinned']"
-               cdkDropListOrientation="horizontal"
-               (cdkDropListDropped)="onColumnDropped($event, 'none')">
-            <div class="argent-grid-header-row">
-              <div
-                *ngFor="let col of getNonPinnedColumns(); trackBy: trackByColumn"
-                class="argent-grid-header-cell"
-                [style.width.px]="getColumnWidth(col)"
-                [class.sortable]="isSortable(col)"
-                (click)="onHeaderClick(col)"
-                cdkDrag
-                [cdkDragData]="col">
-                <div class="argent-grid-header-content" cdkDragHandle>
-                  <span class="header-text">{{ getHeaderName(col) }}</span>
-                  <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
-                </div>
-                <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
-                  &#8942;
-                </div>
-                <div class="argent-grid-header-resize-handle" 
-                     *ngIf="isResizable(col)" 
-                     [class.resizing]="isResizing && resizeColumn === col"
-                     (mousedown)="onResizeMouseDown($event, col)">
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Right Pinned Columns -->
-          <div class="argent-grid-header-pinned-right-container"
-               cdkDropList
-               id="right-pinned"
-               [cdkDropListConnectedTo]="['left-pinned', 'scrollable']"
-               cdkDropListOrientation="horizontal"
-               (cdkDropListDropped)="onColumnDropped($event, 'right')">
-            <div
-              *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
-              class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
-              [style.width.px]="getColumnWidth(col)"
-              [class.sortable]="isSortable(col)"
-              (click)="onHeaderClick(col)"
-              cdkDrag
-              [cdkDragData]="col">
-              <div class="argent-grid-header-content" cdkDragHandle>
-                <span class="header-text">{{ getHeaderName(col) }}</span>
-                <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
-              </div>
-              <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
-                &#8942;
-              </div>
-              <div class="argent-grid-header-resize-handle" 
-                   *ngIf="isResizable(col)" 
-                   [class.resizing]="isResizing && resizeColumn === col"
-                   (mousedown)="onResizeMouseDown($event, col)">
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Floating Filter Row -->
-        <div class="argent-grid-header-row floating-filter-row" *ngIf="hasFloatingFilters()">
-          <!-- Selection Column Padding -->
-          <div *ngIf="showSelectionColumn" class="argent-grid-header-cell" [style.width.px]="selectionColumnWidth"></div>
-
-          <!-- Left Pinned Filters -->
-          <div class="argent-grid-header-pinned-left-container">
-            <div
-              *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
-              class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
-              [style.width.px]="getColumnWidth(col)">
-              <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
-                <input #filterInput
-                       class="floating-filter-input"
-                       [type]="getFilterInputType(col)"
-                       [value]="getFloatingFilterValue(col)"
-                       (input)="onFloatingFilterInput($event, col)"
-                       [placeholder]="'Filter...'" />
-                <span class="floating-filter-clear"
-                      *ngIf="hasFilterValue(col, filterInput)"
-                      (click)="clearFloatingFilter(col, filterInput)">✕</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Scrollable Filters -->
-          <div class="argent-grid-header-scrollable" #headerScrollableFilter>
-            <div class="argent-grid-header-row">
-              <div
-                *ngFor="let col of getNonPinnedColumns(); trackBy: trackByColumn"
-                class="argent-grid-header-cell"
-                [style.width.px]="getColumnWidth(col)">
-                <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
-                  <input #filterInput
-                         class="floating-filter-input"
-                         [type]="getFilterInputType(col)"
-                         [value]="getFloatingFilterValue(col)"
-                         (input)="onFloatingFilterInput($event, col)"
-                         [placeholder]="'Filter...'" />
-                  <span class="floating-filter-clear"
-                        *ngIf="hasFilterValue(col, filterInput)"
-                        (click)="clearFloatingFilter(col, filterInput)">✕</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Right Pinned Filters -->
-          <div class="argent-grid-header-pinned-right-container">
-            <div
-              *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
-              class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
-              [style.width.px]="getColumnWidth(col)">
-              <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
-                <input #filterInput
-                       class="floating-filter-input"
-                       [type]="getFilterInputType(col)"
-                       [value]="getFloatingFilterValue(col)"
-                       (input)="onFloatingFilterInput($event, col)"
-                       [placeholder]="'Filter...'" />
-                <span class="floating-filter-clear"
-                      *ngIf="hasFilterValue(col, filterInput)"
-                      (click)="clearFloatingFilter(col, filterInput)">✕</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Canvas Layer for Data Viewport with virtual scrolling -->
-      <div class="argent-grid-viewport" #viewport>
-        <!-- Spacer to create scrollbars for virtual scrolling -->
-        <div class="argent-grid-scroll-spacer" [style.height.px]="totalHeight" [style.width.px]="totalWidth"></div>
-        
-        <canvas #gridCanvas class="argent-grid-canvas" (contextmenu)="onCanvasContextMenu($event)"></canvas>
-        
-        <!-- Cell Editor Overlay -->
-        <div class="argent-grid-cell-editor" 
-             *ngIf="isEditing"
-             [style.top.px]="editorPosition.y"
-             [style.left.px]="editorPosition.x"
-             [style.width.px]="editorPosition.width"
-             [style.height.px]="editorPosition.height"
-             (click)="$event.stopPropagation()">
-          <input #editorInput
-                 type="text"
-                 class="argent-grid-editor-input"
-                 [value]="editingValue"
-                 (input)="onEditorInput($event)"
-                 (keydown)="onEditorKeydown($event)"
-                 (blur)="onEditorBlur()"
-                 autofocus />
-        </div>
-      </div>
-
-      <!-- Overlay for loading/no rows -->
-      <div class="argent-grid-overlay" *ngIf="showOverlay">
-        <ng-content select="[overlay]"></ng-content>
-      </div>
-
-      <!-- Header Menu Overlay -->
-      <div class="argent-grid-header-menu" 
-           *ngIf="activeHeaderMenu"
-           [style.top.px]="headerMenuPosition.y"
-           [style.left.px]="headerMenuPosition.x"
-           (click)="$event.stopPropagation()">
-        <div class="menu-item" (click)="sortColumnMenu('asc')">
-          <span class="menu-icon">↑</span> Sort Ascending
-        </div>
-        <div class="menu-item" (click)="sortColumnMenu('desc')">
-          <span class="menu-icon">↓</span> Sort Descending
-        </div>
-        <div class="menu-item" (click)="sortColumnMenu(null)">
-          <span class="menu-icon">✕</span> Clear Sort
-        </div>
-        <div class="menu-divider"></div>
-        <div class="menu-item" (click)="hideColumnMenu()">
-          <span class="menu-icon">ø</span> Hide Column
-        </div>
-        <div class="menu-item" (click)="pinColumnMenu('left')">
-          <span class="menu-icon">«</span> Pin Left
-        </div>
-        <div class="menu-item" (click)="pinColumnMenu('right')">
-          <span class="menu-icon">»</span> Pin Right
-        </div>
-        <div class="menu-item" (click)="pinColumnMenu(null)">
-          <span class="menu-icon">↺</span> Unpin
-        </div>
-      </div>
-
-      <!-- Context Menu Overlay -->
-      <div class="argent-grid-context-menu" 
-           *ngIf="activeContextMenu"
-           [style.top.px]="contextMenuPosition.y"
-           [style.left.px]="contextMenuPosition.x"
-           (click)="$event.stopPropagation()">
-        <div class="menu-item" (click)="copyContextMenuCell()">
-          <span class="menu-icon">📋</span> Copy Cell
-        </div>
-        <div class="menu-divider"></div>
-        <div class="menu-item" (click)="exportCSV()">
-          <span class="menu-icon">⤓</span> Export CSV
-        </div>
-        <div class="menu-item" (click)="exportExcel()">
-          <span class="menu-icon">⤓</span> Export Excel
-        </div>
-        <div class="menu-divider"></div>
-        <div class="menu-item" (click)="resetColumns()">
-          <span class="menu-icon">⟲</span> Reset Columns
-        </div>
-      </div>
-    </div>
-  `,
-  styles: [`
-    .argent-grid-container {
-      box-sizing: border-box;
-      position: relative;
-      overflow: hidden;
-      border: 1px solid #babed1;
-      background: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .argent-grid-container *, .argent-grid-container *:before, .argent-grid-container *:after {
-      box-sizing: inherit;
-    }
-
-    .argent-grid-header {
-      border-bottom: 1px solid #babed1;
-      background: #f8f9fa;
-      font-weight: 600;
-    }
-
-    .argent-grid-header-row {
-      display: flex;
-      white-space: nowrap;
-    }
-
-    .argent-grid-header-scrollable {
-      overflow: hidden;
-      flex: 1;
-    }
-
-    .argent-grid-header-pinned-left-container,
-    .argent-grid-header-pinned-right-container {
-      display: flex;
-    }
-
-    .cdk-drag-preview {
-      box-sizing: border-box;
-      border-radius: 4px;
-      box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
-                  0 8px 10px 1px rgba(0, 0, 0, 0.14),
-                  0 3px 14px 2px rgba(0, 0, 0, 0.12);
-      background: #f5f5f5;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 8px 12px;
-      font-weight: 600;
-      opacity: 0.8;
-    }
-
-    .cdk-drag-placeholder {
-      opacity: 0.3;
-    }
-
-    .cdk-drag-animating {
-      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
-    }
-
-    .argent-grid-header-cell.cdk-drop-list-dragging .argent-grid-header-cell:not(.cdk-drag-placeholder) {
-      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
-    }
-
-    .argent-grid-header-cell {
-      padding: 8px 12px;
-      border-right: 1px solid #babed1;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      cursor: pointer;
-      user-select: none;
-      flex-shrink: 0;
-      position: relative;
-      height: 100%;
-    }
-
-    .argent-grid-header-cell:hover .argent-grid-header-menu-icon {
-      opacity: 1;
-    }
-
-    .argent-grid-header-content {
-      display: flex;
-      align-items: center;
-      overflow: hidden;
-      flex: 1;
-      height: 100%;
-    }
-    
-    .header-text {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      padding-right: 4px;
-    }
-
-    .argent-grid-header-menu-icon {
-      opacity: 0;
-      padding: 0 6px;
-      color: #666;
-      transition: opacity 0.2s;
-      font-size: 16px;
-      line-height: 1;
-    }
-
-    .argent-grid-header-menu-icon:hover {
-      color: #000;
-      background: #e0e0e0;
-      border-radius: 4px;
-    }
-
-    .argent-grid-header-resize-handle {
-      position: absolute;
-      right: 0;
-      top: 0;
-      bottom: 0;
-      width: 4px;
-      cursor: col-resize;
-      z-index: 5;
-      transition: background-color 0.2s;
-    }
-
-    .argent-grid-header-resize-handle:hover,
-    .argent-grid-header-resize-handle.resizing {
-      background-color: #2196f3;
-    }
-
-    .argent-grid-header-cell-pinned-left {
-      position: sticky;
-      left: 0;
-      z-index: 10;
-      background: #f8f9fa;
-    }
-
-    .argent-grid-header-cell-pinned-right {
-      position: sticky;
-      right: 0;
-      z-index: 10;
-      background: #f8f9fa;
-    }
-
-    .argent-grid-header-cell.sortable:hover {
-      background: #e8e8e8;
-    }
-
-    .sort-indicator {
-      margin-left: 4px;
-      font-size: 12px;
-    }
-
-    .argent-grid-viewport {
-      position: relative;
-      overflow: auto;
-      contain: strict;
-      will-change: scroll-position;
-      flex: 1;
-      min-height: 0;
-    }
-
-    .argent-grid-canvas {
-      position: sticky;
-      top: 0;
-      left: 0;
-      display: block;
-      width: 100%;
-      image-rendering: -webkit-optimize-contrast;
-      image-rendering: crisp-edges;
-      z-index: 1;
-    }
-
-    .argent-grid-scroll-spacer {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 1px;
-      visibility: hidden;
-      pointer-events: none;
-    }
-
-    .argent-grid-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255, 255, 255, 0.9);
-      z-index: 10;
-    }
-
-    .argent-grid-cell-editor {
-      position: absolute;
-      z-index: 100;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    }
-
-    .argent-grid-editor-input {
-      width: 100%;
-      height: 100%;
-      border: 2px solid #2196f3;
-      outline: none;
-      padding: 4px 8px;
-      font-size: 13px;
-      font-family: inherit;
-      box-sizing: border-box;
-    }
-
-    .argent-grid-header-menu, .argent-grid-context-menu {
-      position: fixed;
-      background: #ffffff;
-      border: 1px solid #babed1;
-      box-shadow: 0 3px 10px 0 rgba(0, 0, 0, 0.2);
-      border-radius: 3px;
-      padding: 4px 0;
-      z-index: 10000;
-      min-width: 200px;
-      font-size: 13px;
-      color: #181d1f;
-    }
-    
-    .menu-item {
-      padding: 6px 12px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      transition: background-color 0.1s;
-    }
-    
-    .menu-item:hover {
-      background-color: #f0f2f5;
-    }
-    
-    .menu-icon {
-      width: 24px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      margin-right: 8px;
-      font-size: 14px;
-      color: #555;
-    }
-
-    .menu-divider {
-      height: 1px;
-      background-color: #babed1;
-      margin: 4px 0;
-      opacity: 0.5;
-    }
-
-    .floating-filter-row {
-      background: #fafafa;
-      border-top: 1px solid #e0e0e0;
-    }
-
-    .floating-filter-container {
-      width: 100%;
-      padding: 2px 4px;
-      box-sizing: border-box;
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-
-    .floating-filter-input {
-      width: 100%;
-      height: 24px;
-      border: 1px solid #d0d0d0;
-      border-radius: 2px;
-      padding: 0 20px 0 6px;
-      font-size: 12px;
-      outline: none;
-      box-sizing: border-box;
-    }
-
-    .floating-filter-clear {
-      position: absolute;
-      right: 8px;
-      cursor: pointer;
-      color: #999;
-      font-size: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      transition: background-color 0.2s, color 0.2s;
-    }
-
-    .floating-filter-clear:hover {
-      background-color: #eee;
-      color: #333;
-    }
-
-    .floating-filter-input:focus {
-      border-color: #2196f3;
-      box-shadow: 0 0 2px rgba(33, 150, 243, 0.2);
-    }
-  `],
+  templateUrl: './argent-grid.component.html',
+  styleUrls: ['./argent-grid.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, AfterViewInit, OnChanges {
@@ -598,7 +35,8 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private viewportHeight = 500;
 
   get totalHeight(): number {
-    return (this.gridApi?.getDisplayedRowCount() || 0) * this.rowHeight;
+    if (this.gridApi) return this.gridApi.getTotalHeight();
+    return (this.rowData?.length || 0) * this.rowHeight;
   }
 
   get totalWidth(): number {
@@ -635,6 +73,14 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private resizeStartX = 0;
   private resizeStartWidth = 0;
 
+  // Range Selection state
+  isRangeSelecting = false;
+  private rangeStartCell: { rowIndex: number, colId: string } | null = null;
+
+  // Side Bar state
+  sideBarVisible = false;
+  activeToolPanel: 'columns' | 'filters' | null = null;
+
   // Context Menu state
   activeContextMenu = false;
   contextMenuPosition = { x: 0, y: 0 };
@@ -646,6 +92,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private destroy$ = new Subject<void>();
   private gridService = new GridService<TData>();
   private horizontalScrollListener?: (e: Event) => void;
+  private resizeObserver?: ResizeObserver;
 
   constructor(@Inject(ChangeDetectorRef) private cdr: ChangeDetectorRef) {}
 
@@ -689,9 +136,52 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       this.canvasRenderer.onRowClick = (rowIndex, event) => {
         this.onRowClick(rowIndex, event);
       };
+
+      // Range Selection Logic
+      this.canvasRenderer.onMouseDown = (event, rowIndex, colId) => {
+        if (event.button !== 0 || !colId || rowIndex === -1) return;
+        
+        const rangeSelectionEnabled = this.gridApi?.getGridOption('enableRangeSelection');
+        if (!rangeSelectionEnabled) return;
+
+        this.isRangeSelecting = true;
+        this.rangeStartCell = { rowIndex, colId };
+        
+        // Clear previous selection if not holding Shift/Ctrl
+        if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
+          this.gridApi?.clearRangeSelection();
+        }
+      };
+
+      this.canvasRenderer.onMouseMove = (event, rowIndex, colId) => {
+        if (!this.isRangeSelecting || !this.rangeStartCell || !colId || rowIndex === -1) return;
+
+        const start = this.rangeStartCell;
+        const end = { rowIndex, colId };
+
+        const columns = this.canvasRenderer.getAllColumns();
+        const startColIdx = columns.findIndex(c => c.colId === start.colId);
+        const endColIdx = columns.findIndex(c => c.colId === end.colId);
+
+        if (startColIdx === -1 || endColIdx === -1) return;
+
+        const range: CellRange = {
+          startRow: Math.min(start.rowIndex, end.rowIndex),
+          endRow: Math.max(start.rowIndex, end.rowIndex),
+          startColumn: columns[Math.min(startColIdx, endColIdx)].colId,
+          endColumn: columns[Math.max(startColIdx, endColIdx)].colId,
+          columns: columns.slice(Math.min(startColIdx, endColIdx), Math.max(startColIdx, endColIdx) + 1)
+        };
+
+        this.gridApi?.addCellRange(range);
+      };
+
+      this.canvasRenderer.onMouseUp = () => {
+        this.isRangeSelecting = false;
+      };
     }
 
-    // Setup viewport dimensions after view init
+    // Setup viewport dimensions and resize observer
     if (this.viewportRef) {
       const rect = this.viewportRef.nativeElement.getBoundingClientRect();
       this.viewportHeight = rect.height || 500;
@@ -709,6 +199,20 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       };
       
       this.viewportRef.nativeElement.addEventListener('scroll', this.horizontalScrollListener, { passive: true });
+
+      // Add ResizeObserver to handle sidebar toggling and other size changes
+      if (typeof ResizeObserver !== 'undefined') {
+        this.resizeObserver = new ResizeObserver(entries => {
+          for (const entry of entries) {
+            const { width, height } = entry.contentRect;
+            this.viewportHeight = height;
+            this.canvasRenderer?.setViewportDimensions(width, height);
+            this.canvasRenderer?.render();
+            this.cdr.detectChanges();
+          }
+        });
+        this.resizeObserver.observe(this.viewportRef.nativeElement);
+      }
     }
   }
 
@@ -719,6 +223,10 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     // Remove horizontal scroll listener
     if (this.viewportRef && this.horizontalScrollListener) {
       this.viewportRef.nativeElement.removeEventListener('scroll', this.horizontalScrollListener);
+    }
+
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
     }
 
     this.gridApi?.destroy();
@@ -746,6 +254,12 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
     // Emit grid ready event
     this.gridReady.emit(this.gridApi);
+
+    // Sidebar state
+    this.sideBarVisible = !!this.gridOptions?.sideBar;
+    if (this.sideBarVisible && !this.activeToolPanel) {
+      this.activeToolPanel = 'columns';
+    }
 
     // Update overlay state
     this.showOverlay = !this.rowData || this.rowData.length === 0;
@@ -970,6 +484,30 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     this.cdr.detectChanges();
   }
 
+  // Side Bar Methods
+  toggleToolPanel(panel: 'columns' | 'filters'): void {
+    if (this.activeToolPanel === panel) {
+      this.activeToolPanel = null;
+    } else {
+      this.activeToolPanel = panel;
+    }
+    this.cdr.detectChanges();
+  }
+
+  toggleColumnVisibility(col: Column): void {
+    const colDef = this.getColumnDefForColumn(col);
+    if (colDef) {
+      colDef.hide = col.visible; // Toggle
+      this.initializeGrid(); // Re-initialize to handle visibility changes correctly
+      this.canvasRenderer?.render();
+      this.cdr.detectChanges();
+    }
+  }
+
+  getAllColumns(): Column[] {
+    return this.gridApi?.getAllColumns() || [];
+  }
+
   copyContextMenuCell(): void {
     if (!this.contextMenuCell || !this.contextMenuCell.column.field) return;
     
@@ -979,6 +517,35 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
         console.error('Failed to copy text: ', err);
       });
     }
+    this.closeContextMenu();
+  }
+
+  hasRangeSelection(): boolean {
+    return (this.gridApi?.getCellRanges()?.length || 0) > 0;
+  }
+
+  copyRangeWithHeaders(): void {
+    const ranges = this.gridApi?.getCellRanges();
+    if (!ranges || ranges.length === 0) return;
+
+    const range = ranges[0];
+    const columns = range.columns;
+    
+    let text = columns.map(c => this.getHeaderName(c)).join('\t') + '\n';
+
+    for (let i = range.startRow; i <= range.endRow; i++) {
+      const node = this.gridApi.getDisplayedRowAtIndex(i);
+      if (node) {
+        text += columns.map(c => {
+          const val = (node.data as any)[c.field || ''];
+          return val !== null && val !== undefined ? String(val) : '';
+        }).join('\t') + '\n';
+      }
+    }
+
+    navigator.clipboard.writeText(text).catch(err => {
+      console.error('Failed to copy range: ', err);
+    });
     this.closeContextMenu();
   }
 
