@@ -16,6 +16,11 @@ A **free, high-performance** alternative to AG Grid Enterprise built with Angula
 npm install argentgrid
 ```
 
+## Requirements
+
+- Angular 18+
+- TypeScript 5.4+
+
 ## Quick Start
 
 ### Basic Usage
