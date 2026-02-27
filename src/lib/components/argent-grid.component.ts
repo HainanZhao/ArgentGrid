@@ -576,7 +576,6 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   // Cell editing state
   isEditing = false;
-  private isCancelling = false;
   editingValue = '';
   editorPosition = { x: 0, y: 0, width: 100, height: 32 };
   private editingRowNode: IRowNode<TData> | null = null;
@@ -600,6 +599,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
+    console.log('[ArgentGrid] ngOnInit called');
     this.initialColumnDefs = this.columnDefs ? JSON.parse(JSON.stringify(this.columnDefs)) : null;
     this.initializeGrid();
   }
@@ -1187,17 +1187,23 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     // Focus input after view update
     setTimeout(() => {
       if (this.editorInputRef) {
-        this.editorInputRef.nativeElement.focus();
-        this.editorInputRef.nativeElement.select();
+        const input = this.editorInputRef.nativeElement;
+        input.focus();
+        input.select();
       }
     }, 0);
   }
 
   stopEditing(save: boolean = true): void {
-    if (!this.isEditing || !this.editingRowNode || !this.editingColDef) return;
+    if (!this.isEditing) return;
     
     const rowNode = this.editingRowNode;
     const colDef = this.editingColDef;
+
+    // Capture current value from input directly if it exists, to be sure
+    if (this.editorInputRef) {
+      this.editingValue = this.editorInputRef.nativeElement.value;
+    }
 
     if (save && colDef && rowNode) {
       const newValue = this.editingValue;
@@ -1231,7 +1237,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
         // Default: update data directly
         (rowNode.data as any)[field] = parsedValue;
       }
-      
+
       // Update via transaction
       this.gridApi.applyTransaction({
         update: [rowNode.data]
@@ -1271,10 +1277,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       this.stopEditing(true);
     } else if (event.key === 'Escape') {
       event.preventDefault();
-      this.isCancelling = true;
       this.stopEditing(false);
-      // Reset after a short delay to allow blur event to skip
-      setTimeout(() => this.isCancelling = false, 100);
     } else if (event.key === 'Tab') {
       event.preventDefault();
       const currentRowIndex = this.editingRowNode?.displayedRowIndex ?? -1;
@@ -1313,12 +1316,11 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   onEditorBlur(): void {
-    // Save on blur, but NOT if we are cancelling via Escape
-    if (this.isEditing && !this.isCancelling) {
+    // Save on blur, matching AG Grid default behavior
+    if (this.isEditing) {
       this.stopEditing(true);
     }
   }
-
   private getColumnDefForColumn(column: Column | ColDef<TData> | ColGroupDef<TData>): ColDef<TData> | null {
     if (!this.columnDefs) return null;
     

@@ -174,6 +174,7 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
 
   onGridReady(api: GridApi<Employee>): void {
     this.gridApi = api;
+    (window as any).gridApi = api;
     console.log('Grid ready:', api);
   }
 

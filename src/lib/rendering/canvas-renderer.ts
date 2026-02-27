@@ -184,84 +184,6 @@ export class CanvasRenderer<TData = any> {
     const leftWidth = leftPinned.reduce((sum, c) => sum + c.width, 0);
     const rightWidth = rightPinned.reduce((sum, c) => sum + c.width, 0);
 
-    // Calculate column positions for each group
-    const renderCol = (cols: Column[], startX: number, isScrollable: boolean, rowIndex: number, rowNode: IRowNode<TData>, y: number) => {
-      let x = startX;
-      cols.forEach((col, colIndex) => {
-        const cellX = isScrollable ? x - this.scrollLeft : x;
-        const cellWidth = col.width;
-
-        // Skip rendering if cell is outside viewport (only for center columns)
-        if (isScrollable && (cellX + cellWidth < leftWidth || cellX > width - rightWidth)) {
-          x += cellWidth;
-          return;
-        }
-
-        const cellValue = (rowNode.data as any)[col.field || ''];
-
-        // Cell border
-        this.ctx.strokeStyle = this.BORDER_COLOR;
-        this.ctx.beginPath();
-        this.ctx.moveTo(cellX + cellWidth, y);
-        this.ctx.lineTo(cellX + cellWidth, y + this.rowHeight);
-        this.ctx.stroke();
-
-        // Cell text
-        if (cellValue !== null && cellValue !== undefined) {
-          this.ctx.fillStyle = this.TEXT_COLOR;
-          
-          let text = '';
-          const colDef = this.getColumnDef(col);
-          
-          if (colDef && typeof colDef.valueFormatter === 'function') {
-            text = colDef.valueFormatter({
-              value: cellValue,
-              data: rowNode.data,
-              node: rowNode,
-              colDef,
-              api: this.gridApi
-            });
-          } else {
-            text = String(cellValue);
-          }
-
-          let textX = cellX + this.CELL_PADDING;
-          
-          // Add indentation and indicator for group rows
-          const isAutoGroupCol = col.colId === 'ag-Grid-AutoColumn';
-          const isFirstColIfNoAutoGroup = !allVisibleColumns.some(c => c.colId === 'ag-Grid-AutoColumn') && col === allVisibleColumns[0];
-
-          if ((isAutoGroupCol || isFirstColIfNoAutoGroup) && (rowNode.group || rowNode.level > 0)) {
-            const indent = rowNode.level * 20;
-            textX += indent;
-            
-            if (rowNode.group) {
-              this.ctx.beginPath();
-              if (rowNode.expanded) {
-                this.ctx.moveTo(textX, y + this.rowHeight / 2 - 3);
-                this.ctx.lineTo(textX + 8, y + this.rowHeight / 2 - 3);
-                this.ctx.lineTo(textX + 4, y + this.rowHeight / 2 + 3);
-              } else {
-                this.ctx.moveTo(textX + 2, y + this.rowHeight / 2 - 4);
-                this.ctx.lineTo(textX + 6, y + this.rowHeight / 2);
-                this.ctx.lineTo(textX + 2, y + this.rowHeight / 2 + 4);
-              }
-              this.ctx.fill();
-              textX += 15;
-            }
-          }
-
-          const truncatedText = this.truncateText(
-            text,
-            cellWidth - (textX - cellX) - this.CELL_PADDING
-          );
-
-          this.ctx.fillText(truncatedText, textX, y + this.rowHeight / 2);
-        }
-        x += cellWidth;
-      });
-    };
-
     // Set common context properties once
     this.ctx.font = this.FONT;
     this.ctx.textBaseline = 'middle';
@@ -287,14 +209,14 @@ export class CanvasRenderer<TData = any> {
       this.ctx.beginPath();
       this.ctx.rect(leftWidth, y, width - leftWidth - rightWidth, this.rowHeight);
       this.ctx.clip();
-      renderCol(centerColumns, leftWidth, true, rowIndex, rowNode, y);
+      this.renderColGroup(centerColumns, leftWidth, true, rowNode, y, width, leftWidth, rightWidth, allVisibleColumns);
       this.ctx.restore();
 
       // 3. Left pinned columns
-      renderCol(leftPinned, 0, false, rowIndex, rowNode, y);
+      this.renderColGroup(leftPinned, 0, false, rowNode, y, width, leftWidth, rightWidth, allVisibleColumns);
 
       // 4. Right pinned columns
-      renderCol(rightPinned, width - rightWidth, false, rowIndex, rowNode, y);
+      this.renderColGroup(rightPinned, width - rightWidth, false, rowNode, y, width, leftWidth, rightWidth, allVisibleColumns);
 
       // 5. Row bottom border
       this.ctx.strokeStyle = this.BORDER_COLOR;
@@ -323,6 +245,93 @@ export class CanvasRenderer<TData = any> {
         this.ctx.lineWidth = 1;
       }
     }
+  }
+
+  private renderColGroup(
+    cols: Column[],
+    startX: number,
+    isScrollable: boolean,
+    rowNode: IRowNode<TData>,
+    y: number,
+    viewportWidth: number,
+    leftWidth: number,
+    rightWidth: number,
+    allVisibleColumns: Column[]
+  ): void {
+    let x = startX;
+    cols.forEach((col) => {
+      const cellX = isScrollable ? x - this.scrollLeft : x;
+      const cellWidth = col.width;
+
+      // Skip rendering if cell is outside viewport (only for center columns)
+      if (isScrollable && (cellX + cellWidth < leftWidth || cellX > viewportWidth - rightWidth)) {
+        x += cellWidth;
+        return;
+      }
+
+      const cellValue = (rowNode.data as any)[col.field || ''];
+
+      // Cell border
+      this.ctx.strokeStyle = this.BORDER_COLOR;
+      this.ctx.beginPath();
+      this.ctx.moveTo(cellX + cellWidth, y);
+      this.ctx.lineTo(cellX + cellWidth, y + this.rowHeight);
+      this.ctx.stroke();
+
+      // Cell text
+      if (cellValue !== null && cellValue !== undefined) {
+        this.ctx.fillStyle = this.TEXT_COLOR;
+        
+        let text = '';
+        const colDef = this.getColumnDef(col);
+        
+        if (colDef && typeof colDef.valueFormatter === 'function') {
+          text = colDef.valueFormatter({
+            value: cellValue,
+            data: rowNode.data,
+            node: rowNode,
+            colDef,
+            api: this.gridApi
+          });
+        } else {
+          text = String(cellValue);
+        }
+
+        let textX = cellX + this.CELL_PADDING;
+        
+        // Add indentation and indicator for group rows
+        const isAutoGroupCol = col.colId === 'ag-Grid-AutoColumn';
+        const isFirstColIfNoAutoGroup = !allVisibleColumns.some(c => c.colId === 'ag-Grid-AutoColumn') && col === allVisibleColumns[0];
+
+        if ((isAutoGroupCol || isFirstColIfNoAutoGroup) && (rowNode.group || rowNode.level > 0)) {
+          const indent = rowNode.level * 20;
+          textX += indent;
+          
+          if (rowNode.group) {
+            this.ctx.beginPath();
+            if (rowNode.expanded) {
+              this.ctx.moveTo(textX, y + this.rowHeight / 2 - 3);
+              this.ctx.lineTo(textX + 8, y + this.rowHeight / 2 - 3);
+              this.ctx.lineTo(textX + 4, y + this.rowHeight / 2 + 3);
+            } else {
+              this.ctx.moveTo(textX + 2, y + this.rowHeight / 2 - 4);
+              this.ctx.lineTo(textX + 6, y + this.rowHeight / 2);
+              this.ctx.lineTo(textX + 2, y + this.rowHeight / 2 + 4);
+            }
+            this.ctx.fill();
+            textX += 15;
+          }
+        }
+
+        const truncatedText = this.truncateText(
+          text,
+          cellWidth - (textX - cellX) - this.CELL_PADDING
+        );
+
+        this.ctx.fillText(truncatedText, textX, y + this.rowHeight / 2);
+      }
+      x += cellWidth;
+    });
   }
 
   private truncateText(text: string, maxWidth: number): string {
