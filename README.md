@@ -142,8 +142,8 @@ npm run lint
 - [x] Basic sorting (client-side)
 - [x] Filtering (text, number, date, boolean)
 - [x] Row Grouping (hierarchical, with aggregations)
+- [x] Cell Editing (inline, with valueParser/valueSetter)
 - [ ] Aggregation (standalone)
-- [ ] Cell Editing
 - [ ] Column Pinning
 - [ ] Selection (full implementation)
 
