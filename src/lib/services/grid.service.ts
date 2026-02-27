@@ -265,60 +265,60 @@ export class GridService<TData = any> {
     
     if (transaction.update) {
       transaction.update.forEach(data => {
-        const id = this.getRowId(data, 0);
-        const existingNode = this.rowNodes.get(id);
+        const anyData = data as any;
+        const dataId = anyData?.id;
+        
+        // First try direct lookup by data id
+        let existingNode: IRowNode<TData> | undefined;
+        for (const [nodeId, node] of this.rowNodes.entries()) {
+          const nodeDataId = (node.data as any)?.id;
+          if (nodeDataId === dataId) {
+            existingNode = node;
+            break;
+          }
+        }
+        
         if (existingNode) {
           existingNode.data = data;
           result.update.push(existingNode);
-        } else {
-          // Try to find node by data id
-          for (const [nodeId, node] of this.rowNodes.entries()) {
-            const anyData = node.data as any;
-            const anyInput = data as any;
-            if (anyData?.id === anyInput?.id) {
-              node.data = data;
-              result.update.push(node);
-              break;
-            }
-          }
         }
       });
     }
 
     if (transaction.remove) {
       transaction.remove.forEach(data => {
-        const id = this.getRowId(data, 0);
-        let node = this.rowNodes.get(id);
+        const anyData = data as any;
+        const dataId = anyData?.id;
         
-        // Try to find node by data id if not found directly
-        if (!node) {
-          for (const [nodeId, n] of this.rowNodes.entries()) {
-            const anyData = n.data as any;
-            const anyInput = data as any;
-            if (anyData?.id === anyInput?.id) {
-              node = n;
-              break;
-            }
+        let nodeToRemove: IRowNode<TData> | undefined;
+        let nodeIdToRemove: string | undefined;
+        
+        // Find node by data id
+        for (const [nodeId, node] of this.rowNodes.entries()) {
+          const nodeDataId = (node.data as any)?.id;
+          if (nodeDataId === dataId) {
+            nodeToRemove = node;
+            nodeIdToRemove = nodeId;
+            break;
           }
         }
-        
-        if (node) {
-          this.rowNodes.delete(node.id!);
+
+        if (nodeToRemove && nodeIdToRemove) {
+          this.rowNodes.delete(nodeIdToRemove);
           const index = this.rowData.findIndex(r => {
             const anyR = r as any;
-            const anyInput = data as any;
-            return anyR?.id === anyInput?.id;
+            return anyR?.id === dataId;
           });
           if (index !== -1) {
             this.rowData.splice(index, 1);
           }
-          result.remove.push(node);
+          result.remove.push(nodeToRemove);
         }
       });
+      
+      // Re-index remaining row nodes after remove
+      this.initializeRowNodes();
     }
-    
-    // Re-index remaining row nodes after remove
-    this.initializeRowNodes();
 
     return result;
   }

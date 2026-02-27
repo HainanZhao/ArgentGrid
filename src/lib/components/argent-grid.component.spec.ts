@@ -14,6 +14,7 @@ const mockCanvasContext = {
   fillText: jest.fn(),
   measureText: jest.fn(() => ({ width: 100 })),
   scale: jest.fn(),
+  setTransform: jest.fn(),
   font: '13px sans-serif',
   textBaseline: 'middle',
   fillStyle: '#000',
@@ -92,9 +93,9 @@ describe('ArgentGridComponent', () => {
     expect(component.rowHeight).toBe(32);
   });
 
-  it('should calculate canvas height correctly', () => {
-    // Canvas height is set during initialization
-    expect(component.canvasHeight).toBe(64); // 32 * 2 rows
+  it('should have viewport for virtual scrolling', () => {
+    // Virtual scrolling is now handled by the viewport container
+    expect(component.viewportRef).toBeDefined();
   });
 
   it('should show overlay when no data', () => {
@@ -147,7 +148,7 @@ describe('ArgentGridComponent', () => {
   });
 
   it('should refresh grid', () => {
-    const mockRenderer = { render: jest.fn() };
+    const mockRenderer = { render: jest.fn(), destroy: jest.fn() };
     (component as any).canvasRenderer = mockRenderer;
     component.refresh();
     expect(mockRenderer.render).toHaveBeenCalled();

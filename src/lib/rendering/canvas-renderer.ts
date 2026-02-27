@@ -2,9 +2,15 @@ import { GridApi, IRowNode, Column } from '../types/ag-grid-types';
 
 /**
  * CanvasRenderer - High-performance canvas rendering engine for ArgentGrid
- * 
+ *
  * Renders the data viewport using HTML5 Canvas for optimal performance
  * with large datasets (100,000+ rows at 60fps)
+ * 
+ * Features:
+ * - Virtual scrolling (only renders visible rows)
+ * - requestAnimationFrame batching
+ * - Device pixel ratio support
+ * - Row buffering for smooth scrolling
  */
 export class CanvasRenderer<TData = any> {
   private canvas: HTMLCanvasElement;
@@ -15,7 +21,12 @@ export class CanvasRenderer<TData = any> {
   private scrollTop = 0;
   private scrollLeft = 0;
   private animationFrameId: number | null = null;
-  
+  private renderPending = false;
+  private rowBuffer = 5; // Render extra rows above/below viewport for smooth scrolling
+  private totalRowCount = 0;
+  private viewportHeight = 0;
+  private viewportWidth = 0;
+
   // Styling constants
   private readonly CELL_PADDING = 8;
   private readonly BORDER_COLOR = '#e0e0e0';
@@ -23,7 +34,8 @@ export class CanvasRenderer<TData = any> {
   private readonly SELECTED_BG_COLOR = '#e3f2fd';
   private readonly HOVER_BG_COLOR = '#f5f5f5';
   private readonly FONT = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  
+  private readonly ROW_STRIPING: { even: string; odd: string } = { even: '#ffffff', odd: '#fafafa' };
+
   constructor(
     canvas: HTMLCanvasElement,
     gridApi: GridApi<TData>,
@@ -33,82 +45,136 @@ export class CanvasRenderer<TData = any> {
     this.ctx = canvas.getContext('2d')!;
     this.gridApi = gridApi;
     this.rowHeight = rowHeight;
-    
+
     this.setupEventListeners();
     this.resize();
   }
-  
+
   private setupEventListeners(): void {
-    // Handle scroll events
+    // Handle scroll events with passive listener for better performance
     const container = this.canvas.parentElement;
     if (container) {
-      container.addEventListener('scroll', (e) => {
-        this.scrollTop = container.scrollTop;
-        this.scrollLeft = container.scrollLeft;
-        this.scheduleRender();
-      });
+      container.addEventListener('scroll', this.handleScroll.bind(this), { passive: true });
     }
-    
+
     // Handle mouse interactions
     this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
     this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
     this.canvas.addEventListener('click', this.handleClick.bind(this));
-    
-    // Handle resize
-    window.addEventListener('resize', () => this.resize());
+
+    // Handle resize with debounce
+    let resizeTimeout: number;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => this.resize(), 150) as any;
+    });
   }
-  
-  resize(): void {
+
+  private handleScroll(): void {
     const container = this.canvas.parentElement;
     if (!container) return;
     
-    const rect = container.getBoundingClientRect();
+    this.scrollTop = container.scrollTop;
+    this.scrollLeft = container.scrollLeft;
+    
+    // Schedule render on next animation frame
+    if (!this.renderPending) {
+      this.renderPending = true;
+      requestAnimationFrame(() => {
+        this.doRender();
+        this.renderPending = false;
+      });
+    }
+  }
+
+  /**
+   * Update the total row count for virtual scrolling
+   */
+  setTotalRowCount(count: number): void {
+    this.totalRowCount = count;
+    this.updateCanvasSize();
+  }
+
+  /**
+   * Set viewport dimensions
+   */
+  setViewportDimensions(width: number, height: number): void {
+    this.viewportWidth = width;
+    this.viewportHeight = height;
+    this.updateCanvasSize();
+  }
+
+  private updateCanvasSize(): void {
     const dpr = window.devicePixelRatio || 1;
     
-    // Set canvas size with device pixel ratio for sharp rendering
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.height * dpr;
-    this.canvas.style.width = `${rect.width}px`;
-    this.canvas.style.height = `${rect.height}px`;
+    // Set canvas size for the full scrollable area
+    const totalHeight = this.totalRowCount * this.rowHeight;
+    const width = this.viewportWidth || this.canvas.clientWidth;
     
-    // Scale context for DPR
-    this.ctx.scale(dpr, dpr);
+    this.canvas.width = width * dpr;
+    this.canvas.height = Math.min(totalHeight, this.viewportHeight || 600) * dpr;
+    this.canvas.style.width = `${width}px`;
+    this.canvas.style.height = `${Math.min(totalHeight, this.viewportHeight || 600)}px`;
+    
+    // Set scrollable container height
+    const container = this.canvas.parentElement;
+    if (container && totalHeight > this.viewportHeight) {
+      container.style.height = `${this.viewportHeight}px`;
+      container.style.overflowY = 'auto';
+    }
+    
+    // Scale context for DPR (use setTransform if available, fallback to scale)
+    if (typeof this.ctx.setTransform === 'function') {
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    } else {
+      this.ctx.scale(dpr, dpr);
+    }
     
     this.scheduleRender();
   }
-  
-  render(): void {
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
-    }
+
+  resize(): void {
+    const container = this.canvas.parentElement;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    this.viewportWidth = rect.width;
+    this.viewportHeight = rect.height;
     
-    this.animationFrameId = requestAnimationFrame(() => {
+    this.updateCanvasSize();
+  }
+
+  render(): void {
+    this.scheduleRender();
+  }
+
+  private scheduleRender(): void {
+    if (this.renderPending) return;
+    
+    this.renderPending = true;
+    requestAnimationFrame(() => {
       this.doRender();
-      this.animationFrameId = null;
+      this.renderPending = false;
     });
   }
-  
-  private scheduleRender(): void {
-    this.render();
-  }
-  
+
   private doRender(): void {
-    const width = this.canvas.clientWidth;
-    const height = this.canvas.clientHeight;
-    
+    const width = this.viewportWidth || this.canvas.clientWidth;
+    const height = this.viewportHeight || this.canvas.clientHeight;
+
     // Clear canvas
     this.ctx.clearRect(0, 0, width, height);
-    
-    // Get visible rows based on scroll position
-    const startIndex = Math.floor(this.scrollTop / this.rowHeight);
+
+    // Calculate visible range with buffer for smooth scrolling
+    const startIndex = Math.max(0, Math.floor(this.scrollTop / this.rowHeight) - this.rowBuffer);
     const endIndex = Math.min(
-      startIndex + Math.ceil(height / this.rowHeight) + 1,
-      this.gridApi.getDisplayedRowCount()
+      startIndex + Math.ceil(height / this.rowHeight) + (this.rowBuffer * 2),
+      this.totalRowCount || this.gridApi.getDisplayedRowCount()
     );
-    
-    // Get columns
+
+    // Get columns (cache this for performance)
     const columns = this.gridApi.getAllColumns().filter(col => col.visible);
-    
+
     // Calculate column positions
     let x = 0;
     const columnPositions: Map<string, { x: number; width: number }> = new Map();
@@ -116,63 +182,69 @@ export class CanvasRenderer<TData = any> {
       columnPositions.set(col.colId, { x, width: col.width });
       x += col.width;
     });
-    
+
+    // Set common context properties once
+    this.ctx.fillStyle = this.TEXT_COLOR;
+    this.ctx.font = this.FONT;
+    this.ctx.textBaseline = 'middle';
+
     // Render visible rows
     for (let rowIndex = startIndex; rowIndex < endIndex; rowIndex++) {
       const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
       if (!rowNode) continue;
-      
-      const y = rowIndex * this.rowHeight;
-      
-      // Row background
+
+      const y = (rowIndex * this.rowHeight) - this.scrollTop + (this.rowBuffer * this.rowHeight);
+
+      // Row background (striping for better readability)
+      this.ctx.fillStyle = rowIndex % 2 === 0 ? this.ROW_STRIPING.even : this.ROW_STRIPING.odd;
+      this.ctx.fillRect(0, y, x, this.rowHeight);
+
+      // Selected row overlay
       if (rowNode.selected) {
         this.ctx.fillStyle = this.SELECTED_BG_COLOR;
         this.ctx.fillRect(0, y, x, this.rowHeight);
       }
-      
-      // Row border
+
+      // Row borders
       this.ctx.strokeStyle = this.BORDER_COLOR;
       this.ctx.beginPath();
       this.ctx.moveTo(0, y + this.rowHeight);
       this.ctx.lineTo(x, y + this.rowHeight);
       this.ctx.stroke();
-      
+
       // Render cells
-      this.ctx.fillStyle = this.TEXT_COLOR;
-      this.ctx.font = this.FONT;
-      this.ctx.textBaseline = 'middle';
-      
       columns.forEach(col => {
         const colPos = columnPositions.get(col.colId);
         if (!colPos) return;
-        
+
         const cellX = colPos.x;
         const cellValue = (rowNode.data as any)[col.field || ''];
-        
+
         // Cell border
         this.ctx.strokeStyle = this.BORDER_COLOR;
         this.ctx.beginPath();
         this.ctx.moveTo(cellX + colPos.width, y);
         this.ctx.lineTo(cellX + colPos.width, y + this.rowHeight);
         this.ctx.stroke();
-        
-        // Cell text
-        const text = cellValue !== null && cellValue !== undefined ? String(cellValue) : '';
-        const truncatedText = this.truncateText(
-          text,
-          colPos.width - (this.CELL_PADDING * 2),
-          this.ctx
-        );
-        
-        this.ctx.fillText(
-          truncatedText,
-          cellX + this.CELL_PADDING,
-          y + this.rowHeight / 2
-        );
+
+        // Cell text with truncation
+        if (cellValue !== null && cellValue !== undefined) {
+          const text = String(cellValue);
+          const truncatedText = this.truncateText(
+            text,
+            colPos.width - (this.CELL_PADDING * 2)
+          );
+
+          this.ctx.fillText(
+            truncatedText,
+            cellX + this.CELL_PADDING,
+            y + this.rowHeight / 2
+          );
+        }
       });
     }
-    
-    // Store visible rows for hit testing
+
+    // Store visible rows for hit testing (adjust for scroll offset)
     this.visibleRows = [];
     for (let rowIndex = startIndex; rowIndex < endIndex; rowIndex++) {
       const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
@@ -181,28 +253,36 @@ export class CanvasRenderer<TData = any> {
       }
     }
   }
-  
-  private truncateText(text: string, maxWidth: number, ctx: CanvasRenderingContext2D): string {
-    const metrics = ctx.measureText(text);
+
+  private truncateText(text: string, maxWidth: number): string {
+    const metrics = this.ctx.measureText(text);
     if (metrics.width <= maxWidth) {
       return text;
     }
-    
-    let truncated = text;
-    while (ctx.measureText(truncated + '...').width > maxWidth && truncated.length > 0) {
-      truncated = truncated.slice(0, -1);
+
+    // Binary search for optimal truncation
+    let start = 0;
+    let end = text.length;
+    while (start < end) {
+      const mid = Math.floor((start + end) / 2);
+      const truncated = text.slice(0, mid) + '...';
+      if (this.ctx.measureText(truncated).width <= maxWidth) {
+        start = mid + 1;
+      } else {
+        end = mid;
+      }
     }
-    
-    return truncated + '...';
+
+    return text.slice(0, Math.max(0, start - 1)) + '...';
   }
-  
+
   private handleMouseDown(event: MouseEvent): void {
     const { rowIndex } = this.getHitTestResult(event);
-    if (rowIndex === -1) return;
-    
+    if (rowIndex === -1 || rowIndex >= this.visibleRows.length) return;
+
     const rowNode = this.visibleRows[rowIndex];
     if (!rowNode) return;
-    
+
     // Handle selection
     if (event.ctrlKey || event.metaKey) {
       rowNode.selected = !rowNode.selected;
@@ -212,32 +292,32 @@ export class CanvasRenderer<TData = any> {
       this.gridApi.deselectAll();
       rowNode.selected = true;
     }
-    
+
     this.render();
   }
-  
+
   private handleMouseMove(event: MouseEvent): void {
-    // TODO: Implement hover state
+    // TODO: Implement hover state with cursor feedback
   }
-  
+
   private handleClick(event: MouseEvent): void {
     const { rowIndex, columnIndex } = this.getHitTestResult(event);
-    if (rowIndex === -1) return;
-    
+    if (rowIndex === -1 || rowIndex >= this.visibleRows.length) return;
+
     const rowNode = this.visibleRows[rowIndex];
     if (!rowNode) return;
-    
+
     // Emit row click event (TODO: use EventEmitter)
     console.log('Row clicked:', rowNode.data);
   }
-  
+
   private getHitTestResult(event: MouseEvent): { rowIndex: number; columnIndex: number } {
     const rect = this.canvas.getBoundingClientRect();
     const y = event.clientY - rect.top + this.scrollTop;
     const x = event.clientX - rect.left + this.scrollLeft;
-    
+
     const rowIndex = Math.floor(y / this.rowHeight);
-    
+
     // Calculate column index
     const columns = this.gridApi.getAllColumns().filter(col => col.visible);
     let columnIndex = 0;
@@ -249,13 +329,46 @@ export class CanvasRenderer<TData = any> {
       xPos += col.width;
       columnIndex++;
     }
-    
+
     return { rowIndex, columnIndex };
   }
-  
+
+  /**
+   * Scroll to a specific row index
+   */
+  scrollToRow(rowIndex: number): void {
+    const container = this.canvas.parentElement;
+    if (!container) return;
+
+    const targetPosition = rowIndex * this.rowHeight;
+    container.scrollTop = targetPosition;
+    this.scrollTop = targetPosition;
+    this.scheduleRender();
+  }
+
+  /**
+   * Scroll to top
+   */
+  scrollToTop(): void {
+    this.scrollToRow(0);
+  }
+
+  /**
+   * Scroll to bottom
+   */
+  scrollToBottom(): void {
+    const container = this.canvas.parentElement;
+    if (!container) return;
+    
+    container.scrollTop = container.scrollHeight - container.clientHeight;
+    this.scrollTop = container.scrollTop;
+    this.scheduleRender();
+  }
+
   destroy(): void {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
     }
+    this.renderPending = false;
   }
 }

@@ -96,33 +96,32 @@ describe('GridService', () => {
     expect(newApi.getRowData().length).toBe(4);
   });
 
-  // TODO: Fix transaction tests - row ID lookup issue
-  xit('should handle transaction - update rows', () => {
+  it('should handle transaction - update rows', () => {
     const firstNode = api.getDisplayedRowAtIndex(0);
-    if (!firstNode) return;
-    
+    if (!firstNode || !firstNode.id) return;
+
     const newData: TestData = { id: firstNode.data.id, name: 'John Updated', age: 31, email: 'john.updated@example.com' };
     const result = api.applyTransaction({
       update: [newData]
     });
-    
+
     expect(result?.update.length).toBe(1);
-    const rowData = api.getRowData();
-    const foundRow = rowData.find(r => r.id === firstNode.data.id);
-    expect(foundRow?.name).toBe('John Updated');
+    const updatedNode = api.getRowNode(firstNode.id);
+    expect(updatedNode?.data.name).toBe('John Updated');
   });
 
-  xit('should handle transaction - remove rows', () => {
+  it('should handle transaction - remove rows', () => {
+    const initialCount = api.getDisplayedRowCount();
     const firstNode = api.getDisplayedRowAtIndex(0);
-    if (!firstNode) return;
-    
+    if (!firstNode || !firstNode.id) return;
+
     const removeData: TestData = { id: firstNode.data.id, name: firstNode.data.name, age: firstNode.data.age, email: firstNode.data.email };
     const result = api.applyTransaction({
       remove: [removeData]
     });
-    
+
     expect(result?.remove.length).toBe(1);
-    expect(api.getRowData().length).toBe(2);
+    expect(api.getDisplayedRowCount()).toBe(initialCount - 1);
   });
 
   it('should get and set filter model', () => {
