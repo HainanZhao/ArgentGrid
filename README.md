@@ -143,8 +143,8 @@ npm run lint
 - [x] Filtering (text, number, date, boolean)
 - [x] Row Grouping (hierarchical, with aggregations)
 - [x] Cell Editing (inline, with valueParser/valueSetter)
+- [x] Column Pinning (left/right sticky columns)
 - [ ] Aggregation (standalone)
-- [ ] Column Pinning
 - [ ] Selection (full implementation)
 
 ### Phase IV: Advanced Features
