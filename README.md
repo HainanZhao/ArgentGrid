@@ -141,8 +141,8 @@ npm run lint
 ### Phase III: Features
 - [x] Basic sorting (client-side)
 - [x] Filtering (text, number, date, boolean)
-- [ ] Row Grouping
-- [ ] Aggregation
+- [x] Row Grouping (hierarchical, with aggregations)
+- [ ] Aggregation (standalone)
 - [ ] Cell Editing
 - [ ] Column Pinning
 - [ ] Selection (full implementation)
