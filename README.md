@@ -144,6 +144,7 @@ npm run lint
 - [x] Row Grouping (hierarchical, with aggregations)
 - [x] Cell Editing (inline, with valueParser/valueSetter)
 - [x] Column Pinning (left/right sticky columns)
+- [x] Row Pinning (top/bottom pinned rows)
 - [ ] Aggregation (standalone)
 - [ ] Selection (full implementation)
 
