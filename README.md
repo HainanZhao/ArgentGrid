@@ -145,8 +145,8 @@ npm run lint
 - [x] Cell Editing (inline, with valueParser/valueSetter)
 - [x] Column Pinning (left/right sticky columns)
 - [x] Row Pinning (top/bottom pinned rows)
+- [x] Selection (full implementation with checkbox)
 - [ ] Aggregation (standalone)
-- [ ] Selection (full implementation)
 
 ### Phase IV: Advanced Features
 - [ ] Pivot Tables
