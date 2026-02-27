@@ -1,7 +1,5 @@
 # ArgentGrid
 
-> ⚠️ **WORK IN PROGRESS** - This project is under active development. The API is not stable and some features are not yet implemented. Use at your own risk in production environments.
-
 A **free, high-performance** alternative to AG Grid Enterprise built with Angular and Canvas rendering.
 
 ## 🌐 Live Demo
@@ -32,7 +30,7 @@ For a detailed comparison with AG Grid and our development roadmap, see:
 ## Installation
 
 ```bash
-npm install argentgrid
+npm install argent-grid
 ```
 
 ## Requirements
@@ -46,7 +44,7 @@ npm install argentgrid
 
 ```typescript
 import { Component } from '@angular/core';
-import { ColDef } from 'argentgrid';
+import { ColDef } from 'argent-grid';
 
 interface RowData {
   id: number;
@@ -83,7 +81,7 @@ export class AppComponent {
 
 ```typescript
 import { NgModule } from '@angular/core';
-import { ArgentGridModule } from 'argentgrid';
+import { ArgentGridModule } from 'argent-grid';
 
 @NgModule({
   imports: [
@@ -145,7 +143,7 @@ npm run lint
 
 ## 🎨 Demo App Development
 
-The repository includes a standalone Angular application for visual testing and performance benchmarking. It is configured to import `argentgrid` directly from the `src/` folder using TypeScript path mapping.
+The repository includes a standalone Angular application for visual testing and performance benchmarking. It is configured to import `argent-grid` directly from the `src/` folder using TypeScript path mapping.
 
 **Why this is better:**
 - **No Build Step:** You don't need to run `npm run build` in the root every time you change the library.
@@ -164,7 +162,7 @@ Open [http://localhost:4200](http://localhost:4200) to view the demo.
 
 ### E2E Testing (Playwright)
 
-ArgentGrid uses Playwright for end-to-end testing of visual and interactive features (like Canvas rendering, dragging, and menu interactions).
+argent-grid uses Playwright for end-to-end testing of visual and interactive features (like Canvas rendering, dragging, and menu interactions).
 
 **Prerequisites:**
 The demo app must be running (`npm start` inside `demo-app/`).

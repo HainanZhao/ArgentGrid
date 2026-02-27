@@ -61,7 +61,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './demo-app/dist/argentgrid-demo/browser'
+          path: './demo-app/dist/argent-grid-demo/browser'
 
       - name: Deploy to GitHub Pages
         id: deployment

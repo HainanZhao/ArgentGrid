@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ArgentGridModule, ArgentGridComponent } from 'argentgrid';
-import { GridApi, ColDef, IRowNode } from 'argentgrid';
+import { ArgentGridModule, ArgentGridComponent } from 'argent-grid';
+import { GridApi, ColDef, IRowNode } from 'argent-grid';
 
 interface Employee {
   id: number;

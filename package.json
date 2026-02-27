@@ -1,6 +1,6 @@
 {
-  "name": "argentgrid",
-  "version": "0.0.1",
+  "name": "argent-grid",
+  "version": "0.1.0",
   "description": "A free, high-performance alternative to AG Grid Enterprise",
   "author": "hainzhao",
   "license": "MIT",

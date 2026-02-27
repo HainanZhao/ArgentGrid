@@ -23,8 +23,8 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "paths": {
-      "argentgrid": ["dist"],
-      "argentgrid/*": ["dist/*"]
+      "argent-grid": ["dist"],
+      "argent-grid/*": ["dist/*"]
     }
   },
   "include": ["src/**/*.ts"],

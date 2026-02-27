@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "argentgrid-demo": {
+    "argent-grid-demo": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -13,7 +13,7 @@
         "build": {
           "builder": "@angular-devkit/build-angular:application",
           "options": {
-            "outputPath": "dist/argentgrid-demo",
+            "outputPath": "dist/argent-grid-demo",
             "index": "src/index.html",
             "browser": "src/main.ts",
             "polyfills": [],
@@ -58,10 +58,10 @@
           "builder": "@angular-devkit/build-angular:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "argentgrid-demo:build:production"
+              "buildTarget": "argent-grid-demo:build:production"
             },
             "development": {
-              "buildTarget": "argentgrid-demo:build:development"
+              "buildTarget": "argent-grid-demo:build:development"
             }
           },
           "defaultConfiguration": "development"
