@@ -33,6 +33,10 @@ export class GridService<TData = any> {
   private gridId: string = '';
   private gridOptions: GridOptions<TData> | null = null;
   public gridStateChanged$ = new Subject<{ type: string, key?: string, value?: any }>();
+
+  // Grouping cache
+  private cachedGroupedData: (TData | GroupRowNode<TData>)[] | null = null;
+  private groupingDirty = true;
   
   createApi(
     columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null,
@@ -130,6 +134,7 @@ export class GridService<TData = any> {
   }
   
   private initializeRowNodes(): void {
+    this.groupingDirty = true;
     this.rowNodes.clear();
     this.displayedRowNodes = [];
     
@@ -191,6 +196,7 @@ export class GridService<TData = any> {
       getColumnDefs: () => this.columnDefs,
       setColumnDefs: (colDefs) => {
         this.columnDefs = colDefs;
+        this.groupingDirty = true;
         this.initializeColumns();
       },
       getColumn: (key) => {
@@ -208,6 +214,7 @@ export class GridService<TData = any> {
         this.rowData = rowData;
         this.filteredRowData = [...rowData];
         this.groupedRowData = [];
+        this.groupingDirty = true;
         this.initializeRowNodes();
       },
       applyTransaction: (transaction) => this.applyTransaction(transaction),
@@ -223,12 +230,14 @@ export class GridService<TData = any> {
           node.selected = true;
           this.selectedRows.add(node.id!);
         });
+        this.gridStateChanged$.next({ type: 'selectionChanged' });
       },
       deselectAll: () => {
         this.rowNodes.forEach(node => {
           node.selected = false;
         });
         this.selectedRows.clear();
+        this.gridStateChanged$.next({ type: 'selectionChanged' });
       },
       
       // Filter API
@@ -325,6 +334,7 @@ export class GridService<TData = any> {
             this.expandedGroups.delete(node.id);
           }
           this.applyGrouping();
+          this.gridStateChanged$.next({ type: 'groupExpanded', value: expanded });
         }
       }
     };
@@ -420,6 +430,7 @@ export class GridService<TData = any> {
   }
   
   private applySorting(): void {
+    this.groupingDirty = true;
     if (this.sortModel.length === 0) {
       return;
     }
@@ -450,6 +461,7 @@ export class GridService<TData = any> {
   }
 
   private applyFiltering(): void {
+    this.groupingDirty = true;
     if (Object.keys(this.filterModel).length === 0) {
       // No filters, use all data
       this.filteredRowData = [...this.rowData];
@@ -491,13 +503,31 @@ export class GridService<TData = any> {
     if (groupColumns.length === 0) {
       // No grouping, use filtered data
       this.groupedRowData = [];
+      this.cachedGroupedData = null;
+      this.groupingDirty = true;
       this.initializeRowNodesFromFilteredData();
       return;
     }
 
-    // Group data hierarchically
-    this.groupedRowData = this.groupByColumns(this.filteredRowData, groupColumns, 0);
+    // Only re-group if filters or data changed
+    if (this.groupingDirty || !this.cachedGroupedData) {
+      this.cachedGroupedData = this.groupByColumns(this.filteredRowData, groupColumns, 0);
+      this.groupingDirty = false;
+    }
+
+    // Re-flatten from cache (respects new expansion state)
+    this.updateExpansionStateInCache(this.cachedGroupedData);
+    this.groupedRowData = this.flattenGroupedData(this.cachedGroupedData);
     this.initializeRowNodesFromGroupedData();
+  }
+
+  private updateExpansionStateInCache(groupedData: (TData | GroupRowNode<TData>)[]): void {
+    for (const item of groupedData) {
+      if (this.isGroupRowNode(item)) {
+        item.expanded = this.expandedGroups.has(item.id);
+        this.updateExpansionStateInCache(item.children);
+      }
+    }
   }
 
   private groupByColumns(
@@ -593,12 +623,10 @@ export class GridService<TData = any> {
   }
 
   private initializeRowNodesFromGroupedData(): void {
-    this.rowNodes.clear();
+    // DO NOT CLEAR this.rowNodes - reuse existing nodes to preserve state
     this.displayedRowNodes = [];
-    const flatRows = this.flattenGroupedData(this.groupedRowData);
     
-    flatRows.forEach((item, index) => {
-      // ... (code omitted for brevity in thought, but I'll provide full function)
+    this.groupedRowData.forEach((item, index) => {
       let id: string;
       let data: TData;
       let isGroup = false;
@@ -607,39 +635,54 @@ export class GridService<TData = any> {
 
       if (this.isGroupRowNode(item)) {
         // Group node
-        const groupNode = item;
-        id = groupNode.id;
-        // Create synthetic data for group row
+        id = item.id;
+        // Re-use aggregation data from the group node
         data = { 
-          ...groupNode.aggregation,
-          [groupNode.groupField]: groupNode.groupKey,
-          'ag-Grid-AutoColumn': groupNode.groupKey 
+          ...item.aggregation,
+          [item.groupField]: item.groupKey,
+          'ag-Grid-AutoColumn': item.groupKey 
         } as TData;
         isGroup = true;
-        level = groupNode.level;
-        expanded = groupNode.expanded;
+        level = item.level;
+        expanded = item.expanded;
       } else {
-        // Regular data node
+        // Regular data node - IMPORTANT: DO NOT CLONE DATA
         id = this.getRowId(item, index);
-        data = { ...item, 'ag-Grid-AutoColumn': '' } as any;
+        data = item;
       }
 
-      const node: IRowNode<TData> = {
-        id,
-        data,
-        rowPinned: false,
-        rowHeight: null,
-        displayed: true,
-        selected: this.selectedRows.has(id),
-        expanded,
-        group: isGroup,
-        level,
-        firstChild: index === 0,
-        lastChild: index === flatRows.length - 1,
-        rowIndex: index,
-        displayedRowIndex: index
-      };
-      this.rowNodes.set(id, node);
+      // Check if we already have this node
+      let node = this.rowNodes.get(id);
+      if (node) {
+        // Update existing node properties
+        node.data = data;
+        node.expanded = expanded;
+        node.group = isGroup;
+        node.level = level;
+        node.rowIndex = index;
+        node.displayedRowIndex = index;
+        node.firstChild = index === 0;
+        node.lastChild = index === this.groupedRowData.length - 1;
+      } else {
+        // Create new node only if it doesn't exist
+        node = {
+          id,
+          data,
+          rowPinned: false,
+          rowHeight: null,
+          displayed: true,
+          selected: this.selectedRows.has(id),
+          expanded,
+          group: isGroup,
+          level,
+          firstChild: index === 0,
+          lastChild: index === this.groupedRowData.length - 1,
+          rowIndex: index,
+          displayedRowIndex: index
+        };
+        this.rowNodes.set(id, node);
+      }
+      
       this.displayedRowNodes.push(node);
     });
   }
