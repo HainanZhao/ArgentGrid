@@ -1,0 +1,79 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]: 🚧
+    - generic [ref=e6]: WORK IN PROGRESS - Using ArgentGrid Component
+    - link "View on GitHub →" [ref=e7] [cursor=pointer]:
+      - /url: https://github.com/HainanZhao/ArgentGrid
+  - generic [ref=e8]:
+    - banner [ref=e9]:
+      - generic [ref=e10]:
+        - heading "🎨 ArgentGrid - Canvas-Based Grid" [level=1] [ref=e11]
+        - paragraph [ref=e12]: Ultra-High Performance - 1,000,000+ Rows at 60fps
+        - generic [ref=e13]:
+          - generic [ref=e14]: ✓ Canvas Rendering
+          - generic [ref=e15]: ✓ Zero DOM Overhead
+          - generic [ref=e16]: ✓ GPU Accelerated
+          - generic [ref=e17]: ✓ AG Grid Compatible
+          - generic [ref=e18]: ✓ < 50KB Bundle
+      - generic [ref=e19]:
+        - generic [ref=e20]:
+          - strong [ref=e21]: 100,000
+          - text: rows
+        - generic [ref=e22]:
+          - strong [ref=e23]: "179"
+          - text: ms load
+        - generic [ref=e24]:
+          - strong [ref=e25]: "588"
+          - text: FPS
+        - button "100K" [ref=e26] [cursor=pointer]
+        - button "500K" [ref=e27] [cursor=pointer]
+        - button "1M" [ref=e28] [cursor=pointer]
+      - generic [ref=e29]:
+        - button "Group by Dept" [ref=e30] [cursor=pointer]
+        - button "Hide Filters" [ref=e31] [cursor=pointer]
+        - button "Filter 'Engineering'" [ref=e32] [cursor=pointer]
+        - button "Clear Filters" [ref=e33] [cursor=pointer]
+    - generic [ref=e37]:
+      - generic [ref=e40]:
+        - generic [ref=e41] [cursor=pointer]:
+          - generic [ref=e43]: ID
+          - generic [ref=e44]: ⋮
+        - generic [ref=e45] [cursor=pointer]:
+          - generic [ref=e47]: Name
+          - generic [ref=e48]: ⋮
+        - generic [ref=e49] [cursor=pointer]:
+          - generic [ref=e51]: Department
+          - generic [ref=e52]: ⋮
+        - generic [ref=e53] [cursor=pointer]:
+          - generic [ref=e55]: Role
+          - generic [ref=e56]: ⋮
+        - generic [ref=e57] [cursor=pointer]:
+          - generic [ref=e59]: Salary
+          - generic [ref=e60]: ⋮
+        - generic [ref=e61] [cursor=pointer]:
+          - generic [ref=e63]: Location
+          - generic [ref=e64]: ⋮
+        - generic [ref=e65] [cursor=pointer]:
+          - generic [ref=e67]: Start Date
+          - generic [ref=e68]: ⋮
+        - generic [ref=e69] [cursor=pointer]:
+          - generic [ref=e71]: Performance
+          - generic [ref=e72]: ⋮
+      - generic [ref=e75]:
+        - spinbutton [ref=e78]
+        - textbox "Filter..." [ref=e81]
+        - textbox "Filter..." [ref=e84]
+        - textbox "Filter..." [ref=e87]
+        - spinbutton [ref=e90]
+        - textbox "Filter..." [ref=e93]
+        - textbox [ref=e96]:
+          - /placeholder: Filter...
+        - spinbutton [ref=e99]
+    - generic [ref=e101]:
+      - generic [ref=e102]: Built with Angular 18 + Canvas 2D API
+      - link "View on GitHub →" [ref=e104] [cursor=pointer]:
+        - /url: https://github.com/HainanZhao/ArgentGrid
+```

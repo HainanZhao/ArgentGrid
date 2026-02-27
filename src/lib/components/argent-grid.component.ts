@@ -438,13 +438,13 @@ import { Subject } from 'rxjs';
     }
 
     .argent-grid-header-menu, .argent-grid-context-menu {
-      position: absolute;
+      position: fixed;
       background: #ffffff;
       border: 1px solid #babed1;
       box-shadow: 0 3px 10px 0 rgba(0, 0, 0, 0.2);
       border-radius: 3px;
       padding: 4px 0;
-      z-index: 1000;
+      z-index: 10000;
       min-width: 200px;
       font-size: 13px;
       color: #181d1f;
@@ -599,7 +599,6 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
-    console.log('[ArgentGrid] ngOnInit called');
     this.initialColumnDefs = this.columnDefs ? JSON.parse(JSON.stringify(this.columnDefs)) : null;
     this.initializeGrid();
   }
@@ -668,8 +667,6 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   private initializeGrid(): void {
-    console.log('[ArgentGrid] initializeGrid:', { columnDefs: this.columnDefs?.length, rowData: this.rowData?.length });
-
     // Initialize grid API
     this.gridApi = this.gridService.createApi(this.columnDefs, this.rowData, this.gridOptions);
 
@@ -691,7 +688,6 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   private onRowDataChanged(newData: TData[] | null): void {
-    console.log('[ArgentGrid] onRowDataChanged:', newData?.length);
     this.rowData = newData;
 
     if (this.gridApi) {
@@ -820,20 +816,18 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
     this.activeHeaderMenu = col;
     
-    // Position menu below the icon
+    // Position menu below the icon using fixed (viewport) coordinates
     const target = event.target as HTMLElement;
     const rect = target.getBoundingClientRect();
-    const containerRect = this.viewportRef.nativeElement.parentElement?.getBoundingClientRect() || { top: 0, left: 0, width: 0, height: 0 };
     
-    let x = rect.right - 180 - containerRect.left;
-    let y = rect.bottom - containerRect.top + 4;
+    let x = rect.right - 200; // Align right, assuming menu width ~200px
+    let y = rect.bottom + 4;
 
     // Prevent menu from going off-screen
     if (x < 0) x = 0;
-    if (x + 180 > containerRect.width) x = containerRect.width - 180;
-    if (y + 200 > containerRect.height) {
-      // Show above the header if it overflows bottom
-      y = rect.top - containerRect.top - 200;
+    if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
+    if (y + 250 > window.innerHeight) { // Assuming max menu height ~250px
+      y = rect.top - 250; // Show above if overflows bottom
     }
     
     this.headerMenuPosition = { x, y };
@@ -878,20 +872,15 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     this.contextMenuCell = { rowNode, column };
     this.activeContextMenu = true;
     
-    // Position menu at mouse coordinates relative to viewport
-    const containerRect = this.viewportRef.nativeElement.parentElement?.getBoundingClientRect() || { top: 0, left: 0, width: 0, height: 0 };
-    let x = event.clientX - containerRect.left;
-    let y = event.clientY - containerRect.top;
+    // Position menu at mouse coordinates (fixed/viewport)
+    let x = event.clientX;
+    let y = event.clientY;
 
-    // Prevent menu from going off-screen (right and bottom)
-    if (x + 180 > containerRect.width) {
-      x = containerRect.width - 180;
-    }
-    if (y + 200 > containerRect.height) { // Assuming max menu height ~200px
-      y = containerRect.height - 200;
-    }
+    // Prevent menu from going off-screen
+    if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
+    if (y + 200 > window.innerHeight) y = window.innerHeight - 200;
 
-    this.contextMenuPosition = { x: Math.max(0, x), y: Math.max(0, y) };
+    this.contextMenuPosition = { x, y };
     
     // Select the row
     this.gridApi.deselectAll();
@@ -944,13 +933,17 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   sortColumnMenu(direction: 'asc' | 'desc' | null): void {
-    if (!this.activeHeaderMenu || 'children' in this.activeHeaderMenu) return;
+    if (!this.activeHeaderMenu) return;
     
-    const col = this.activeHeaderMenu as ColDef<TData>;
-    col.sort = direction;
-    col.sortIndex = direction ? 0 : undefined;
+    const col = this.activeHeaderMenu as any;
+    const colId = col.colId || col.field?.toString() || '';
     
-    const colId = typeof col.colId === 'string' ? col.colId : col.field?.toString() || '';
+    // Update original ColDef to ensure persistence
+    const colDef = this.getColumnDefForColumn(col);
+    if (colDef) {
+      colDef.sort = direction;
+    }
+
     this.gridApi.setSortModel(direction ? [{ colId, sort: direction }] : []);
     this.canvasRenderer?.render();
     
@@ -958,12 +951,17 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   hideColumnMenu(): void {
-    if (!this.activeHeaderMenu || 'children' in this.activeHeaderMenu) return;
+    if (!this.activeHeaderMenu) return;
     
-    const col = this.activeHeaderMenu as ColDef<TData>;
-    col.hide = true;
+    const col = this.activeHeaderMenu as any;
     
-    // Create new array to trigger change detection
+    // Update the original column definition
+    const colDef = this.getColumnDefForColumn(col);
+    if (colDef) {
+      colDef.hide = true;
+    }
+    
+    // Create new array to trigger change detection and API update
     if (this.columnDefs) {
       this.onColumnDefsChanged([...this.columnDefs]);
     }
@@ -972,10 +970,15 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   pinColumnMenu(pin: 'left' | 'right' | null): void {
-    if (!this.activeHeaderMenu || 'children' in this.activeHeaderMenu) return;
+    if (!this.activeHeaderMenu) return;
     
-    const col = this.activeHeaderMenu as ColDef<TData>;
-    col.pinned = pin as any;
+    const col = this.activeHeaderMenu as any;
+    
+    // Update the original column definition
+    const colDef = this.getColumnDefForColumn(col);
+    if (colDef) {
+      colDef.pinned = pin as any;
+    }
     
     if (this.columnDefs) {
       this.onColumnDefsChanged([...this.columnDefs]);

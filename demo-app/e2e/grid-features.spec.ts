@@ -1,0 +1,167 @@
+import { test, expect, Page } from '@playwright/test';
+
+test.describe('ArgentGrid Feature Guard Rails', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/', { waitUntil: 'networkidle' });
+    // Wait for grid to be ready
+    await page.waitForSelector('argent-grid', { timeout: 10000 });
+    // Wait for data to load
+    await page.waitForSelector('.loading', { state: 'detached', timeout: 30000 });
+  });
+
+  test('should support row grouping and expansion', async ({ page }) => {
+    // 1. Toggle Grouping
+    await page.click('button:has-text("Group by Dept")');
+    
+    // 2. Verify "Organization" column (Auto Group Column) appears
+    const groupHeader = page.locator('.argent-grid-header-cell').filter({ hasText: /^Organization/ });
+    await expect(groupHeader).toBeVisible();
+
+    // 3. Verify original "Department" column is hidden
+    const deptHeader = page.locator('.argent-grid-header-cell').filter({ hasText: /^Department/ });
+    await expect(deptHeader).not.toBeVisible();
+
+    // 4. Verify row count via GridApi (initially grouped)
+    const rowCountBefore = await page.evaluate(() => window.gridApi.getDisplayedRowCount());
+    expect(rowCountBefore).toBeLessThan(20);
+
+    // 5. Expand first group (click near chevron)
+    const canvas = page.locator('canvas');
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Canvas box not found');
+
+    // Click at x=20, y=16 (roughly the first group's chevron)
+    await page.mouse.click(box.x + 20, box.y + 16);
+    
+    // 6. Verify row count increased
+    await page.waitForTimeout(1000); // Wait for processing
+    const rowCountAfter = await page.evaluate(() => window.gridApi.getDisplayedRowCount());
+    expect(rowCountAfter).toBeGreaterThan(rowCountBefore);
+  });
+
+  test('should support floating filters', async ({ page }) => {
+    // 1. Verify floating filter row is visible
+    const filterRow = page.locator('.floating-filter-row');
+    await expect(filterRow).toBeVisible();
+
+    // 2. Type "Sales" into the Department filter (3rd input)
+    const deptFilter = page.locator('.floating-filter-input').nth(2);
+    await deptFilter.fill('Sales');
+    
+    // 3. Wait for debounce and verify filtered count
+    await page.waitForTimeout(1500);
+    const filteredCount = await page.evaluate(() => window.gridApi.getDisplayedRowCount());
+    
+    expect(filteredCount).toBeGreaterThan(0);
+    expect(filteredCount).toBeLessThan(100000);
+
+    // 4. Verify Clear button (x) works
+    const clearBtn = page.locator('.floating-filter-clear').first();
+    await expect(clearBtn).toBeVisible();
+    await clearBtn.click();
+
+    // 5. Verify count restored
+    await page.waitForTimeout(1000);
+    const restoredCount = await page.evaluate(() => window.gridApi.getDisplayedRowCount());
+    expect(restoredCount).toBe(100000);
+  });
+
+  test('should support cell editing with keyboard navigation', async ({ page }) => {
+    const canvas = page.locator('canvas');
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('Canvas box not found');
+
+    // 1. Double click to start editing (Name column, first row)
+    // Click on Name column (x=150 is roughly middle of Name column)
+    await canvas.dblclick({ position: { x: 150, y: 16 } });
+    
+    const editor = page.locator('.argent-grid-editor-input');
+    await expect(editor).toBeVisible();
+
+    // 2. Type new value and Enter to save
+    await editor.fill('TEST_EDIT_SUCCESS');
+    await page.keyboard.press('Enter');
+
+    // 3. Verify editor is gone and value persisted
+    await expect(editor).not.toBeVisible();
+    const savedValue = await page.evaluate(() => window.gridApi.getDisplayedRowAtIndex(0).data.name);
+    expect(savedValue).toBe('TEST_EDIT_SUCCESS');
+
+    // 4. Test Escape to cancel
+    await canvas.dblclick({ position: { x: 150, y: 16 } });
+    await expect(editor).toBeVisible();
+    await editor.fill('WILL_CANCEL');
+    await page.keyboard.press('Escape');
+    
+    await expect(editor).not.toBeVisible();
+    const afterCancelValue = await page.evaluate(() => window.gridApi.getDisplayedRowAtIndex(0).data.name);
+    expect(afterCancelValue).toBe('TEST_EDIT_SUCCESS');
+  });
+
+  test('should support column pinning and horizontal scroll sync', async ({ page }) => {
+    // Force horizontal scroll by reducing viewport
+    await page.setViewportSize({ width: 800, height: 600 });
+
+    // 1. Pin ID column to Left via Menu
+    const idHeader = page.locator('.argent-grid-header-cell').filter({ hasText: /^ID/ });
+    await idHeader.hover();
+    const menuIcon = idHeader.locator('.argent-grid-header-menu-icon');
+    await menuIcon.waitFor({ state: 'visible' });
+    await menuIcon.click();
+
+    // Click Pin Left
+    await page.locator('.menu-item').filter({ hasText: 'Pin Left' }).click();
+
+    // 2. Verify internal state via GridApi
+    await page.waitForFunction(() => {
+      const api = (window as any).gridApi;
+      const col = api.getAllColumns().find(c => c.colId === 'id');
+      return col && col.pinned === 'left';
+    }, { timeout: 5000 });
+
+    // 3. Scroll grid horizontally
+    const viewport = page.locator('.argent-grid-viewport');
+    await viewport.evaluate(el => el.scrollLeft = 200);
+    
+    // 4. Verify header scroll sync
+    await page.waitForTimeout(1000);
+    const headerScrollable = page.locator('.argent-grid-header-scrollable').first();
+    const headerScrollLeft = await headerScrollable.evaluate(el => el.scrollLeft);
+    expect(headerScrollLeft).toBe(200);
+
+    // 5. Verify pinned column remains at the left
+    const idHeaderBox = await idHeader.boundingBox();
+    const containerBox = await page.locator('.argent-grid-container').boundingBox();
+    // Allow 2px margin for borders
+    expect(Math.abs((idHeaderBox?.x || 0) - (containerBox?.x || 0))).toBeLessThanOrEqual(2);
+  });
+
+  test('should support column re-ordering via drag and drop', async ({ page }) => {
+    const idHeader = page.locator('.argent-grid-header-cell').filter({ hasText: /^ID/ });
+    const nameHeader = page.locator('.argent-grid-header-cell').filter({ hasText: /^Name/ });
+    
+    const idBoxBefore = await idHeader.boundingBox();
+    const nameBoxBefore = await nameHeader.boundingBox();
+    
+    expect(idBoxBefore!.x).toBeLessThan(nameBoxBefore!.x);
+
+    // Drag Name to before ID
+    await nameHeader.hover();
+    await page.mouse.down();
+    await page.mouse.move(idBoxBefore!.x + 10, idBoxBefore!.y + 10, { steps: 10 });
+    await page.mouse.up();
+
+    // Verify order swapped
+    await page.waitForTimeout(1000);
+    const idBoxAfter = await idHeader.boundingBox();
+    const nameBoxAfter = await nameHeader.boundingBox();
+    
+    expect(nameBoxAfter!.x).toBeLessThan(idBoxAfter!.x);
+  });
+});
+
+declare global {
+  interface Window {
+    gridApi: any;
+  }
+}
