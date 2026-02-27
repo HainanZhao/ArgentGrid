@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - dirty
+
     paths:
       - 'src/**'
       - 'demo-app/**'
@@ -22,7 +22,7 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
