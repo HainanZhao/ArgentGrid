@@ -1,4 +1,4 @@
-import { Component, signal, OnInit, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ArgentGridModule } from '../../../../src/lib/argent-grid.module';
 import { GridApi, ColDef, IRowNode } from '../../../../src/lib/types/ag-grid-types';
@@ -21,8 +21,8 @@ interface Employee {
   templateUrl: './demo-page.component.html',
   styleUrls: ['./demo-page.component.css'],
 })
-export class DemoPageComponent implements OnInit, AfterViewInit {
-  readonly rowData = signal<Employee[]>([]);
+export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
+  rowData: Employee[] = [];
   renderTime = 0;
   fps = 0;
   isLoading = false;
@@ -113,7 +113,7 @@ export class DemoPageComponent implements OnInit, AfterViewInit {
     }
 
     setTimeout(() => {
-      this.rowData.set(data);
+      this.rowData = data;
       const endTime = performance.now();
       this.renderTime = Math.round(endTime - startTime);
       this.rowCount = count;
