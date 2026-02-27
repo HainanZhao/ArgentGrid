@@ -271,18 +271,23 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
   `,
   styles: [`
     .argent-grid-container {
+      box-sizing: border-box;
       position: relative;
       overflow: hidden;
-      border: 1px solid #e0e0e0;
+      border: 1px solid #babed1;
       background: #fff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
       display: flex;
       flex-direction: column;
     }
 
+    .argent-grid-container *, .argent-grid-container *:before, .argent-grid-container *:after {
+      box-sizing: inherit;
+    }
+
     .argent-grid-header {
-      border-bottom: 1px solid #e0e0e0;
-      background: #f5f5f5;
+      border-bottom: 1px solid #babed1;
+      background: #f8f9fa;
       font-weight: 600;
     }
 
@@ -330,7 +335,7 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
 
     .argent-grid-header-cell {
       padding: 8px 12px;
-      border-right: 1px solid #e0e0e0;
+      border-right: 1px solid #babed1;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -338,6 +343,7 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
       user-select: none;
       flex-shrink: 0;
       position: relative;
+      height: 100%;
     }
 
     .argent-grid-header-cell:hover .argent-grid-header-menu-icon {
@@ -349,6 +355,7 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
       align-items: center;
       overflow: hidden;
       flex: 1;
+      height: 100%;
     }
     
     .header-text {
@@ -392,16 +399,22 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
       position: sticky;
       left: 0;
       z-index: 10;
-      border-right: 2px solid #ccc;
-      background: #f5f5f5;
+      background: #f8f9fa;
     }
 
     .argent-grid-header-cell-pinned-right {
       position: sticky;
       right: 0;
       z-index: 10;
-      border-left: 2px solid #ccc;
-      background: #f5f5f5;
+      background: #f8f9fa;
+    }
+
+    .argent-grid-header-pinned-left-container {
+      border-right: 2px solid #babed1;
+    }
+
+    .argent-grid-header-pinned-right-container {
+      border-left: 2px solid #babed1;
     }
 
     .argent-grid-header-cell.sortable:hover {

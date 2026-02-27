@@ -38,12 +38,12 @@ export class CanvasRenderer<TData = any> {
 
   // Styling constants
   private readonly CELL_PADDING = 8;
-  private readonly BORDER_COLOR = '#e0e0e0';
-  private readonly TEXT_COLOR = '#333';
+  private readonly BORDER_COLOR = '#babed1';
+  private readonly TEXT_COLOR = '#181d1f';
   private readonly SELECTED_BG_COLOR = '#e3f2fd';
-  private readonly HOVER_BG_COLOR = '#f5f5f5';
+  private readonly HOVER_BG_COLOR = '#f0f2f5';
   private readonly FONT = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  private readonly ROW_STRIPING: { even: string; odd: string } = { even: '#ffffff', odd: '#fafafa' };
+  private readonly ROW_STRIPING: { even: string; odd: string } = { even: '#ffffff', odd: '#f8f9fa' };
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -227,7 +227,7 @@ export class CanvasRenderer<TData = any> {
       
       // 6. Draw vertical lines separating pinned sections
       if (leftWidth > 0) {
-        this.ctx.strokeStyle = '#ccc';
+        this.ctx.strokeStyle = '#babed1';
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
         this.ctx.moveTo(leftWidth, y);
@@ -236,7 +236,7 @@ export class CanvasRenderer<TData = any> {
         this.ctx.lineWidth = 1;
       }
       if (rightWidth > 0) {
-        this.ctx.strokeStyle = '#ccc';
+        this.ctx.strokeStyle = '#babed1';
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
         this.ctx.moveTo(width - rightWidth, y);
