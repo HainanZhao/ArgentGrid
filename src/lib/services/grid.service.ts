@@ -715,11 +715,17 @@ export class GridService<TData = any> {
         filterState[key] = item;
       }
     });
-    
+
+    // Get pinned columns
+    const allColumns = Array.from(this.columns.values());
+    const leftPinned = allColumns.filter(c => c.pinned === 'left').map(c => c.colId);
+    const rightPinned = allColumns.filter(c => c.pinned === 'right').map(c => c.colId);
+
     return {
       sort: { sortModel: [...this.sortModel] },
       filter: filterState,
-      columnOrder: Array.from(this.columns.values()).map(col => ({
+      columnPinning: { left: leftPinned, right: rightPinned },
+      columnOrder: allColumns.map(col => ({
         colId: col.colId,
         width: col.width,
         hide: !col.visible,

@@ -401,6 +401,52 @@ describe('GridService', () => {
     expect(setterColumnDefs[1].valueSetter).toBeDefined();
   });
 
+  // Column Pinning Tests
+  it('should pin column to left', () => {
+    const pinColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID', pinned: 'left' },
+      { colId: 'name', field: 'name', headerName: 'Name' },
+      { colId: 'value', field: 'value', headerName: 'Value' }
+    ];
+    
+    const pinApi = service.createApi(pinColumnDefs, [...testRowData]);
+    const columns = pinApi.getAllColumns();
+    
+    const pinnedCol = columns.find(c => c.pinned === 'left');
+    expect(pinnedCol).toBeDefined();
+    expect(pinnedCol?.colId).toBe('id');
+  });
+
+  it('should pin column to right', () => {
+    const pinColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID' },
+      { colId: 'name', field: 'name', headerName: 'Name' },
+      { colId: 'value', field: 'value', headerName: 'Value', pinned: 'right' }
+    ];
+    
+    const pinApi = service.createApi(pinColumnDefs, [...testRowData]);
+    const columns = pinApi.getAllColumns();
+    
+    const pinnedCol = columns.find(c => c.pinned === 'right');
+    expect(pinnedCol).toBeDefined();
+    expect(pinnedCol?.colId).toBe('value');
+  });
+
+  it('should return pinned columns in getColumnPinningState', () => {
+    const pinColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID', pinned: 'left' },
+      { colId: 'name', field: 'name', headerName: 'Name' },
+      { colId: 'value', field: 'value', headerName: 'Value', pinned: 'right' }
+    ];
+    
+    const pinApi = service.createApi(pinColumnDefs, [...testRowData]);
+    const state = pinApi.getState();
+    
+    expect(state.columnPinning).toBeDefined();
+    expect(state.columnPinning?.left).toContain('id');
+    expect(state.columnPinning?.right).toContain('value');
+  });
+
   it('should get displayed row count', () => {
     const freshApi = service.createApi(testColumnDefs, [...testRowData]);
     expect(freshApi.getDisplayedRowCount()).toBe(3);

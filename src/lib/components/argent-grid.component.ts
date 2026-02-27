@@ -9,11 +9,38 @@ import { Subject } from 'rxjs';
   template: `
     <div class="argent-grid-container" [style.height]="height" [style.width]="width">
       <!-- Header Layer (DOM-based for accessibility) -->
-      <div class="argent-grid-header" *ngIf="columnDefs">
+      <div class="argent-grid-header">
         <div class="argent-grid-header-row">
+          <!-- Left Pinned Columns -->
           <div
-            *ngFor="let col of columnDefs"
-            class="argent-grid-header-cell"
+            *ngFor="let col of getLeftPinnedColumns()"
+            class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
+            [style.width.px]="getColumnWidth(col)"
+            [class.sortable]="isSortable(col)"
+            (click)="onHeaderClick(col)">
+            {{ getHeaderName(col) }}
+            <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+          </div>
+          
+          <!-- Scrollable Columns -->
+          <div class="argent-grid-header-scrollable">
+            <div class="argent-grid-header-row">
+              <div
+                *ngFor="let col of getNonPinnedColumns()"
+                class="argent-grid-header-cell"
+                [style.width.px]="getColumnWidth(col)"
+                [class.sortable]="isSortable(col)"
+                (click)="onHeaderClick(col)">
+                {{ getHeaderName(col) }}
+                <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Right Pinned Columns -->
+          <div
+            *ngFor="let col of getRightPinnedColumns()"
+            class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
             [style.width.px]="getColumnWidth(col)"
             [class.sortable]="isSortable(col)"
             (click)="onHeaderClick(col)">
@@ -68,6 +95,12 @@ import { Subject } from 'rxjs';
 
     .argent-grid-header-row {
       display: flex;
+      white-space: nowrap;
+    }
+
+    .argent-grid-header-scrollable {
+      overflow: hidden;
+      flex: 1;
     }
 
     .argent-grid-header-cell {
@@ -78,6 +111,21 @@ import { Subject } from 'rxjs';
       justify-content: space-between;
       cursor: pointer;
       user-select: none;
+      flex-shrink: 0;
+    }
+
+    .argent-grid-header-cell-pinned-left {
+      position: sticky;
+      left: 0;
+      z-index: 10;
+      border-right: 2px solid #ccc;
+    }
+
+    .argent-grid-header-cell-pinned-right {
+      position: sticky;
+      right: 0;
+      z-index: 10;
+      border-left: 2px solid #ccc;
     }
 
     .argent-grid-header-cell.sortable:hover {
@@ -219,6 +267,30 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       return col.children.reduce((sum, child) => sum + this.getColumnWidth(child), 0);
     }
     return col.width || 150;
+  }
+
+  getLeftPinnedColumns(): (ColDef<TData> | ColGroupDef<TData>)[] {
+    if (!this.columnDefs) return [];
+    return this.columnDefs.filter(col => {
+      if ('children' in col) return false;
+      return col.pinned === 'left';
+    });
+  }
+
+  getRightPinnedColumns(): (ColDef<TData> | ColGroupDef<TData>)[] {
+    if (!this.columnDefs) return [];
+    return this.columnDefs.filter(col => {
+      if ('children' in col) return false;
+      return col.pinned === 'right';
+    });
+  }
+
+  getNonPinnedColumns(): (ColDef<TData> | ColGroupDef<TData>)[] {
+    if (!this.columnDefs) return [];
+    return this.columnDefs.filter(col => {
+      if ('children' in col) return false;
+      return !col.pinned;
+    });
   }
   
   isSortable(col: ColDef<TData> | ColGroupDef<TData>): boolean {
