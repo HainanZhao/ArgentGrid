@@ -140,7 +140,7 @@ npm run lint
 
 ### Phase III: Features
 - [x] Basic sorting (client-side)
-- [ ] Filtering
+- [x] Filtering (text, number, date, boolean)
 - [ ] Row Grouping
 - [ ] Aggregation
 - [ ] Cell Editing
