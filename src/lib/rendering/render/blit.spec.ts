@@ -21,10 +21,10 @@ import { Rectangle, BufferPair } from './types';
 // Mock canvas and context
 const mockContext = {
   canvas: { width: 800, height: 600, style: {} } as any,
-  drawImage: jest.fn(),
-  setTransform: jest.fn(),
-  getImageData: jest.fn(() => ({ data: new Uint8ClampedArray([255, 0, 0, 255]) })),
-  fillRect: jest.fn(),
+  drawImage: vi.fn(),
+  setTransform: vi.fn(),
+  getImageData: vi.fn(() => ({ data: new Uint8ClampedArray([255, 0, 0, 255]) })),
+  fillRect: vi.fn(),
   fillStyle: '',
 } as unknown as CanvasRenderingContext2D;
 
@@ -42,7 +42,7 @@ class MockCanvas {
 // Mock document.createElement for canvas
 const originalCreateElement = document.createElement.bind(document);
 beforeAll(() => {
-  jest.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+  vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
     if (tagName.toLowerCase() === 'canvas') {
       return new MockCanvas() as unknown as HTMLCanvasElement;
     }
@@ -51,7 +51,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe('Blitting Optimization', () => {
@@ -214,7 +214,7 @@ describe('Blitting Optimization', () => {
 
   describe('blitLastFrame', () => {
     beforeEach(() => {
-      (mockContext.drawImage as jest.Mock).mockClear();
+      (mockContext.drawImage as ReturnType<typeof vi.fn>).mockClear();
     });
 
     it('should return blitted=false when blitting not possible', () => {
@@ -303,7 +303,7 @@ describe('Blitting Optimization', () => {
 
   describe('displayBuffer', () => {
     beforeEach(() => {
-      (mockContext.drawImage as jest.Mock).mockClear();
+      (mockContext.drawImage as ReturnType<typeof vi.fn>).mockClear();
     });
 
     it('should copy buffer to display context', () => {

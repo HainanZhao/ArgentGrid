@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, ChangeDetectionStrategy, AfterViewInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, ChangeDetectionStrategy, AfterViewInit, OnChanges, SimpleChanges, ChangeDetectorRef, Inject } from '@angular/core';
 import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { GridApi, GridOptions, ColDef, ColGroupDef, IRowNode, Column } from '../types/ag-grid-types';
 import { Subject } from 'rxjs';
@@ -646,7 +646,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private destroy$ = new Subject<void>();
   private gridService = new GridService<TData>();
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(@Inject(ChangeDetectorRef) private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
     this.initialColumnDefs = this.columnDefs ? JSON.parse(JSON.stringify(this.columnDefs)) : null;
@@ -814,12 +814,17 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
   
   isSortable(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
-    if ('colId' in col && !(col as any).children) {
-      // It's a Column object or flat ColDef
-      const colDef = this.getColumnDefForColumn(col as any);
-      return colDef ? (colDef.sortable !== false) : true;
+    // If it has children, it's a group and cannot be sorted directly
+    if ('children' in col) return false;
+
+    // Check if the object itself has sortable property (ColDef)
+    if ('sortable' in col && col.sortable !== undefined) {
+      return !!col.sortable;
     }
-    return 'sortable' in col ? !!col.sortable : true;
+
+    // It's likely a Column object, look up its ColDef
+    const colDef = this.getColumnDefForColumn(col as any);
+    return colDef ? (colDef.sortable !== false) : true;
   }
   
   getHeaderName(col: Column | ColDef<TData> | ColGroupDef<TData>): string {

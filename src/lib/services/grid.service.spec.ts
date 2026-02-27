@@ -267,7 +267,7 @@ describe('GridService', () => {
   });
 
   // Row Grouping Tests - TODO: Fix test isolation
-  xit('should group rows by column', () => {
+  it.skip('should group rows by column', () => {
     const groupData: any[] = [
       { id: 1, name: 'John', department: 'Engineering', salary: 80000 },
       { id: 2, name: 'Jane', department: 'Engineering', salary: 90000 },
@@ -287,7 +287,7 @@ describe('GridService', () => {
     expect(displayedCount).toBe(2); // 2 groups (Engineering, Sales)
   });
 
-  xit('should expand and collapse groups', () => {
+  it.skip('should expand and collapse groups', () => {
     const groupData: any[] = [
       { id: 1, name: 'John', department: 'Engineering' },
       { id: 2, name: 'Jane', department: 'Engineering' },
@@ -305,7 +305,7 @@ describe('GridService', () => {
     expect(displayedCount).toBe(2); // 2 groups
   });
 
-  xit('should calculate group aggregations', () => {
+  it.skip('should calculate group aggregations', () => {
     const groupData: any[] = [
       { id: 1, name: 'John', department: 'Engineering', salary: 80000 },
       { id: 2, name: 'Jane', department: 'Engineering', salary: 90000 },
@@ -324,7 +324,7 @@ describe('GridService', () => {
     expect(displayedCount).toBeGreaterThanOrEqual(2); // At least 2 groups
   });
 
-  xit('should support multiple row group columns', () => {
+  it.skip('should support multiple row group columns', () => {
     const groupData: any[] = [
       { id: 1, name: 'John', department: 'Engineering', level: 'Senior' },
       { id: 2, name: 'Jane', department: 'Engineering', level: 'Junior' },
@@ -698,7 +698,7 @@ describe('GridService', () => {
     const exportApi = service.createApi(exportColumnDefs, exportData);
     
     // Mock downloadFile to avoid browser API issues in tests
-    (service as any).downloadFile = jest.fn();
+    (service as any).downloadFile = vi.fn();
     expect(() => exportApi.exportDataAsCsv()).not.toThrow();
     expect((service as any).downloadFile).toHaveBeenCalled();
   });
@@ -711,7 +711,7 @@ describe('GridService', () => {
     ];
     
     const exportApi = service.createApi(exportColumnDefs, exportData);
-    (service as any).downloadFile = jest.fn();
+    (service as any).downloadFile = vi.fn();
     
     exportApi.exportDataAsCsv({ fileName: 'custom-export.csv' });
     expect((service as any).downloadFile).toHaveBeenCalledWith(
@@ -733,7 +733,7 @@ describe('GridService', () => {
     ];
     
     const exportApi = service.createApi(exportColumnDefs, exportData);
-    (service as any).downloadFile = jest.fn();
+    (service as any).downloadFile = vi.fn();
     
     exportApi.exportDataAsCsv({ columnKeys: ['id', 'name'] });
     const csvContent = (service as any).downloadFile.mock.calls[0][0];
@@ -749,7 +749,7 @@ describe('GridService', () => {
     ];
     
     const exportApi = service.createApi(exportColumnDefs, exportData);
-    (service as any).downloadFile = jest.fn();
+    (service as any).downloadFile = vi.fn();
     
     exportApi.exportDataAsCsv({ skipHeader: true });
     const csvContent = (service as any).downloadFile.mock.calls[0][0];
@@ -765,7 +765,7 @@ describe('GridService', () => {
     ];
     
     const exportApi = service.createApi(exportColumnDefs, exportData);
-    (service as any).downloadFile = jest.fn();
+    (service as any).downloadFile = vi.fn();
     
     expect(() => exportApi.exportDataAsExcel()).not.toThrow();
     expect((service as any).downloadFile).toHaveBeenCalledWith(

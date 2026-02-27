@@ -289,14 +289,18 @@ describe('DamageTracker', () => {
 
   describe('render timing', () => {
     it('should track last render time', () => {
+      vi.useRealTimers();
       tracker.clear(); // Sets lastRenderTime
       expect(tracker.getLastRenderTime()).toBeGreaterThan(0);
+      vi.useFakeTimers();
     });
 
     it('should calculate time since last render', () => {
+      vi.useRealTimers();
       tracker.clear();
       const time = tracker.getTimeSinceLastRender();
       expect(time).toBeGreaterThanOrEqual(0);
+      vi.useFakeTimers();
     });
   });
 });

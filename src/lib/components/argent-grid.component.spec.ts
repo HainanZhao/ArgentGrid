@@ -1,20 +1,23 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { ChangeDetectorRef } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 import { ArgentGridComponent } from './argent-grid.component';
 import { GridService } from '../services/grid.service';
 import { ColDef } from '../types/ag-grid-types';
 
 // Mock canvas context
 const mockCanvasContext = {
-  clearRect: jest.fn(),
-  fillRect: jest.fn(),
-  beginPath: jest.fn(),
-  moveTo: jest.fn(),
-  lineTo: jest.fn(),
-  stroke: jest.fn(),
-  fillText: jest.fn(),
-  measureText: jest.fn(() => ({ width: 100 })),
-  scale: jest.fn(),
-  setTransform: jest.fn(),
+  clearRect: vi.fn(),
+  fillRect: vi.fn(),
+  beginPath: vi.fn(),
+  moveTo: vi.fn(),
+  lineTo: vi.fn(),
+  stroke: vi.fn(),
+  fillText: vi.fn(),
+  measureText: vi.fn(() => ({ width: 100 })),
+  scale: vi.fn(),
+  setTransform: vi.fn(),
   font: '13px sans-serif',
   textBaseline: 'middle',
   fillStyle: '#000',
@@ -22,12 +25,12 @@ const mockCanvasContext = {
 };
 
 const mockCanvas = {
-  getContext: jest.fn(() => mockCanvasContext as any),
+  getContext: vi.fn(() => mockCanvasContext as any),
   width: 800,
   height: 600,
   style: {},
-  addEventListener: jest.fn(),
-  getBoundingClientRect: jest.fn(() => ({ width: 800, height: 600 }))
+  addEventListener: vi.fn(),
+  getBoundingClientRect: vi.fn(() => ({ width: 800, height: 600 }))
 } as unknown as HTMLCanvasElement;
 
 interface TestData {
@@ -39,6 +42,28 @@ interface TestData {
 describe('ArgentGridComponent', () => {
   let component: ArgentGridComponent<TestData>;
   let fixture: ComponentFixture<ArgentGridComponent<TestData>>;
+
+  // Mock getContext globally for this test suite
+  beforeAll(() => {
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation((contextId) => {
+      if (contextId === '2d') {
+        return mockCanvasContext as any;
+      }
+      return null;
+    });
+    
+    vi.spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 800,
+      height: 600,
+      top: 0,
+      left: 0,
+      bottom: 600,
+      right: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => {}
+    } as DOMRect);
+  });
   
   const testColumnDefs: (ColDef<TestData>)[] = [
     { colId: 'id', field: 'id', headerName: 'ID', width: 100 },
@@ -54,7 +79,10 @@ describe('ArgentGridComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       declarations: [ArgentGridComponent],
-      providers: [GridService]
+      imports: [
+        CommonModule,
+        DragDropModule
+      ]
     }).compileComponents();
   });
 
@@ -63,9 +91,6 @@ describe('ArgentGridComponent', () => {
     component = fixture.componentInstance;
     component.columnDefs = testColumnDefs;
     component.rowData = testRowData;
-    
-    // Mock canvas
-    component.canvasRef = { nativeElement: mockCanvas } as any;
     
     fixture.detectChanges();
   });
@@ -148,7 +173,7 @@ describe('ArgentGridComponent', () => {
   });
 
   it('should refresh grid', () => {
-    const mockRenderer = { render: jest.fn(), destroy: jest.fn() };
+    const mockRenderer = { render: vi.fn(), destroy: vi.fn() };
     (component as any).canvasRenderer = mockRenderer;
     component.refresh();
     expect(mockRenderer.render).toHaveBeenCalled();
