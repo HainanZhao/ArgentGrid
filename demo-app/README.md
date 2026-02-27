@@ -18,6 +18,30 @@ npm run build
 npm run build:gh-pages
 ```
 
+## E2E Testing (Playwright)
+
+End-to-end tests are located in the `e2e/` folder. They verify critical visual and interactive features that cannot be easily tested with unit tests (like Canvas rendering and Drag & Drop).
+
+**Prerequisites:**
+Ensure the dev server is running (`npm start`).
+
+**Run All Tests:**
+```bash
+npx playwright test
+```
+
+**Run with UI:**
+```bash
+npx playwright test --ui
+```
+
+**Key Scenarios Covered:**
+- Row Grouping & Hierarchical Expansion
+- Floating Filters & Quick Clear
+- Inline Cell Editing (Enter/Escape/Tab)
+- Column Pinning (Sticky Columns)
+- Column Re-ordering via Drag & Drop
+
 ## Demo Features
 
 - **100K rows** - Standard load test

@@ -173,6 +173,26 @@ npm start
 
 Open [http://localhost:4200](http://localhost:4200) to view the demo.
 
+### E2E Testing (Playwright)
+
+ArgentGrid uses Playwright for end-to-end testing of visual and interactive features (like Canvas rendering, dragging, and menu interactions).
+
+**Prerequisites:**
+The demo app must be running (`npm start` inside `demo-app/`).
+
+**Run Tests:**
+```bash
+cd demo-app
+npx playwright test
+```
+
+This will execute the **Feature Guard Rails** suite which verifies:
+- Row Grouping & Expansion
+- Floating Filters
+- Cell Editing (Enter/Escape/Tab)
+- Column Pinning & Scroll Sync
+- Column Re-ordering (Drag & Drop)
+
 ## Roadmap
 
 ### Phase I: API Extraction ✅
