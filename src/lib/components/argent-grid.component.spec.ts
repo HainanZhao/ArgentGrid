@@ -1,5 +1,5 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
-import { ChangeDetectorRef } from '@angular/core';
+import { ChangeDetectorRef, provideExperimentalZonelessChangeDetection } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { ArgentGridComponent } from './argent-grid.component';
@@ -82,6 +82,9 @@ describe('ArgentGridComponent', () => {
       imports: [
         CommonModule,
         DragDropModule
+      ],
+      providers: [
+        provideExperimentalZonelessChangeDetection()
       ]
     }).compileComponents();
   });

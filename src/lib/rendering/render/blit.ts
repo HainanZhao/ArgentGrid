@@ -357,9 +357,14 @@ export class BlitState {
       this.lastCanvas = document.createElement('canvas');
     }
     
+    // Only resize if dimensions changed, as setting width/height clears the canvas
+    // and is an expensive operation.
+    if (this.lastCanvas.width !== canvas.width || this.lastCanvas.height !== canvas.height) {
+      this.lastCanvas.width = canvas.width;
+      this.lastCanvas.height = canvas.height;
+    }
+    
     const ctx = this.lastCanvas.getContext('2d')!;
-    this.lastCanvas.width = canvas.width;
-    this.lastCanvas.height = canvas.height;
     ctx.drawImage(canvas, 0, 0);
   }
 

@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideExperimentalZonelessChangeDetection } from '@angular/core';
 import { GridService } from './grid.service';
 import { GridApi, ColDef, FilterModel, IRowNode } from '../types/ag-grid-types';
 
@@ -28,7 +29,10 @@ describe('GridService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [GridService]
+      providers: [
+        GridService,
+        provideExperimentalZonelessChangeDetection()
+      ]
     });
     service = TestBed.inject(GridService);
     api = service.createApi(testColumnDefs, [...testRowData]);

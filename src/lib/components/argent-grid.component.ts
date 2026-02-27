@@ -645,6 +645,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private canvasRenderer!: CanvasRenderer;
   private destroy$ = new Subject<void>();
   private gridService = new GridService<TData>();
+  private horizontalScrollListener?: (e: Event) => void;
 
   constructor(@Inject(ChangeDetectorRef) private cdr: ChangeDetectorRef) {}
 
@@ -698,20 +699,28 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       this.canvasRenderer?.setTotalRowCount(this.rowData?.length || 0);
 
       // Synchronize horizontal scroll with DOM header
-      this.viewportRef.nativeElement.addEventListener('scroll', () => {
+      this.horizontalScrollListener = () => {
         if (this.headerScrollableRef) {
           this.headerScrollableRef.nativeElement.scrollLeft = this.viewportRef.nativeElement.scrollLeft;
         }
         if (this.headerScrollableFilterRef) {
           this.headerScrollableFilterRef.nativeElement.scrollLeft = this.viewportRef.nativeElement.scrollLeft;
         }
-      }, { passive: true });
+      };
+      
+      this.viewportRef.nativeElement.addEventListener('scroll', this.horizontalScrollListener, { passive: true });
     }
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+
+    // Remove horizontal scroll listener
+    if (this.viewportRef && this.horizontalScrollListener) {
+      this.viewportRef.nativeElement.removeEventListener('scroll', this.horizontalScrollListener);
+    }
+
     this.gridApi?.destroy();
     this.canvasRenderer?.destroy();
   }
@@ -1268,6 +1277,10 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   refresh(): void {
     this.canvasRenderer?.render();
+  }
+
+  getLastFrameTime(): number {
+    return this.canvasRenderer?.lastFrameTime || 0;
   }
 
   // Cell Editing Methods

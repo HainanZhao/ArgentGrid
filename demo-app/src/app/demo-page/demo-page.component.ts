@@ -1,6 +1,6 @@
-import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ArgentGridModule } from 'argentgrid';
+import { ArgentGridModule, ArgentGridComponent } from 'argentgrid';
 import { GridApi, ColDef, IRowNode } from 'argentgrid';
 
 interface Employee {
@@ -22,13 +22,18 @@ interface Employee {
   styleUrls: ['./demo-page.component.css'],
 })
 export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
+  @ViewChild(ArgentGridComponent) gridComponent!: ArgentGridComponent<Employee>;
+
   rowData: Employee[] = [];
   renderTime = 0;
+  canvasFrameTime = 0;
   fps = 0;
   isLoading = false;
   rowCount = 100000;
   isGrouped = false;
   isFloatingFilterShown = true;
+  isBenchmarking = false;
+  benchmarkResults: any = null;
 
   columnDefs: ColDef<Employee>[] = [
     { field: 'id', headerName: 'ID', width: 80, sortable: true, filter: 'number' },
@@ -70,6 +75,10 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
   private gridApi?: GridApi<Employee>;
   private fpsInterval?: number;
   private lastFrameTime = 0;
+
+  constructor(
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit(): void {
     this.loadData(100000);
@@ -119,14 +128,89 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
   startFPSCounter(): void {
     const countFPS = () => {
       const now = performance.now();
+      let changed = false;
+
       if (this.lastFrameTime) {
         const delta = now - this.lastFrameTime;
-        this.fps = Math.round(1000 / delta);
+        const newFps = Math.round(1000 / delta);
+        if (newFps !== this.fps) {
+          this.fps = newFps;
+          changed = true;
+        }
       }
       this.lastFrameTime = now;
+      
+      // Update canvas frame time if available
+      if (this.gridComponent) {
+        const newFrameTime = Number(this.gridComponent.getLastFrameTime().toFixed(2));
+        if (newFrameTime !== this.canvasFrameTime) {
+          this.canvasFrameTime = newFrameTime;
+          changed = true;
+        }
+      }
+
+      // In zoneless mode, we manually trigger change detection for these async updates
+      if (changed) {
+        this.cdr.detectChanges();
+      }
+
       this.fpsInterval = requestAnimationFrame(countFPS);
     };
     this.fpsInterval = requestAnimationFrame(countFPS);
+  }
+
+  runBenchmark(): void {
+    if (!this.gridApi || !this.gridComponent) return;
+    
+    this.isBenchmarking = true;
+    this.benchmarkResults = null;
+    
+    const results = {
+      initialRender: 0,
+      scrollFrameAverage: 0,
+      selectionUpdateTime: 0,
+      totalTime: 0
+    };
+
+    const startTime = performance.now();
+
+    // 1. Initial render time (cached from last frame)
+    results.initialRender = this.gridComponent.getLastFrameTime();
+
+    // 2. Selection Update Time
+    const selStart = performance.now();
+    this.gridApi.selectAll();
+    // Wait for render cycle
+    setTimeout(() => {
+      results.selectionUpdateTime = Number((performance.now() - selStart).toFixed(2));
+      this.gridApi?.deselectAll();
+
+      // 3. Scroll performance (programmatic scroll)
+      const frameTimes: number[] = [];
+      let scrollCount = 0;
+      const totalScrollFrames = 30;
+      const viewport = this.gridComponent.viewportRef.nativeElement;
+
+      const runScroll = () => {
+        if (scrollCount < totalScrollFrames) {
+          viewport.scrollTop += 100;
+          frameTimes.push(this.gridComponent.getLastFrameTime());
+          scrollCount++;
+          requestAnimationFrame(runScroll);
+        } else {
+          // Finished scroll
+          results.scrollFrameAverage = Number((frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length).toFixed(2));
+          results.totalTime = Number((performance.now() - startTime).toFixed(2));
+          this.benchmarkResults = results;
+          this.isBenchmarking = false;
+          
+          // Scroll back up
+          viewport.scrollTop = 0;
+        }
+      };
+      
+      requestAnimationFrame(runScroll);
+    }, 100);
   }
 
   loadData(count: number): void {

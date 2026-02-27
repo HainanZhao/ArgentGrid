@@ -16,7 +16,7 @@
             "outputPath": "dist/argentgrid-demo",
             "index": "src/index.html",
             "browser": "src/main.ts",
-            "polyfills": ["zone.js"],
+            "polyfills": [],
             "tsConfig": "tsconfig.json",
             "sourceMap": true,
             "assets": [

@@ -67,6 +67,10 @@ export class CanvasRenderer<TData = any> {
   // Theme system
   private theme: GridTheme;
 
+  // Performance tracking
+  private lastRenderDuration = 0;
+  get lastFrameTime(): number { return this.lastRenderDuration; }
+
   // Damage tracking
   private damageTracker = new DamageTracker();
 
@@ -75,6 +79,14 @@ export class CanvasRenderer<TData = any> {
 
   // Column prep results cache
   private columnPreps: Map<string, ColumnPrepResult<TData>> = new Map();
+
+  // Event listener references for cleanup
+  private scrollListener?: (e: Event) => void;
+  private resizeListener?: () => void;
+  private mousedownListener?: (e: MouseEvent) => void;
+  private mousemoveListener?: (e: MouseEvent) => void;
+  private clickListener?: (e: MouseEvent) => void;
+  private dblclickListener?: (e: MouseEvent) => void;
 
   // Callbacks
   onCellDoubleClick?: (rowIndex: number, colId: string) => void;
@@ -115,19 +127,26 @@ export class CanvasRenderer<TData = any> {
   private setupEventListeners(): void {
     const container = this.canvas.parentElement;
     if (container) {
-      container.addEventListener('scroll', this.handleScroll.bind(this), { passive: true });
+      this.scrollListener = this.handleScroll.bind(this);
+      container.addEventListener('scroll', this.scrollListener, { passive: true });
     }
 
-    this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
-    this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
-    this.canvas.addEventListener('click', this.handleClick.bind(this));
-    this.canvas.addEventListener('dblclick', this.handleDoubleClick.bind(this));
+    this.mousedownListener = this.handleMouseDown.bind(this);
+    this.mousemoveListener = this.handleMouseMove.bind(this);
+    this.clickListener = this.handleClick.bind(this);
+    this.dblclickListener = this.handleDoubleClick.bind(this);
+
+    this.canvas.addEventListener('mousedown', this.mousedownListener);
+    this.canvas.addEventListener('mousemove', this.mousemoveListener);
+    this.canvas.addEventListener('click', this.clickListener);
+    this.canvas.addEventListener('dblclick', this.dblclickListener);
 
     let resizeTimeout: number;
-    window.addEventListener('resize', () => {
+    this.resizeListener = () => {
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => this.resize(), 150) as any;
-    });
+    };
+    window.addEventListener('resize', this.resizeListener);
   }
 
   private handleScroll(): void {
@@ -245,6 +264,7 @@ export class CanvasRenderer<TData = any> {
   }
 
   private doRender(): void {
+    const startTime = performance.now();
     const width = this.viewportWidth || this.canvas.clientWidth;
     const height = this.viewportHeight || this.canvas.clientHeight;
 
@@ -289,6 +309,8 @@ export class CanvasRenderer<TData = any> {
 
     // Clear damage
     this.damageTracker.clear();
+    
+    this.lastRenderDuration = performance.now() - startTime;
   }
 
   private renderRow(
@@ -686,6 +708,22 @@ export class CanvasRenderer<TData = any> {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
     }
+    
+    // Remove event listeners
+    const container = this.canvas.parentElement;
+    if (container && this.scrollListener) {
+      container.removeEventListener('scroll', this.scrollListener);
+    }
+    
+    if (this.mousedownListener) this.canvas.removeEventListener('mousedown', this.mousedownListener);
+    if (this.mousemoveListener) this.canvas.removeEventListener('mousemove', this.mousemoveListener);
+    if (this.clickListener) this.canvas.removeEventListener('click', this.clickListener);
+    if (this.dblclickListener) this.canvas.removeEventListener('dblclick', this.dblclickListener);
+    
+    if (this.resizeListener) {
+      window.removeEventListener('resize', this.resizeListener);
+    }
+
     this.renderPending = false;
     this.blitState.reset();
     this.damageTracker.reset();

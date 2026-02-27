@@ -25,10 +25,16 @@
       <div class="stat-badge">
         <strong>{{ renderTime }}</strong>ms load
       </div>
+      <div class="stat-badge" title="Time taken by canvas to render the last frame">
+        <strong>{{ canvasFrameTime }}</strong>ms frame
+      </div>
       <div class="stat-badge">
         <strong>{{ fps }}</strong> FPS
       </div>
-      <button class="btn" (click)="loadData(100000)" [disabled]="isLoading">
+      <button class="btn btn-benchmark" (click)="runBenchmark()" [disabled]="isLoading || isBenchmarking">
+        {{ isBenchmarking ? 'Running...' : '🚀 Benchmark' }}
+      </button>
+      <button class="btn" (click)="loadData(100000)" [disabled]="isLoading || isBenchmarking">
         {{ isLoading ? 'Loading...' : '100K' }}
       </button>
       <button class="btn" (click)="loadData(500000)" [disabled]="isLoading">
@@ -53,6 +59,31 @@
       </button>
     </div>
   </header>
+
+  @if (benchmarkResults) {
+    <div class="benchmark-results">
+      <h3>🚀 Benchmark Results ({{ rowCount | number }} rows)</h3>
+      <div class="results-grid">
+        <div class="result-item">
+          <label>Initial Render:</label>
+          <span>{{ benchmarkResults.initialRender.toFixed(2) }}ms</span>
+        </div>
+        <div class="result-item">
+          <label>Avg Scroll Frame:</label>
+          <span>{{ benchmarkResults.scrollFrameAverage.toFixed(2) }}ms</span>
+        </div>
+        <div class="result-item">
+          <label>Selection All:</label>
+          <span>{{ benchmarkResults.selectionUpdateTime.toFixed(2) }}ms</span>
+        </div>
+        <div class="result-item">
+          <label>Total Test Time:</label>
+          <span>{{ benchmarkResults.totalTime.toFixed(2) }}ms</span>
+        </div>
+      </div>
+      <button class="btn btn-small" (click)="benchmarkResults = null">Close</button>
+    </div>
+  }
 
   <div class="grid-wrapper">
     @if (isLoading) {
