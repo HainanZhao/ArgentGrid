@@ -29,10 +29,14 @@ ArgentGrid currently achieves 60fps rendering for 1,000,000+ rows and includes c
 - [x] **Export**: CSV and HTML-based Excel export.
 
 ### Phase IV: UI Interactivity & UX (Current Focus) 🕒
-- [ ] **Column Re-ordering (Drag & Drop)**:
-    - [ ] Implement drag handle in DOM headers.
-    - [ ] Update `columnDefs` and `GridApi` on drop.
-    - [ ] Animate column movement on Canvas.
+- [x] **Column Re-ordering (Drag & Drop)**:
+    - [x] Implement drag handle in DOM headers.
+    - [x] Update `columnDefs` and `GridApi` on drop.
+    - [x] Animate column movement on Canvas.
+- [ ] **Column Resizing**:
+    - [ ] Add resize handles to DOM header cells.
+    - [ ] Implement drag-to-resize logic.
+    - [ ] Update `columnDefs` and `GridApi` on resize completion.
 - [x] **Header Menus**:
     - [x] Add "hamburger" or "ellipsis" menu to column headers.
     - [x] Support Sort, Filter, and "Hide Column" actions from menu.

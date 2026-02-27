@@ -199,6 +199,31 @@ test.describe('ArgentGrid Feature Guard Rails', () => {
     // 4. Verify floating filter row returned
     await expect(filterRow).toBeVisible();
   });
+
+  test('should support column resizing by dragging the handle', async ({ page }) => {
+    const idHeader = page.locator('.argent-grid-header-cell').filter({ hasText: /^ID/ });
+    const idBoxBefore = await idHeader.boundingBox();
+    if (!idBoxBefore) throw new Error('ID header box not found');
+
+    const initialWidth = idBoxBefore.width;
+
+    // Locate resize handle
+    const resizeHandle = idHeader.locator('.argent-grid-header-resize-handle');
+    await expect(resizeHandle).toBeVisible();
+
+    // Drag to resize
+    await resizeHandle.hover();
+    await page.mouse.down();
+    await page.mouse.move(idBoxBefore.x + idBoxBefore.width + 100, idBoxBefore.y + 10, { steps: 10 });
+    await page.mouse.up();
+
+    // Verify width increased
+    await page.waitForTimeout(500);
+    const idBoxAfter = await idHeader.boundingBox();
+    expect(idBoxAfter!.width).toBeGreaterThan(initialWidth);
+    // Should be roughly initialWidth + 100 (allow 10px margin)
+    expect(Math.abs(idBoxAfter!.width - (initialWidth + 100))).toBeLessThanOrEqual(10);
+  });
 });
 
 declare global {

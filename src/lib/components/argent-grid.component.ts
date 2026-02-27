@@ -41,12 +41,17 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
               (click)="onHeaderClick(col)"
               cdkDrag
               [cdkDragData]="col">
-              <div class="argent-grid-header-content">
+              <div class="argent-grid-header-content" cdkDragHandle>
                 <span class="header-text">{{ getHeaderName(col) }}</span>
                 <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
               </div>
               <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
                 &#8942;
+              </div>
+              <div class="argent-grid-header-resize-handle" 
+                   *ngIf="isResizable(col)" 
+                   [class.resizing]="isResizing && resizeColumn === col"
+                   (mousedown)="onResizeMouseDown($event, col)">
               </div>
             </div>
           </div>
@@ -68,12 +73,17 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
                 (click)="onHeaderClick(col)"
                 cdkDrag
                 [cdkDragData]="col">
-                <div class="argent-grid-header-content">
+                <div class="argent-grid-header-content" cdkDragHandle>
                   <span class="header-text">{{ getHeaderName(col) }}</span>
                   <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
                 </div>
                 <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
                   &#8942;
+                </div>
+                <div class="argent-grid-header-resize-handle" 
+                     *ngIf="isResizable(col)" 
+                     [class.resizing]="isResizing && resizeColumn === col"
+                     (mousedown)="onResizeMouseDown($event, col)">
                 </div>
               </div>
             </div>
@@ -94,12 +104,17 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
               (click)="onHeaderClick(col)"
               cdkDrag
               [cdkDragData]="col">
-              <div class="argent-grid-header-content">
+              <div class="argent-grid-header-content" cdkDragHandle>
                 <span class="header-text">{{ getHeaderName(col) }}</span>
                 <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
               </div>
               <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
                 &#8942;
+              </div>
+              <div class="argent-grid-header-resize-handle" 
+                   *ngIf="isResizable(col)" 
+                   [class.resizing]="isResizing && resizeColumn === col"
+                   (mousedown)="onResizeMouseDown($event, col)">
               </div>
             </div>
           </div>
@@ -357,6 +372,22 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
       border-radius: 4px;
     }
 
+    .argent-grid-header-resize-handle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      cursor: col-resize;
+      z-index: 5;
+      transition: background-color 0.2s;
+    }
+
+    .argent-grid-header-resize-handle:hover,
+    .argent-grid-header-resize-handle.resizing {
+      background-color: #2196f3;
+    }
+
     .argent-grid-header-cell-pinned-left {
       position: sticky;
       left: 0;
@@ -586,8 +617,14 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private editingColDef: ColDef<TData> | null = null;
 
   // Header Menu state
-  activeHeaderMenu: ColDef<TData> | ColGroupDef<TData> | null = null;
+  activeHeaderMenu: Column | ColDef<TData> | ColGroupDef<TData> | null = null;
   headerMenuPosition = { x: 0, y: 0 };
+
+  // Resizing state
+  isResizing = false;
+  private resizeColumn: Column | null = null;
+  private resizeStartX = 0;
+  private resizeStartWidth = 0;
 
   // Context Menu state
   activeContextMenu = false;
@@ -1050,6 +1087,59 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     const newDefs = [...orderedVisibleColDefs, ...hidden];
     
     this.onColumnDefsChanged(newDefs);
+  }
+
+  // --- Column Resizing Logic ---
+
+  isResizable(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
+    if ('children' in col) return false;
+    const colDef = this.getColumnDefForColumn(col as any);
+    return colDef ? colDef.resizable !== false : true;
+  }
+
+  onResizeMouseDown(event: MouseEvent, col: Column): void {
+    event.stopPropagation();
+    event.preventDefault();
+
+    this.isResizing = true;
+    this.resizeColumn = col;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidth = col.width;
+
+    const mouseMoveHandler = (e: MouseEvent) => this.onResizeMouseMove(e);
+    const mouseUpHandler = () => {
+      this.onResizeMouseUp();
+      window.removeEventListener('mousemove', mouseMoveHandler);
+      window.removeEventListener('mouseup', mouseUpHandler);
+    };
+
+    window.addEventListener('mousemove', mouseMoveHandler);
+    window.addEventListener('mouseup', mouseUpHandler);
+  }
+
+  private onResizeMouseMove(event: MouseEvent): void {
+    if (!this.isResizing || !this.resizeColumn) return;
+
+    const deltaX = event.clientX - this.resizeStartX;
+    const newWidth = Math.max(20, this.resizeStartWidth + deltaX);
+    
+    // Update internal column width
+    this.resizeColumn.width = newWidth;
+    
+    // Update original ColDef
+    const colDef = this.getColumnDefForColumn(this.resizeColumn);
+    if (colDef) {
+      colDef.width = newWidth;
+    }
+
+    // Force re-render
+    this.canvasRenderer?.render();
+    this.cdr.detectChanges();
+  }
+
+  private onResizeMouseUp(): void {
+    this.isResizing = false;
+    this.resizeColumn = null;
   }
 
   // --- Floating Filter Logic ---
