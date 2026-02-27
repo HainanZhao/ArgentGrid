@@ -1,7 +1,9 @@
-import { Component, signal, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy } from '@angular/core';
+import { Component, signal, OnInit, ViewChild, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ArgentGridModule } from '../../../../src/lib/argent-grid.module';
+import { GridApi, ColDef, IRowNode } from '../../../../src/lib/types/ag-grid-types';
 
-interface RowData {
+interface Employee {
   id: number;
   name: string;
   department: string;
@@ -12,178 +14,70 @@ interface RowData {
   performance: number;
 }
 
-interface Column {
-  field: keyof RowData;
-  header: string;
-  width: number;
-}
-
 @Component({
   selector: 'app-demo-page',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ArgentGridModule],
   templateUrl: './demo-page.component.html',
   styleUrls: ['./demo-page.component.css'],
 })
-export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
-  @ViewChild('gridCanvas') canvasRef?: ElementRef<HTMLCanvasElement>;
-
-  readonly rowData = signal<RowData[]>([]);
+export class DemoPageComponent implements OnInit, AfterViewInit {
+  readonly rowData = signal<Employee[]>([]);
   renderTime = 0;
   fps = 0;
   isLoading = false;
   rowCount = 100000;
 
-  private ctx?: CanvasRenderingContext2D;
-  private animationFrameId?: number;
-  private lastFrameTime = 0;
-  private scrollTop = 0;
-  private visibleStart = 0;
-  private visibleEnd = 0;
-
-  columns: Column[] = [
-    { field: 'id', header: 'ID', width: 80 },
-    { field: 'name', header: 'Name', width: 200 },
-    { field: 'department', header: 'Department', width: 180 },
-    { field: 'role', header: 'Role', width: 250 },
-    { field: 'salary', header: 'Salary', width: 120 },
-    { field: 'location', header: 'Location', width: 150 },
-    { field: 'startDate', header: 'Start Date', width: 130 },
-    { field: 'performance', header: 'Performance', width: 120 },
+  columnDefs: ColDef<Employee>[] = [
+    { field: 'id', headerName: 'ID', width: 80, sortable: true },
+    { field: 'name', headerName: 'Name', width: 200, sortable: true },
+    { field: 'department', headerName: 'Department', width: 180, sortable: true, filter: true },
+    { field: 'role', headerName: 'Role', width: 250 },
+    {
+      field: 'salary',
+      headerName: 'Salary',
+      width: 120,
+      sortable: true,
+      valueFormatter: (params: any) => `$${params.value?.toLocaleString()}`,
+    },
+    { field: 'location', headerName: 'Location', width: 150 },
+    { field: 'startDate', headerName: 'Start Date', width: 130 },
+    {
+      field: 'performance',
+      headerName: 'Performance',
+      width: 120,
+      cellRenderer: (params: any) => {
+        const value = params.value;
+        const color = value >= 80 ? '#22c55e' : value >= 60 ? '#eab308' : '#ef4444';
+        return `<span style="color: ${color}; font-weight: bold; padding: 4px 8px; background: ${color}20; border-radius: 4px;">${value}%</span>`;
+      },
+    },
   ];
 
-  rowHeight = 32;
-  headerHeight = 40;
+  private gridApi?: GridApi<Employee>;
+  private fpsInterval?: number;
+  private lastFrameTime = 0;
 
   ngOnInit(): void {
     this.loadData(100000);
+    this.startFPSCounter();
   }
 
   ngAfterViewInit(): void {
-    if (this.canvasRef) {
-      this.ctx = this.canvasRef.nativeElement.getContext('2d')!;
-      this.resizeCanvas();
-      this.startRenderLoop();
-    }
+    // Grid is ready after view init
   }
 
-  resizeCanvas(): void {
-    if (!this.canvasRef || !this.ctx) return;
-
-    const canvas = this.canvasRef.nativeElement;
-    const container = canvas.parentElement;
-    if (!container) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = container.clientWidth * dpr;
-    canvas.height = container.clientHeight * dpr;
-    canvas.style.width = `${container.clientWidth}px`;
-    canvas.style.height = `${container.clientHeight}px`;
-
-    this.ctx.scale(dpr, dpr);
-    this.viewportWidth = container.clientWidth;
-    this.viewportHeight = container.clientHeight;
-  }
-
-  private viewportWidth = 0;
-  private viewportHeight = 0;
-
-  startRenderLoop(): void {
-    const loop = (timestamp: number) => {
-      if (!this.lastFrameTime) this.lastFrameTime = timestamp;
-      const delta = timestamp - this.lastFrameTime;
-      this.fps = Math.round(1000 / delta);
-      this.lastFrameTime = timestamp;
-
-      this.render();
-
-      this.animationFrameId = requestAnimationFrame(loop);
-    };
-
-    this.animationFrameId = requestAnimationFrame(loop);
-  }
-
-  render(): void {
-    if (!this.ctx || !this.canvasRef) return;
-
-    const ctx = this.ctx;
-    const data = this.rowData();
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, this.viewportWidth, this.viewportHeight);
-
-    // Calculate visible rows
-    const totalRows = data.length;
-    const visibleRowCount = Math.ceil(this.viewportHeight / this.rowHeight);
-    const visibleStart = Math.floor(this.scrollTop / this.rowHeight);
-    const visibleEnd = Math.min(visibleStart + visibleRowCount + 5, totalRows);
-
-    this.visibleStart = visibleStart;
-    this.visibleEnd = visibleEnd;
-
-    // Draw header
-    ctx.fillStyle = '#f5f5f5';
-    ctx.fillRect(0, 0, this.viewportWidth, this.headerHeight);
-    ctx.fillStyle = '#333';
-    ctx.font = '600 13px Inter, sans-serif';
-
-    let x = 0;
-    for (const col of this.columns) {
-      ctx.fillStyle = '#333';
-      ctx.fillText(col.header, x + 12, this.headerHeight / 2 + 5);
-      ctx.strokeStyle = '#e0e0e0';
-      ctx.beginPath();
-      ctx.moveTo(x + col.width, 0);
-      ctx.lineTo(x + col.width, this.headerHeight);
-      ctx.stroke();
-      x += col.width;
-    }
-
-    // Draw rows
-    ctx.font = '12px Inter, sans-serif';
-    for (let i = visibleStart; i < visibleEnd; i++) {
-      const row = data[i];
-      const y = this.headerHeight + (i * this.rowHeight) - this.scrollTop;
-
-      // Row background
-      ctx.fillStyle = i % 2 === 0 ? '#fff' : '#fafafa';
-      ctx.fillRect(0, y, this.viewportWidth, this.rowHeight);
-
-      // Row border
-      ctx.strokeStyle = '#e0e0e0';
-      ctx.beginPath();
-      ctx.moveTo(0, y + this.rowHeight);
-      ctx.lineTo(this.viewportWidth, y + this.rowHeight);
-      ctx.stroke();
-
-      // Cell content
-      x = 0;
-      for (const col of this.columns) {
-        let value = row[col.field];
-        if (col.field === 'salary') {
-          value = `$${(value as number).toLocaleString()}`;
-        } else if (col.field === 'performance') {
-          // Performance badge
-          const perf = value as number;
-          const badgeColor = perf >= 80 ? '#22c55e' : perf >= 60 ? '#eab308' : '#ef4444';
-          ctx.fillStyle = badgeColor;
-          ctx.fillRect(x + 12, y + 6, 50, 20);
-          ctx.fillStyle = '#fff';
-          ctx.fillText(`${perf}%`, x + 18, y + 20);
-          x += col.width;
-          continue;
-        }
-
-        ctx.fillStyle = '#333';
-        ctx.fillText(String(value), x + 12, y + 20);
-        x += col.width;
+  startFPSCounter(): void {
+    const countFPS = () => {
+      const now = performance.now();
+      if (this.lastFrameTime) {
+        const delta = now - this.lastFrameTime;
+        this.fps = Math.round(1000 / delta);
       }
-    }
-
-    // Draw total count
-    ctx.fillStyle = '#666';
-    ctx.font = '12px Inter, sans-serif';
-    ctx.fillText(`Showing rows ${visibleStart + 1}-${visibleEnd} of ${totalRows.toLocaleString()}`, 12, this.viewportHeight - 10);
+      this.lastFrameTime = now;
+      this.fpsInterval = requestAnimationFrame(countFPS);
+    };
+    this.fpsInterval = requestAnimationFrame(countFPS);
   }
 
   loadData(count: number): void {
@@ -199,7 +93,7 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
     ];
     const locations = ['New York', 'San Francisco', 'London', 'Singapore', 'Tokyo', 'Berlin', 'Remote'];
 
-    const data: RowData[] = [];
+    const data: Employee[] = [];
 
     for (let i = 0; i < count; i++) {
       const dept = departments[Math.floor(Math.random() * departments.length)];
@@ -224,13 +118,23 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
       this.renderTime = Math.round(endTime - startTime);
       this.rowCount = count;
       this.isLoading = false;
+
       console.log(`Loaded ${count} rows in ${this.renderTime}ms`);
     }, 100);
   }
 
+  onGridReady(api: GridApi<Employee>): void {
+    this.gridApi = api;
+    console.log('Grid ready:', api);
+  }
+
+  onRowClicked(event: { data: Employee; node: IRowNode<Employee> }): void {
+    console.log('Row clicked:', event.data);
+  }
+
   ngOnDestroy(): void {
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
+    if (this.fpsInterval) {
+      cancelAnimationFrame(this.fpsInterval);
     }
   }
 }

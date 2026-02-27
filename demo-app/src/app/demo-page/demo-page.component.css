@@ -142,6 +142,7 @@
   position: relative;
   overflow: hidden;
   background: #fafafa;
+  min-height: 0;
 }
 
 .loading {
@@ -165,12 +166,6 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-.grid-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
 }
 
 .footer {
@@ -209,4 +204,20 @@
   .feature-list {
     gap: 10px;
   }
+}
+
+/* Override argent-grid styles for demo */
+argent-grid {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+argent-grid .argent-grid-container {
+  height: 100% !important;
+  border: none;
+}
+
+argent-grid .argent-grid-viewport {
+  height: calc(100% - 40px);
 }

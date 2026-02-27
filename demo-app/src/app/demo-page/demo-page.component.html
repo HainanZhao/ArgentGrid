@@ -1,7 +1,7 @@
 <!-- WIP Banner -->
 <div class="wip-banner">
   <span class="icon">🚧</span>
-  <span>WORK IN PROGRESS - Canvas-based rendering demo</span>
+  <span>WORK IN PROGRESS - Using ArgentGrid Component</span>
   <a href="https://github.com/HainanZhao/ArgentGrid" target="_blank">View on GitHub →</a>
 </div>
 
@@ -47,7 +47,15 @@
         <p>Loading {{ rowCount | number }} rows...</p>
       </div>
     } @else {
-      <canvas #gridCanvas class="grid-canvas"></canvas>
+      <argent-grid
+        [columnDefs]="columnDefs"
+        [rowData]="rowData()"
+        [rowHeight]="32"
+        [height]="'100%'"
+        [width]="'100%'"
+        (gridReady)="onGridReady($event)"
+        (rowClicked)="onRowClicked($event)"
+      />
     }
   </div>
 
