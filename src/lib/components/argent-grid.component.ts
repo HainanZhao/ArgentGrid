@@ -52,6 +52,7 @@ import { Subject } from 'rxjs';
           
           <!-- Scrollable Columns -->
           <div class="argent-grid-header-scrollable"
+               #headerScrollable
                cdkDropList
                id="scrollable"
                [cdkDropListConnectedTo]="['left-pinned', 'right-pinned']"
@@ -126,7 +127,7 @@ import { Subject } from 'rxjs';
           </div>
 
           <!-- Scrollable Filters -->
-          <div class="argent-grid-header-scrollable">
+          <div class="argent-grid-header-scrollable" #headerScrollableFilter>
             <div class="argent-grid-header-row">
               <div
                 *ngFor="let col of getNonPinnedColumns(); trackBy: trackByColumn"
@@ -543,6 +544,8 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   @ViewChild('gridCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('viewport') viewportRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('headerScrollable') headerScrollableRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('headerScrollableFilter') headerScrollableFilterRef!: ElementRef<HTMLDivElement>;
   @ViewChild('editorInput') editorInputRef!: ElementRef<HTMLInputElement>;
 
   canvasHeight = 0;
@@ -554,8 +557,10 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   get totalWidth(): number {
-    if (!this.columnDefs) return 0;
-    return this.columnDefs.reduce((sum, col) => sum + this.getColumnWidth(col), 0);
+    if (!this.gridApi) return 0;
+    return this.gridApi.getAllColumns()
+      .filter(col => col.visible)
+      .reduce((sum, col) => sum + col.width, 0);
   }
 
   // Selection state
@@ -564,9 +569,8 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   isAllSelected = false;
   isIndeterminateSelection = false;
 
-  trackByColumn(index: number, col: ColDef<TData> | ColGroupDef<TData>): string {
-    if ('children' in col) return col.groupId || index.toString();
-    return col.colId || col.field?.toString() || index.toString();
+  trackByColumn(index: number, col: Column | ColDef<TData> | ColGroupDef<TData>): string {
+    return (col as any).colId || (col as any).field?.toString() || index.toString();
   }
 
   // Cell editing state
@@ -641,6 +645,16 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       this.viewportHeight = rect.height || 500;
       this.canvasRenderer?.setViewportDimensions(rect.width, this.viewportHeight);
       this.canvasRenderer?.setTotalRowCount(this.rowData?.length || 0);
+
+      // Synchronize horizontal scroll with DOM header
+      this.viewportRef.nativeElement.addEventListener('scroll', () => {
+        if (this.headerScrollableRef) {
+          this.headerScrollableRef.nativeElement.scrollLeft = this.viewportRef.nativeElement.scrollLeft;
+        }
+        if (this.headerScrollableFilterRef) {
+          this.headerScrollableFilterRef.nativeElement.scrollLeft = this.viewportRef.nativeElement.scrollLeft;
+        }
+      }, { passive: true });
     }
   }
 
@@ -714,7 +728,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     this.cdr.detectChanges();
   }
   
-  getColumnWidth(col: ColDef<TData> | ColGroupDef<TData>): number {
+  getColumnWidth(col: Column | ColDef<TData> | ColGroupDef<TData>): number {
     if ('children' in col) {
       // Column group - sum children widths
       return col.children.reduce((sum, child) => sum + this.getColumnWidth(child), 0);
@@ -722,74 +736,79 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     return col.width || 150;
   }
 
-  getLeftPinnedColumns(): (ColDef<TData> | ColGroupDef<TData>)[] {
-    if (!this.columnDefs) return [];
-    return this.columnDefs.filter(col => {
-      if ('children' in col) return false;
-      if (col.hide) return false;
-      return col.pinned === 'left';
+  getLeftPinnedColumns(): Column[] {
+    if (!this.gridApi) return [];
+    return this.gridApi.getAllColumns().filter(col => {
+      return col.visible && col.pinned === 'left';
     });
   }
 
-  getRightPinnedColumns(): (ColDef<TData> | ColGroupDef<TData>)[] {
-    if (!this.columnDefs) return [];
-    return this.columnDefs.filter(col => {
-      if ('children' in col) return false;
-      if (col.hide) return false;
-      return col.pinned === 'right';
+  getRightPinnedColumns(): Column[] {
+    if (!this.gridApi) return [];
+    return this.gridApi.getAllColumns().filter(col => {
+      return col.visible && col.pinned === 'right';
     });
   }
 
-  getNonPinnedColumns(): (ColDef<TData> | ColGroupDef<TData>)[] {
-    if (!this.columnDefs) return [];
-    return this.columnDefs.filter(col => {
-      if ('children' in col) return false;
-      if (col.hide) return false;
-      return !col.pinned;
+  getNonPinnedColumns(): Column[] {
+    if (!this.gridApi) return [];
+    return this.gridApi.getAllColumns().filter(col => {
+      return col.visible && !col.pinned;
     });
   }
   
-  isSortable(col: ColDef<TData> | ColGroupDef<TData>): boolean {
+  isSortable(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
+    if ('colId' in col && !(col as any).children) {
+      // It's a Column object or flat ColDef
+      const colDef = this.getColumnDefForColumn(col as any);
+      return colDef ? (colDef.sortable !== false) : true;
+    }
     return 'sortable' in col ? !!col.sortable : true;
   }
   
-  getHeaderName(col: ColDef<TData> | ColGroupDef<TData>): string {
+  getHeaderName(col: Column | ColDef<TData> | ColGroupDef<TData>): string {
     if ('children' in col) {
       return col.headerName || '';
     }
-    return col.headerName || col.field?.toString() || '';
+    return col.headerName || (col as any).field?.toString() || '';
   }
   
-  getSortIndicator(col: ColDef<TData> | ColGroupDef<TData>): string {
+  getSortIndicator(col: Column | ColDef<TData> | ColGroupDef<TData>): string {
     if ('children' in col || !col.sort) {
       return '';
     }
     return col.sort === 'asc' ? '▲' : '▼';
   }
   
-  onHeaderClick(col: ColDef<TData> | ColGroupDef<TData>): void {
+  onHeaderClick(col: Column | ColDef<TData> | ColGroupDef<TData>): void {
     if (!this.isSortable(col) || 'children' in col) {
       return;
     }
     
     // Toggle sort
     const currentSort = col.sort;
-    col.sort = currentSort === 'asc' ? 'desc' : currentSort === 'desc' ? null : 'asc';
-    col.sortIndex = col.sort ? 0 : undefined;
+    const newSort = currentSort === 'asc' ? 'desc' : currentSort === 'desc' ? null : 'asc';
     
-    const colId = typeof col.colId === 'string' ? col.colId : col.field?.toString() || '';
-    this.gridApi.setSortModel(col.sort ? [{ colId, sort: col.sort }] : []);
+    const colId = (col as any).colId || (col as any).field?.toString() || '';
+    
+    // Update the column directly if it's a Column object
+    if ('colId' in col && !(col as any).children) {
+      (col as any).sort = newSort;
+    }
+
+    this.gridApi.setSortModel(newSort ? [{ colId, sort: newSort }] : []);
     this.canvasRenderer?.render();
   }
 
   // --- Header Menu Logic ---
 
-  hasHeaderMenu(col: ColDef<TData> | ColGroupDef<TData>): boolean {
+  hasHeaderMenu(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
     if ('children' in col) return false;
-    return col.suppressHeaderMenuButton !== true;
+    const colDef = this.getColumnDefForColumn(col as any);
+    return colDef ? colDef.suppressHeaderMenuButton !== true : true;
   }
 
-  onHeaderMenuClick(event: MouseEvent, col: ColDef<TData> | ColGroupDef<TData>): void {
+  onHeaderMenuClick(event: MouseEvent, col: Column | ColDef<TData> | ColGroupDef<TData>): void {
     event.stopPropagation();
     
     if (this.activeHeaderMenu === col) {
@@ -959,7 +978,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   onColumnDropped(event: CdkDragDrop<any[]>, pinType: 'left' | 'right' | 'none'): void {
     if (!this.columnDefs) return;
 
-    // Get current groups (deep clones to avoid direct mutation issues during merge)
+    // Get current groups (using internal Columns)
     const left = [...this.getLeftPinnedColumns()];
     const center = [...this.getNonPinnedColumns()];
     const right = [...this.getRightPinnedColumns()];
@@ -983,14 +1002,28 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
         event.currentIndex
       );
 
-      // Update pinned state of the moved column
-      const movedCol = currentContainerData[event.currentIndex] as ColDef<TData>;
-      movedCol.pinned = pinType === 'none' ? null : pinType as any;
+      // Update pinned state of the moved column in its original definition
+      const movedCol = currentContainerData[event.currentIndex] as Column;
+      const colDef = this.getColumnDefForColumn(movedCol);
+      if (colDef) {
+        colDef.pinned = pinType === 'none' ? null : pinType as any;
+      }
     }
 
-    // Reconstruct full columnDefs array
-    const hidden = this.columnDefs.filter(c => !('children' in c) && c.hide);
-    const newDefs = [...left, ...center, ...right, ...hidden];
+    // Map internal Columns back to their original ColDefs in the new order
+    const orderedVisibleColDefs: (ColDef<TData> | ColGroupDef<TData>)[] = [];
+    [...left, ...center, ...right].forEach(col => {
+      const def = this.getColumnDefForColumn(col);
+      if (def) orderedVisibleColDefs.push(def);
+    });
+
+    // Reconstruct full columnDefs array, maintaining hidden columns
+    const hidden = this.columnDefs.filter(c => {
+      if ('children' in c) return false;
+      return (c as ColDef).hide;
+    });
+    
+    const newDefs = [...orderedVisibleColDefs, ...hidden];
     
     this.onColumnDefsChanged(newDefs);
   }
@@ -1009,36 +1042,40 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     });
   }
 
-  isFloatingFilterEnabled(col: ColDef<TData> | ColGroupDef<TData>): boolean {
-    if ('children' in col) return false;
-    if (!col.filter) return false;
+  isFloatingFilterEnabled(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
+    const colDef = this.getColumnDefForColumn(col as any);
+    if (!colDef || 'children' in colDef) return false;
+    if (!colDef.filter) return false;
     
-    if (col.floatingFilter === true) return true;
-    if (col.floatingFilter === false) return false;
+    if (colDef.floatingFilter === true) return true;
+    if (colDef.floatingFilter === false) return false;
     
     return !!this.gridApi?.getGridOption('floatingFilter');
   }
 
-  isFilterable(col: ColDef<TData> | ColGroupDef<TData>): boolean {
-    if ('children' in col) return false;
-    return !!col.filter;
+  isFilterable(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
+    const colDef = this.getColumnDefForColumn(col as any);
+    if (!colDef || 'children' in colDef) return false;
+    return !!colDef.filter;
   }
 
-  getFilterInputType(col: ColDef<TData> | ColGroupDef<TData>): string {
-    if ('children' in col) return 'text';
-    const filter = col.filter;
+  getFilterInputType(col: Column | ColDef<TData> | ColGroupDef<TData>): string {
+    const colDef = this.getColumnDefForColumn(col as any);
+    if (!colDef || 'children' in colDef) return 'text';
+    const filter = colDef.filter;
     if (filter === 'number') return 'number';
     if (filter === 'date') return 'date';
     return 'text';
   }
 
   private filterTimeout: any;
-  onFloatingFilterInput(event: Event, col: ColDef<TData> | ColGroupDef<TData>): void {
-    if ('children' in col) return;
+  onFloatingFilterInput(event: Event, col: Column | ColDef<TData> | ColGroupDef<TData>): void {
+    const colDef = this.getColumnDefForColumn(col as any);
+    if (!colDef || 'children' in colDef) return;
     
     const input = event.target as HTMLInputElement;
     const value = input.value;
-    const colId = typeof col.colId === 'string' ? col.colId : col.field?.toString() || '';
+    const colId = (col as any).colId || (col as any).field?.toString() || '';
 
     this.cdr.detectChanges(); // Update clear button visibility immediately
 
@@ -1049,7 +1086,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       if (!value) {
         delete currentModel[colId];
       } else {
-        const filterType = this.getFilterTypeFromCol(col);
+        const filterType = this.getFilterTypeFromCol(colDef);
         currentModel[colId] = {
           filterType: filterType as any,
           type: filterType === 'text' ? 'contains' : 'equals',
@@ -1070,15 +1107,16 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     return 'text';
   }
 
-  hasFilterValue(col: ColDef<TData> | ColGroupDef<TData>, input: HTMLInputElement): boolean {
+  hasFilterValue(col: Column | ColDef<TData> | ColGroupDef<TData>, input: HTMLInputElement): boolean {
     return !!input.value;
   }
 
-  clearFloatingFilter(col: ColDef<TData> | ColGroupDef<TData>, input: HTMLInputElement): void {
-    if ('children' in col) return;
+  clearFloatingFilter(col: Column | ColDef<TData> | ColGroupDef<TData>, input: HTMLInputElement): void {
+    const colDef = this.getColumnDefForColumn(col as any);
+    if (!colDef || 'children' in colDef) return;
     
     input.value = '';
-    const colId = typeof col.colId === 'string' ? col.colId : col.field?.toString() || '';
+    const colId = (col as any).colId || (col as any).field?.toString() || '';
     
     const currentModel = this.gridApi.getFilterModel();
     delete currentModel[colId];
