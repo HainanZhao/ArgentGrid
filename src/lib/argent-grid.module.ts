@@ -2,7 +2,6 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ArgentGridComponent } from './components/argent-grid.component';
 import { AgGridCompatibilityDirective } from './directives/ag-grid-compatibility.directive';
-import { GridService } from './services/grid.service';
 
 @NgModule({
   declarations: [
@@ -11,9 +10,6 @@ import { GridService } from './services/grid.service';
   ],
   imports: [
     CommonModule
-  ],
-  providers: [
-    GridService
   ],
   exports: [
     ArgentGridComponent,

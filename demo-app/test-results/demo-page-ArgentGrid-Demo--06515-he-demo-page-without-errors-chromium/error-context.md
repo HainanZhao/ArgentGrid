@@ -23,10 +23,10 @@
           - strong [ref=e21]: 100,000
           - text: rows
         - generic [ref=e22]:
-          - strong [ref=e23]: "187"
+          - strong [ref=e23]: "194"
           - text: ms load
         - generic [ref=e24]:
-          - strong [ref=e25]: "63"
+          - strong [ref=e25]: "76"
           - text: FPS
         - button "100K" [ref=e26] [cursor=pointer]
         - button "500K" [ref=e27] [cursor=pointer]
