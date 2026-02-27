@@ -27,6 +27,11 @@ coverage/
 # Test
 *.test.js.map
 *.spec.js.map
+playwright-report/
+test-results/
+e2e/screenshots/
 
 # Package lock (optional - uncomment if needed)
 # package-lock.json
+
+screenshots/

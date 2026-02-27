@@ -1,6 +1,6 @@
 import { Injectable, Inject, Optional } from '@angular/core';
-import {
-  GridApi,
+import { Subject } from 'rxjs';
+import {  GridApi,
   GridOptions,
   ColDef,
   ColGroupDef,
@@ -32,6 +32,7 @@ export class GridService<TData = any> {
   private expandedGroups: Set<string> = new Set();
   private gridId: string = '';
   private gridOptions: GridOptions<TData> | null = null;
+  public gridStateChanged$ = new Subject<{ type: string, key?: string, value?: any }>();
   
   createApi(
     columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null,
@@ -44,7 +45,7 @@ export class GridService<TData = any> {
     this.groupedRowData = [];
     this.displayedRowNodes = [];
     this.gridId = this.generateGridId();
-    this.gridOptions = gridOptions || null;
+    this.gridOptions = gridOptions ? { ...gridOptions } : {};
 
     this.initializeColumns();
     this.initializeRowNodes();
@@ -234,10 +235,12 @@ export class GridService<TData = any> {
       setFilterModel: (model) => {
         this.filterModel = model;
         this.applyFiltering();
+        this.gridStateChanged$.next({ type: 'filterChanged' });
       },
       getFilterModel: () => ({ ...this.filterModel }),
       onFilterChanged: () => {
         this.applyFiltering();
+        this.gridStateChanged$.next({ type: 'filterChanged' });
       },
       isFilterPresent: () => Object.keys(this.filterModel).length > 0,
       
@@ -245,10 +248,12 @@ export class GridService<TData = any> {
       setSortModel: (model) => {
         this.sortModel = model;
         this.applySorting();
+        this.gridStateChanged$.next({ type: 'sortChanged' });
       },
       getSortModel: () => [...this.sortModel],
       onSortChanged: () => {
-        // TODO: Emit sort changed event
+        this.applySorting();
+        this.gridStateChanged$.next({ type: 'sortChanged' });
       },
       
       // Pagination API
@@ -304,11 +309,11 @@ export class GridService<TData = any> {
       getGridId: () => this.gridId,
       getGridOption: (key) => this.gridOptions ? this.gridOptions[key] : undefined as any,
       setGridOption: (key, value) => {
-        if (this.gridOptions) {
-          this.gridOptions[key] = value;
-        } else {
-          this.gridOptions = { [key]: value } as GridOptions<TData>;
+        if (!this.gridOptions) {
+          this.gridOptions = {} as GridOptions<TData>;
         }
+        this.gridOptions[key] = value;
+        this.gridStateChanged$.next({ type: 'optionChanged', key: key as string, value });
       },
       
       // Group Expansion

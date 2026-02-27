@@ -1,9 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, ChangeDetectionStrategy, AfterViewInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { GridApi, GridOptions, ColDef, ColGroupDef, IRowNode, Column } from '../types/ag-grid-types';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { GridService } from '../services/grid.service';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
-import { Subject } from 'rxjs';
 
 @Component({
   selector: 'argent-grid',
@@ -40,12 +41,17 @@ import { Subject } from 'rxjs';
               (click)="onHeaderClick(col)"
               cdkDrag
               [cdkDragData]="col">
-              <div class="argent-grid-header-content">
+              <div class="argent-grid-header-content" cdkDragHandle>
                 <span class="header-text">{{ getHeaderName(col) }}</span>
                 <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
               </div>
               <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
                 &#8942;
+              </div>
+              <div class="argent-grid-header-resize-handle" 
+                   *ngIf="isResizable(col)" 
+                   [class.resizing]="isResizing && resizeColumn === col"
+                   (mousedown)="onResizeMouseDown($event, col)">
               </div>
             </div>
           </div>
@@ -67,12 +73,17 @@ import { Subject } from 'rxjs';
                 (click)="onHeaderClick(col)"
                 cdkDrag
                 [cdkDragData]="col">
-                <div class="argent-grid-header-content">
+                <div class="argent-grid-header-content" cdkDragHandle>
                   <span class="header-text">{{ getHeaderName(col) }}</span>
                   <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
                 </div>
                 <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
                   &#8942;
+                </div>
+                <div class="argent-grid-header-resize-handle" 
+                     *ngIf="isResizable(col)" 
+                     [class.resizing]="isResizing && resizeColumn === col"
+                     (mousedown)="onResizeMouseDown($event, col)">
                 </div>
               </div>
             </div>
@@ -93,12 +104,17 @@ import { Subject } from 'rxjs';
               (click)="onHeaderClick(col)"
               cdkDrag
               [cdkDragData]="col">
-              <div class="argent-grid-header-content">
+              <div class="argent-grid-header-content" cdkDragHandle>
                 <span class="header-text">{{ getHeaderName(col) }}</span>
                 <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
               </div>
               <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
                 &#8942;
+              </div>
+              <div class="argent-grid-header-resize-handle" 
+                   *ngIf="isResizable(col)" 
+                   [class.resizing]="isResizing && resizeColumn === col"
+                   (mousedown)="onResizeMouseDown($event, col)">
               </div>
             </div>
           </div>
@@ -110,19 +126,22 @@ import { Subject } from 'rxjs';
           <div *ngIf="showSelectionColumn" class="argent-grid-header-cell" [style.width.px]="selectionColumnWidth"></div>
 
           <!-- Left Pinned Filters -->
-          <div
-            *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
-            class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
-            [style.width.px]="getColumnWidth(col)">
-            <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
-              <input #filterInput
-                     class="floating-filter-input" 
-                     [type]="getFilterInputType(col)" 
-                     (input)="onFloatingFilterInput($event, col)"
-                     [placeholder]="'Filter...'" />
-              <span class="floating-filter-clear" 
-                    *ngIf="hasFilterValue(col, filterInput)"
-                    (click)="clearFloatingFilter(col, filterInput)">✕</span>
+          <div class="argent-grid-header-pinned-left-container">
+            <div
+              *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
+              class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
+              [style.width.px]="getColumnWidth(col)">
+              <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
+                <input #filterInput
+                       class="floating-filter-input"
+                       [type]="getFilterInputType(col)"
+                       [value]="getFloatingFilterValue(col)"
+                       (input)="onFloatingFilterInput($event, col)"
+                       [placeholder]="'Filter...'" />
+                <span class="floating-filter-clear"
+                      *ngIf="hasFilterValue(col, filterInput)"
+                      (click)="clearFloatingFilter(col, filterInput)">✕</span>
+              </div>
             </div>
           </div>
 
@@ -135,11 +154,12 @@ import { Subject } from 'rxjs';
                 [style.width.px]="getColumnWidth(col)">
                 <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
                   <input #filterInput
-                         class="floating-filter-input" 
-                         [type]="getFilterInputType(col)" 
+                         class="floating-filter-input"
+                         [type]="getFilterInputType(col)"
+                         [value]="getFloatingFilterValue(col)"
                          (input)="onFloatingFilterInput($event, col)"
                          [placeholder]="'Filter...'" />
-                  <span class="floating-filter-clear" 
+                  <span class="floating-filter-clear"
                         *ngIf="hasFilterValue(col, filterInput)"
                         (click)="clearFloatingFilter(col, filterInput)">✕</span>
                 </div>
@@ -148,19 +168,22 @@ import { Subject } from 'rxjs';
           </div>
 
           <!-- Right Pinned Filters -->
-          <div
-            *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
-            class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
-            [style.width.px]="getColumnWidth(col)">
-            <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
-              <input #filterInput
-                     class="floating-filter-input" 
-                     [type]="getFilterInputType(col)" 
-                     (input)="onFloatingFilterInput($event, col)"
-                     [placeholder]="'Filter...'" />
-              <span class="floating-filter-clear" 
-                    *ngIf="hasFilterValue(col, filterInput)"
-                    (click)="clearFloatingFilter(col, filterInput)">✕</span>
+          <div class="argent-grid-header-pinned-right-container">
+            <div
+              *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
+              class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
+              [style.width.px]="getColumnWidth(col)">
+              <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
+                <input #filterInput
+                       class="floating-filter-input"
+                       [type]="getFilterInputType(col)"
+                       [value]="getFloatingFilterValue(col)"
+                       (input)="onFloatingFilterInput($event, col)"
+                       [placeholder]="'Filter...'" />
+                <span class="floating-filter-clear"
+                      *ngIf="hasFilterValue(col, filterInput)"
+                      (click)="clearFloatingFilter(col, filterInput)">✕</span>
+              </div>
             </div>
           </div>
         </div>
@@ -252,18 +275,23 @@ import { Subject } from 'rxjs';
   `,
   styles: [`
     .argent-grid-container {
+      box-sizing: border-box;
       position: relative;
       overflow: hidden;
-      border: 1px solid #e0e0e0;
+      border: 1px solid #babed1;
       background: #fff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
       display: flex;
       flex-direction: column;
     }
 
+    .argent-grid-container *, .argent-grid-container *:before, .argent-grid-container *:after {
+      box-sizing: inherit;
+    }
+
     .argent-grid-header {
-      border-bottom: 1px solid #e0e0e0;
-      background: #f5f5f5;
+      border-bottom: 1px solid #babed1;
+      background: #f8f9fa;
       font-weight: 600;
     }
 
@@ -311,7 +339,7 @@ import { Subject } from 'rxjs';
 
     .argent-grid-header-cell {
       padding: 8px 12px;
-      border-right: 1px solid #e0e0e0;
+      border-right: 1px solid #babed1;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -319,6 +347,7 @@ import { Subject } from 'rxjs';
       user-select: none;
       flex-shrink: 0;
       position: relative;
+      height: 100%;
     }
 
     .argent-grid-header-cell:hover .argent-grid-header-menu-icon {
@@ -330,6 +359,7 @@ import { Subject } from 'rxjs';
       align-items: center;
       overflow: hidden;
       flex: 1;
+      height: 100%;
     }
     
     .header-text {
@@ -353,20 +383,34 @@ import { Subject } from 'rxjs';
       border-radius: 4px;
     }
 
+    .argent-grid-header-resize-handle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      cursor: col-resize;
+      z-index: 5;
+      transition: background-color 0.2s;
+    }
+
+    .argent-grid-header-resize-handle:hover,
+    .argent-grid-header-resize-handle.resizing {
+      background-color: #2196f3;
+    }
+
     .argent-grid-header-cell-pinned-left {
       position: sticky;
       left: 0;
       z-index: 10;
-      border-right: 2px solid #ccc;
-      background: #f5f5f5;
+      background: #f8f9fa;
     }
 
     .argent-grid-header-cell-pinned-right {
       position: sticky;
       right: 0;
       z-index: 10;
-      border-left: 2px solid #ccc;
-      background: #f5f5f5;
+      background: #f8f9fa;
     }
 
     .argent-grid-header-cell.sortable:hover {
@@ -438,13 +482,13 @@ import { Subject } from 'rxjs';
     }
 
     .argent-grid-header-menu, .argent-grid-context-menu {
-      position: absolute;
+      position: fixed;
       background: #ffffff;
       border: 1px solid #babed1;
       box-shadow: 0 3px 10px 0 rgba(0, 0, 0, 0.2);
       border-radius: 3px;
       padding: 4px 0;
-      z-index: 1000;
+      z-index: 10000;
       min-width: 200px;
       font-size: 13px;
       color: #181d1f;
@@ -582,8 +626,14 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private editingColDef: ColDef<TData> | null = null;
 
   // Header Menu state
-  activeHeaderMenu: ColDef<TData> | ColGroupDef<TData> | null = null;
+  activeHeaderMenu: Column | ColDef<TData> | ColGroupDef<TData> | null = null;
   headerMenuPosition = { x: 0, y: 0 };
+
+  // Resizing state
+  isResizing = false;
+  resizeColumn: Column | null = null;
+  private resizeStartX = 0;
+  private resizeStartWidth = 0;
 
   // Context Menu state
   activeContextMenu = false;
@@ -599,7 +649,6 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
-    console.log('[ArgentGrid] ngOnInit called');
     this.initialColumnDefs = this.columnDefs ? JSON.parse(JSON.stringify(this.columnDefs)) : null;
     this.initializeGrid();
   }
@@ -668,10 +717,16 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   private initializeGrid(): void {
-    console.log('[ArgentGrid] initializeGrid:', { columnDefs: this.columnDefs?.length, rowData: this.rowData?.length });
-
     // Initialize grid API
     this.gridApi = this.gridService.createApi(this.columnDefs, this.rowData, this.gridOptions);
+
+    // Listen for grid state changes from API (filters, sorts, options)
+    this.gridService.gridStateChanged$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.canvasRenderer?.render();
+        this.cdr.detectChanges();
+      });
 
     // Check if any column has checkbox selection
     this.showSelectionColumn = this.columnDefs?.some(col =>
@@ -691,7 +746,6 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   private onRowDataChanged(newData: TData[] | null): void {
-    console.log('[ArgentGrid] onRowDataChanged:', newData?.length);
     this.rowData = newData;
 
     if (this.gridApi) {
@@ -820,20 +874,18 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
     this.activeHeaderMenu = col;
     
-    // Position menu below the icon
+    // Position menu below the icon using fixed (viewport) coordinates
     const target = event.target as HTMLElement;
     const rect = target.getBoundingClientRect();
-    const containerRect = this.viewportRef.nativeElement.parentElement?.getBoundingClientRect() || { top: 0, left: 0, width: 0, height: 0 };
     
-    let x = rect.right - 180 - containerRect.left;
-    let y = rect.bottom - containerRect.top + 4;
+    let x = rect.right - 200; // Align right, assuming menu width ~200px
+    let y = rect.bottom + 4;
 
     // Prevent menu from going off-screen
     if (x < 0) x = 0;
-    if (x + 180 > containerRect.width) x = containerRect.width - 180;
-    if (y + 200 > containerRect.height) {
-      // Show above the header if it overflows bottom
-      y = rect.top - containerRect.top - 200;
+    if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
+    if (y + 250 > window.innerHeight) { // Assuming max menu height ~250px
+      y = rect.top - 250; // Show above if overflows bottom
     }
     
     this.headerMenuPosition = { x, y };
@@ -878,20 +930,15 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     this.contextMenuCell = { rowNode, column };
     this.activeContextMenu = true;
     
-    // Position menu at mouse coordinates relative to viewport
-    const containerRect = this.viewportRef.nativeElement.parentElement?.getBoundingClientRect() || { top: 0, left: 0, width: 0, height: 0 };
-    let x = event.clientX - containerRect.left;
-    let y = event.clientY - containerRect.top;
+    // Position menu at mouse coordinates (fixed/viewport)
+    let x = event.clientX;
+    let y = event.clientY;
 
-    // Prevent menu from going off-screen (right and bottom)
-    if (x + 180 > containerRect.width) {
-      x = containerRect.width - 180;
-    }
-    if (y + 200 > containerRect.height) { // Assuming max menu height ~200px
-      y = containerRect.height - 200;
-    }
+    // Prevent menu from going off-screen
+    if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
+    if (y + 200 > window.innerHeight) y = window.innerHeight - 200;
 
-    this.contextMenuPosition = { x: Math.max(0, x), y: Math.max(0, y) };
+    this.contextMenuPosition = { x, y };
     
     // Select the row
     this.gridApi.deselectAll();
@@ -944,13 +991,17 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   sortColumnMenu(direction: 'asc' | 'desc' | null): void {
-    if (!this.activeHeaderMenu || 'children' in this.activeHeaderMenu) return;
+    if (!this.activeHeaderMenu) return;
     
-    const col = this.activeHeaderMenu as ColDef<TData>;
-    col.sort = direction;
-    col.sortIndex = direction ? 0 : undefined;
+    const col = this.activeHeaderMenu as any;
+    const colId = col.colId || col.field?.toString() || '';
     
-    const colId = typeof col.colId === 'string' ? col.colId : col.field?.toString() || '';
+    // Update original ColDef to ensure persistence
+    const colDef = this.getColumnDefForColumn(col);
+    if (colDef) {
+      colDef.sort = direction;
+    }
+
     this.gridApi.setSortModel(direction ? [{ colId, sort: direction }] : []);
     this.canvasRenderer?.render();
     
@@ -958,12 +1009,17 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   hideColumnMenu(): void {
-    if (!this.activeHeaderMenu || 'children' in this.activeHeaderMenu) return;
+    if (!this.activeHeaderMenu) return;
     
-    const col = this.activeHeaderMenu as ColDef<TData>;
-    col.hide = true;
+    const col = this.activeHeaderMenu as any;
     
-    // Create new array to trigger change detection
+    // Update the original column definition
+    const colDef = this.getColumnDefForColumn(col);
+    if (colDef) {
+      colDef.hide = true;
+    }
+    
+    // Create new array to trigger change detection and API update
     if (this.columnDefs) {
       this.onColumnDefsChanged([...this.columnDefs]);
     }
@@ -972,10 +1028,15 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   pinColumnMenu(pin: 'left' | 'right' | null): void {
-    if (!this.activeHeaderMenu || 'children' in this.activeHeaderMenu) return;
+    if (!this.activeHeaderMenu) return;
     
-    const col = this.activeHeaderMenu as ColDef<TData>;
-    col.pinned = pin as any;
+    const col = this.activeHeaderMenu as any;
+    
+    // Update the original column definition
+    const colDef = this.getColumnDefForColumn(col);
+    if (colDef) {
+      colDef.pinned = pin as any;
+    }
     
     if (this.columnDefs) {
       this.onColumnDefsChanged([...this.columnDefs]);
@@ -1035,6 +1096,59 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     const newDefs = [...orderedVisibleColDefs, ...hidden];
     
     this.onColumnDefsChanged(newDefs);
+  }
+
+  // --- Column Resizing Logic ---
+
+  isResizable(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
+    if ('children' in col) return false;
+    const colDef = this.getColumnDefForColumn(col as any);
+    return colDef ? colDef.resizable !== false : true;
+  }
+
+  onResizeMouseDown(event: MouseEvent, col: Column): void {
+    event.stopPropagation();
+    event.preventDefault();
+
+    this.isResizing = true;
+    this.resizeColumn = col;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidth = col.width;
+
+    const mouseMoveHandler = (e: MouseEvent) => this.onResizeMouseMove(e);
+    const mouseUpHandler = () => {
+      this.onResizeMouseUp();
+      window.removeEventListener('mousemove', mouseMoveHandler);
+      window.removeEventListener('mouseup', mouseUpHandler);
+    };
+
+    window.addEventListener('mousemove', mouseMoveHandler);
+    window.addEventListener('mouseup', mouseUpHandler);
+  }
+
+  private onResizeMouseMove(event: MouseEvent): void {
+    if (!this.isResizing || !this.resizeColumn) return;
+
+    const deltaX = event.clientX - this.resizeStartX;
+    const newWidth = Math.max(20, this.resizeStartWidth + deltaX);
+    
+    // Update internal column width
+    this.resizeColumn.width = newWidth;
+    
+    // Update original ColDef
+    const colDef = this.getColumnDefForColumn(this.resizeColumn);
+    if (colDef) {
+      colDef.width = newWidth;
+    }
+
+    // Force re-render
+    this.canvasRenderer?.render();
+    this.cdr.detectChanges();
+  }
+
+  private onResizeMouseUp(): void {
+    this.isResizing = false;
+    this.resizeColumn = null;
   }
 
   // --- Floating Filter Logic ---
@@ -1116,8 +1230,15 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     return 'text';
   }
 
+  getFloatingFilterValue(col: Column | ColDef<TData> | ColGroupDef<TData>): string {
+    if (!this.gridApi) return '';
+    const colId = (col as any).colId || (col as any).field?.toString() || '';
+    const model = this.gridApi.getFilterModel();
+    return model[colId]?.filter || '';
+  }
+
   hasFilterValue(col: Column | ColDef<TData> | ColGroupDef<TData>, input: HTMLInputElement): boolean {
-    return !!input.value;
+    return !!this.getFloatingFilterValue(col);
   }
 
   clearFloatingFilter(col: Column | ColDef<TData> | ColGroupDef<TData>, input: HTMLInputElement): void {
