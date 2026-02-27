@@ -92,6 +92,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private destroy$ = new Subject<void>();
   private gridService = new GridService<TData>();
   private horizontalScrollListener?: (e: Event) => void;
+  private resizeObserver?: ResizeObserver;
 
   constructor(@Inject(ChangeDetectorRef) private cdr: ChangeDetectorRef) {}
 
@@ -180,7 +181,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       };
     }
 
-    // Setup viewport dimensions after view init
+    // Setup viewport dimensions and resize observer
     if (this.viewportRef) {
       const rect = this.viewportRef.nativeElement.getBoundingClientRect();
       this.viewportHeight = rect.height || 500;
@@ -198,6 +199,20 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       };
       
       this.viewportRef.nativeElement.addEventListener('scroll', this.horizontalScrollListener, { passive: true });
+
+      // Add ResizeObserver to handle sidebar toggling and other size changes
+      if (typeof ResizeObserver !== 'undefined') {
+        this.resizeObserver = new ResizeObserver(entries => {
+          for (const entry of entries) {
+            const { width, height } = entry.contentRect;
+            this.viewportHeight = height;
+            this.canvasRenderer?.setViewportDimensions(width, height);
+            this.canvasRenderer?.render();
+            this.cdr.detectChanges();
+          }
+        });
+        this.resizeObserver.observe(this.viewportRef.nativeElement);
+      }
     }
   }
 
@@ -208,6 +223,10 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     // Remove horizontal scroll listener
     if (this.viewportRef && this.horizontalScrollListener) {
       this.viewportRef.nativeElement.removeEventListener('scroll', this.horizontalScrollListener);
+    }
+
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
     }
 
     this.gridApi?.destroy();

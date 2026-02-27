@@ -25,23 +25,30 @@
 }
 
 .argent-grid-side-bar {
-  border-left: 1px solid #babed1;
-  background: #f8f9fa;
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 15;
+  background: transparent;
   display: flex;
   flex-direction: row-reverse;
   transition: width 0.2s ease-in-out;
+  pointer-events: none;
+  width: 32px;
 }
 
 .argent-grid-side-bar.has-active-panel {
-  width: 250px;
+  width: 282px; /* 250px panel + 32px buttons */
 }
 
 .side-bar-buttons {
   width: 32px;
-  border-left: 1px solid #babed1;
   display: flex;
   flex-direction: column;
-  background: #eee;
+  pointer-events: none;
+  height: 100%;
+  border-left: 1px solid #babed1;
 }
 
 .side-bar-button {
@@ -52,6 +59,7 @@
   color: #666;
   border-bottom: 1px solid #ddd;
   background: #f4f4f4;
+  pointer-events: auto;
 }
 
 .side-bar-button:hover {
@@ -66,10 +74,13 @@
 }
 
 .tool-panel-content {
-  flex: 1;
+  width: 250px;
   padding: 12px;
   overflow-y: auto;
   background: #fff;
+  pointer-events: auto;
+  border-left: 1px solid #babed1;
+  box-shadow: -5px 0 10px rgba(0, 0, 0, 0.05);
 }
 
 .tool-panel-content h3 {
