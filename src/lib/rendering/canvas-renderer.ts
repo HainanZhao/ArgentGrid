@@ -179,13 +179,7 @@ export class CanvasRenderer<TData = any> {
       this.damageTracker.markAllDirty();
     }
 
-    if (!this.renderPending) {
-      this.renderPending = true;
-      requestAnimationFrame(() => {
-        this.doRender();
-        this.renderPending = false;
-      });
-    }
+    this.scheduleRender();
   }
 
   setTotalRowCount(count: number): void {
@@ -240,12 +234,13 @@ export class CanvasRenderer<TData = any> {
   }
 
   private scheduleRender(): void {
-    if (this.renderPending) return;
+    if (this.renderPending || this.animationFrameId !== null) return;
 
     this.renderPending = true;
-    requestAnimationFrame(() => {
+    this.animationFrameId = requestAnimationFrame(() => {
       this.doRender();
       this.renderPending = false;
+      this.animationFrameId = null;
     });
   }
 
@@ -505,11 +500,11 @@ export class CanvasRenderer<TData = any> {
     if (!rowNode) return;
 
     // Track old selection for damage tracking
-    const oldSelectedRows = new Set<number>();
-    for (let i = 0; i < this.gridApi.getDisplayedRowCount(); i++) {
-      const node = this.gridApi.getDisplayedRowAtIndex(i);
-      if (node?.selected) oldSelectedRows.add(i);
-    }
+    const oldSelectedRows = new Set<number>(
+      this.gridApi.getSelectedNodes()
+        .map(node => node.rowIndex)
+        .filter(idx => idx !== null) as number[]
+    );
 
     if (event.ctrlKey || event.metaKey) {
       rowNode.selected = !rowNode.selected;
@@ -519,11 +514,11 @@ export class CanvasRenderer<TData = any> {
     }
 
     // Track new selection
-    const newSelectedRows = new Set<number>();
-    for (let i = 0; i < this.gridApi.getDisplayedRowCount(); i++) {
-      const node = this.gridApi.getDisplayedRowAtIndex(i);
-      if (node?.selected) newSelectedRows.add(i);
-    }
+    const newSelectedRows = new Set<number>(
+      this.gridApi.getSelectedNodes()
+        .map(node => node.rowIndex)
+        .filter(idx => idx !== null) as number[]
+    );
 
     // Mark changed rows as dirty
     this.damageTracker.markSelectionChanged(oldSelectedRows, newSelectedRows);

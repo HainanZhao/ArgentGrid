@@ -75,6 +75,7 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
   private gridApi?: GridApi<Employee>;
   private fpsInterval?: number;
   private lastFrameTime = 0;
+  private fpsUpdateTimer = 0;
 
   constructor(
     private cdr: ChangeDetectorRef
@@ -102,6 +103,8 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
       this.gridApi.setColumnDefs(this.columnDefs);
       this.gridApi.onFilterChanged(); // Trigger re-processing
     }
+
+    this.cdr.detectChanges();
   }
 
   toggleFloatingFilter(): void {
@@ -109,6 +112,7 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.gridApi) {
       this.gridApi.setGridOption('floatingFilter', this.isFloatingFilterShown);
     }
+    this.cdr.detectChanges();
   }
 
   applyFilter(): void {
@@ -117,12 +121,14 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
         department: { filterType: 'text', type: 'contains', filter: 'Eng' }
       });
     }
+    this.cdr.detectChanges();
   }
 
   clearFilters(): void {
     if (this.gridApi) {
       this.gridApi.setFilterModel({});
     }
+    this.cdr.detectChanges();
   }
 
   startFPSCounter(): void {
@@ -132,22 +138,28 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
 
       if (this.lastFrameTime) {
         const delta = now - this.lastFrameTime;
-        const newFps = Math.round(1000 / delta);
-        if (newFps !== this.fps) {
-          this.fps = newFps;
-          changed = true;
+        
+        // Update metrics only every 500ms to reduce change detection cycles
+        if (now - this.fpsUpdateTimer > 500) {
+          const newFps = Math.round(1000 / delta);
+          if (newFps !== this.fps) {
+            this.fps = newFps;
+            changed = true;
+          }
+
+          // Update canvas frame time if available
+          if (this.gridComponent) {
+            const newFrameTime = Number(this.gridComponent.getLastFrameTime().toFixed(2));
+            if (newFrameTime !== this.canvasFrameTime) {
+              this.canvasFrameTime = newFrameTime;
+              changed = true;
+            }
+          }
+          
+          this.fpsUpdateTimer = now;
         }
       }
       this.lastFrameTime = now;
-      
-      // Update canvas frame time if available
-      if (this.gridComponent) {
-        const newFrameTime = Number(this.gridComponent.getLastFrameTime().toFixed(2));
-        if (newFrameTime !== this.canvasFrameTime) {
-          this.canvasFrameTime = newFrameTime;
-          changed = true;
-        }
-      }
 
       // In zoneless mode, we manually trigger change detection for these async updates
       if (changed) {
@@ -164,11 +176,13 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
     
     this.isBenchmarking = true;
     this.benchmarkResults = null;
+    this.cdr.detectChanges();
     
     const results = {
       initialRender: 0,
       scrollFrameAverage: 0,
       selectionUpdateTime: 0,
+      groupingUpdateTime: 0,
       totalTime: 0
     };
 
@@ -185,31 +199,53 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
       results.selectionUpdateTime = Number((performance.now() - selStart).toFixed(2));
       this.gridApi?.deselectAll();
 
-      // 3. Scroll performance (programmatic scroll)
-      const frameTimes: number[] = [];
-      let scrollCount = 0;
-      const totalScrollFrames = 30;
-      const viewport = this.gridComponent.viewportRef.nativeElement;
-
-      const runScroll = () => {
-        if (scrollCount < totalScrollFrames) {
-          viewport.scrollTop += 100;
-          frameTimes.push(this.gridComponent.getLastFrameTime());
-          scrollCount++;
-          requestAnimationFrame(runScroll);
-        } else {
-          // Finished scroll
-          results.scrollFrameAverage = Number((frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length).toFixed(2));
-          results.totalTime = Number((performance.now() - startTime).toFixed(2));
-          this.benchmarkResults = results;
-          this.isBenchmarking = false;
+      // 3. Grouping Update Time (Toggle grouping twice)
+      const groupStart = performance.now();
+      if (!this.isGrouped) {
+        this.toggleGrouping(); // Turn on
+        setTimeout(() => {
+          this.toggleGrouping(); // Turn off
+          results.groupingUpdateTime = Number((performance.now() - groupStart).toFixed(2));
           
-          // Scroll back up
-          viewport.scrollTop = 0;
-        }
+          startScrolling();
+        }, 100);
+      } else {
+        this.toggleGrouping(); // Turn off
+        setTimeout(() => {
+          this.toggleGrouping(); // Turn on
+          results.groupingUpdateTime = Number((performance.now() - groupStart).toFixed(2));
+          
+          startScrolling();
+        }, 100);
+      }
+
+      // 4. Scroll performance (programmatic scroll)
+      const startScrolling = () => {
+        const frameTimes: number[] = [];
+        let scrollCount = 0;
+        const totalScrollFrames = 30;
+        const viewport = this.gridComponent.viewportRef.nativeElement;
+
+        const runScroll = () => {
+          if (scrollCount < totalScrollFrames) {
+            viewport.scrollTop += 100;
+            frameTimes.push(this.gridComponent.getLastFrameTime());
+            scrollCount++;
+            requestAnimationFrame(runScroll);
+          } else {
+                      // Finished scroll
+                      results.scrollFrameAverage = Number((frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length).toFixed(2));
+                      results.totalTime = Number((performance.now() - startTime).toFixed(2));
+                      this.benchmarkResults = results;
+                      this.isBenchmarking = false;
+                      
+                      // Scroll back up
+                      viewport.scrollTop = 0;
+                      this.cdr.detectChanges();
+                    }
+                  };        
+        requestAnimationFrame(runScroll);
       };
-      
-      requestAnimationFrame(runScroll);
     }, 100);
   }
 
@@ -252,6 +288,7 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
       this.rowCount = count;
       this.isLoading = false;
 
+      this.cdr.detectChanges();
       console.log(`Loaded ${count} rows in ${this.renderTime}ms`);
     }, 100);
   }
