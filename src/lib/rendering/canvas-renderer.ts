@@ -26,6 +26,9 @@ export class CanvasRenderer<TData = any> {
   private totalRowCount = 0;
   private viewportHeight = 0;
   private viewportWidth = 0;
+  
+  // Callback for cell editing
+  onCellDoubleClick?: (rowIndex: number, colId: string) => void;
 
   // Styling constants
   private readonly CELL_PADDING = 8;
@@ -61,6 +64,7 @@ export class CanvasRenderer<TData = any> {
     this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
     this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
     this.canvas.addEventListener('click', this.handleClick.bind(this));
+    this.canvas.addEventListener('dblclick', this.handleDoubleClick.bind(this));
 
     // Handle resize with debounce
     let resizeTimeout: number;
@@ -309,6 +313,25 @@ export class CanvasRenderer<TData = any> {
 
     // Emit row click event (TODO: use EventEmitter)
     console.log('Row clicked:', rowNode.data);
+  }
+
+  private handleDoubleClick(event: MouseEvent): void {
+    const { rowIndex, columnIndex } = this.getHitTestResult(event);
+    if (rowIndex === -1 || rowIndex >= this.visibleRows.length) return;
+
+    const rowNode = this.visibleRows[rowIndex];
+    if (!rowNode) return;
+
+    // Get column at index
+    const columns = this.gridApi.getAllColumns().filter(col => col.visible);
+    if (columnIndex >= columns.length) return;
+
+    const column = columns[columnIndex];
+    
+    // Trigger cell editing callback
+    if (this.onCellDoubleClick) {
+      this.onCellDoubleClick(rowIndex, column.colId);
+    }
   }
 
   private getHitTestResult(event: MouseEvent): { rowIndex: number; columnIndex: number } {

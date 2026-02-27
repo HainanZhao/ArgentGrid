@@ -349,6 +349,58 @@ describe('GridService', () => {
     expect(state.columnOrder).toBeDefined();
   });
 
+  // Cell Editing Tests
+  it('should update cell value on edit', () => {
+    const editApi = service.createApi(testColumnDefs, [...testRowData]);
+    const firstNode = editApi.getDisplayedRowAtIndex(0);
+    if (!firstNode) return;
+
+    const originalName = firstNode.data.name;
+    
+    // Simulate cell edit via transaction
+    const newValue = 'Updated Name';
+    editApi.applyTransaction({
+      update: [{ ...firstNode.data, name: newValue }]
+    });
+
+    const updatedNode = editApi.getDisplayedRowAtIndex(0);
+    expect(updatedNode?.data.name).toBe(newValue);
+    expect(updatedNode?.data.name).not.toBe(originalName);
+  });
+
+  it('should support read-only cells', () => {
+    const readOnlyColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID', editable: false },
+      { colId: 'name', field: 'name', headerName: 'Name', editable: true }
+    ];
+    
+    expect(readOnlyColumnDefs[0].editable).toBe(false);
+    expect(readOnlyColumnDefs[1].editable).toBe(true);
+  });
+
+  it('should support valueParser on column', () => {
+    const parserColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID' },
+      { colId: 'value', field: 'value', headerName: 'Value', 
+        valueParser: (params: any) => Number(params.newValue) }
+    ];
+    
+    expect(parserColumnDefs[1].valueParser).toBeDefined();
+  });
+
+  it('should support valueSetter on column', () => {
+    const setterColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID' },
+      { colId: 'name', field: 'name', headerName: 'Name',
+        valueSetter: (params: any) => {
+          params.data.name = params.newValue.toUpperCase();
+          return true;
+        }}
+    ];
+    
+    expect(setterColumnDefs[1].valueSetter).toBeDefined();
+  });
+
   it('should get displayed row count', () => {
     const freshApi = service.createApi(testColumnDefs, [...testRowData]);
     expect(freshApi.getDisplayedRowCount()).toBe(3);

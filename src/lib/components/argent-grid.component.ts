@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, ChangeDetectionStrategy, AfterViewInit } from '@angular/core';
-import { GridApi, GridOptions, ColDef, ColGroupDef, IRowNode } from '../types/ag-grid-types';
+import { GridApi, GridOptions, ColDef, ColGroupDef, IRowNode, Column } from '../types/ag-grid-types';
 import { GridService } from '../services/grid.service';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
 import { Subject } from 'rxjs';
@@ -26,6 +26,23 @@ import { Subject } from 'rxjs';
       <!-- Canvas Layer for Data Viewport with virtual scrolling -->
       <div class="argent-grid-viewport" #viewport>
         <canvas #gridCanvas class="argent-grid-canvas"></canvas>
+        
+        <!-- Cell Editor Overlay -->
+        <div class="argent-grid-cell-editor" 
+             *ngIf="isEditing"
+             [style.top.px]="editorPosition.y"
+             [style.left.px]="editorPosition.x"
+             [style.width.px]="editorPosition.width"
+             [style.height.px]="editorPosition.height">
+          <input #editorInput
+                 type="text"
+                 class="argent-grid-editor-input"
+                 [value]="editingValue"
+                 (input)="onEditorInput($event)"
+                 (keydown)="onEditorKeydown($event)"
+                 (blur)="onEditorBlur()"
+                 autofocus />
+        </div>
       </div>
 
       <!-- Overlay for loading/no rows -->
@@ -97,6 +114,23 @@ import { Subject } from 'rxjs';
       background: rgba(255, 255, 255, 0.9);
       z-index: 10;
     }
+
+    .argent-grid-cell-editor {
+      position: absolute;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .argent-grid-editor-input {
+      width: 100%;
+      height: 100%;
+      border: 2px solid #2196f3;
+      outline: none;
+      padding: 4px 8px;
+      font-size: 13px;
+      font-family: inherit;
+      box-sizing: border-box;
+    }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
@@ -114,10 +148,18 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   
   @ViewChild('gridCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('viewport') viewportRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('editorInput') editorInputRef!: ElementRef<HTMLInputElement>;
 
   canvasHeight = 0;
   showOverlay = false;
   private viewportHeight = 500;
+
+  // Cell editing state
+  isEditing = false;
+  editingValue = '';
+  editorPosition = { x: 0, y: 0, width: 100, height: 32 };
+  private editingRowNode: IRowNode<TData> | null = null;
+  private editingColDef: ColDef<TData> | null = null;
 
   private gridApi!: GridApi<TData>;
   private canvasRenderer!: CanvasRenderer;
@@ -157,6 +199,11 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
         this.gridApi,
         this.rowHeight
       );
+      
+      // Wire up cell editing callback
+      this.canvasRenderer.onCellDoubleClick = (rowIndex, colId) => {
+        this.startEditing(rowIndex, colId);
+      };
     }
 
     // Emit grid ready event
@@ -211,8 +258,155 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   getApi(): GridApi<TData> {
     return this.gridApi;
   }
-  
+
   refresh(): void {
     this.canvasRenderer?.render();
+  }
+
+  // Cell Editing Methods
+  startEditing(rowIndex: number, colId: string): void {
+    const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
+    const column = this.gridApi.getColumn(colId);
+    
+    if (!rowNode || !column || !column.field) return;
+    
+    // Check if cell is editable
+    const colDef = this.getColumnDefForColumn(column);
+    if (colDef && colDef.editable === false) return;
+    
+    const value = (rowNode.data as any)[column.field];
+    
+    this.editingRowNode = rowNode;
+    this.editingColDef = colDef;
+    this.editingValue = value !== null && value !== undefined ? String(value) : '';
+    
+    // Calculate editor position based on row and column
+    const columns = this.gridApi.getAllColumns().filter(c => c.visible);
+    let x = 0;
+    for (const col of columns) {
+      if (col.colId === colId) break;
+      x += col.width;
+    }
+    
+    this.editorPosition = {
+      x: x - this.canvasRenderer?.['scrollLeft'] || 0,
+      y: (rowIndex * this.rowHeight) - (this.canvasRenderer?.['scrollTop'] || 0),
+      width: column.width,
+      height: this.rowHeight
+    };
+    
+    this.isEditing = true;
+    
+    // Focus input after view update
+    setTimeout(() => {
+      if (this.editorInputRef) {
+        this.editorInputRef.nativeElement.focus();
+        this.editorInputRef.nativeElement.select();
+      }
+    }, 0);
+  }
+
+  stopEditing(save: boolean = true): void {
+    if (!this.isEditing || !this.editingRowNode || !this.editingColDef) return;
+    
+    if (save && this.editingColDef && this.editingRowNode) {
+      const newValue = this.editingValue;
+      const colDef = this.editingColDef;
+      
+      // Apply valueParser if provided
+      let parsedValue: any = newValue;
+      if (typeof colDef.valueParser === 'function') {
+        parsedValue = colDef.valueParser({
+          value: this.editingRowNode.data,
+          newValue,
+          data: this.editingRowNode.data,
+          node: this.editingRowNode,
+          colDef,
+          api: this.gridApi
+        });
+      }
+
+      // Apply valueSetter if provided
+      if (typeof colDef.valueSetter === 'function') {
+        colDef.valueSetter({
+          value: parsedValue,
+          newValue: parsedValue,
+          data: this.editingRowNode.data,
+          node: this.editingRowNode,
+          colDef,
+          api: this.gridApi
+        });
+      } else if (colDef.field) {
+        // Default: update data directly
+        (this.editingRowNode.data as any)[colDef.field] = parsedValue;
+      }
+      
+      // Update via transaction
+      this.gridApi.applyTransaction({
+        update: [this.editingRowNode.data]
+      });
+      
+      // Trigger callback
+      if (colDef.onCellValueChanged) {
+        const column = this.gridApi.getColumn(colDef.colId || colDef.field?.toString() || '');
+        if (column) {
+          colDef.onCellValueChanged({
+            newValue: parsedValue,
+            oldValue: (this.editingRowNode.data as any)[colDef.field],
+            data: this.editingRowNode.data,
+            node: this.editingRowNode,
+            column
+          });
+        }
+      }
+      
+      this.canvasRenderer?.render();
+    }
+    
+    this.isEditing = false;
+    this.editingRowNode = null;
+    this.editingColDef = null;
+  }
+
+  onEditorInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.editingValue = input.value;
+  }
+
+  onEditorKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.stopEditing(true);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.stopEditing(false);
+    } else if (event.key === 'Tab') {
+      event.preventDefault();
+      this.stopEditing(true);
+      // TODO: Move to next cell
+    }
+  }
+
+  onEditorBlur(): void {
+    // Delay to allow click events to propagate
+    setTimeout(() => {
+      if (this.isEditing) {
+        this.stopEditing(true);
+      }
+    }, 100);
+  }
+
+  private getColumnDefForColumn(column: Column): ColDef<TData> | null {
+    if (!this.columnDefs) return null;
+    
+    for (const def of this.columnDefs) {
+      if ('children' in def) {
+        const found = def.children.find(c => 'colId' in c && c.colId === column.colId);
+        if (found && 'colId' in found) return found as ColDef<TData>;
+      } else if (def.colId === column.colId) {
+        return def;
+      }
+    }
+    return null;
   }
 }
