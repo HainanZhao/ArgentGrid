@@ -27,7 +27,6 @@ export class GridService<TData = any> {
   private sortModel: SortModelItem[] = [];
   private filterModel: FilterModel = {};
   private filteredRowData: TData[] = [];
-  private groupedRowData: (TData | GroupRowNode<TData>)[] = [];
   private selectedRows: Set<string> = new Set();
   private expandedGroups: Set<string> = new Set();
   private gridId: string = '';
@@ -46,13 +45,15 @@ export class GridService<TData = any> {
     this.columnDefs = columnDefs;
     this.rowData = rowData ? [...rowData] : [];
     this.filteredRowData = [...this.rowData];
-    this.groupedRowData = [];
     this.displayedRowNodes = [];
     this.gridId = this.generateGridId();
     this.gridOptions = gridOptions ? { ...gridOptions } : {};
 
     this.initializeColumns();
-    this.initializeRowNodes();
+    
+    // Trigger initial pipeline run
+    this.applySorting();
+    this.applyFiltering(); // This will trigger grouping if needed and initialize nodes
 
     return this.createGridApi();
   }
@@ -133,59 +134,13 @@ export class GridService<TData = any> {
     this.columns.set(colId, column);
   }
   
-  private initializeRowNodes(): void {
-    this.groupingDirty = true;
-    this.rowNodes.clear();
-    this.displayedRowNodes = [];
-    
-    // Separate rows by pinned state
-    const pinnedTopRows: TData[] = [];
-    const pinnedBottomRows: TData[] = [];
-    const normalRows: TData[] = [];
-    
-    this.rowData.forEach(data => {
-      const anyData = data as any;
-      const pinned = anyData?.pinned;
-      
-      if (pinned === 'top') {
-        pinnedTopRows.push(data);
-      } else if (pinned === 'bottom') {
-        pinnedBottomRows.push(data);
-      } else {
-        normalRows.push(data);
-      }
-    });
-    
-    // Combine in order: pinned top, normal, pinned bottom
-    const orderedRows = [...pinnedTopRows, ...normalRows, ...pinnedBottomRows];
-    
-    orderedRows.forEach((data, index) => {
-      const id = this.getRowId(data, index);
-      const anyData = data as any;
-      const rowPinned = anyData?.pinned || false;
-      
-      const node: IRowNode<TData> = {
-        id,
-        data,
-        rowPinned,
-        rowHeight: null,
-        displayed: true,
-        selected: this.selectedRows.has(id),
-        expanded: false,
-        group: false,
-        level: 0,
-        firstChild: index === 0,
-        lastChild: index === orderedRows.length - 1,
-        rowIndex: index,
-        displayedRowIndex: index
-      };
-      this.rowNodes.set(id, node);
-      this.displayedRowNodes.push(node);
-    });
-  }
-  
   private getRowId(data: TData, index: number): string {
-    // Try to get ID from data, fallback to index
+    // 1. Try custom callback from gridOptions
+    if (this.gridOptions?.getRowId) {
+      return this.gridOptions.getRowId({ data });
+    }
+
+    // 2. Try to get ID from data, fallback to index
     const anyData = data as any;
     return anyData?.id?.toString() || anyData?.Id?.toString() || `row-${index}`;
   }
@@ -213,12 +168,12 @@ export class GridService<TData = any> {
       setRowData: (rowData) => {
         this.rowData = rowData;
         this.filteredRowData = [...rowData];
-        this.groupedRowData = [];
         this.groupingDirty = true;
-        this.initializeRowNodes();
+        this.applySorting();
+        this.applyFiltering();
       },
       applyTransaction: (transaction) => this.applyTransaction(transaction),
-      getDisplayedRowCount: () => Array.from(this.rowNodes.values()).filter(n => n.displayed).length,
+      getDisplayedRowCount: () => this.displayedRowNodes.length,
       getAggregations: () => this.calculateColumnAggregations(this.filteredRowData),
       getRowNode: (id) => this.rowNodes.get(id) || null,
       
@@ -257,11 +212,13 @@ export class GridService<TData = any> {
       setSortModel: (model) => {
         this.sortModel = model;
         this.applySorting();
+        this.applyFiltering(); // Re-filter and re-group after sort
         this.gridStateChanged$.next({ type: 'sortChanged' });
       },
       getSortModel: () => [...this.sortModel],
       onSortChanged: () => {
         this.applySorting();
+        this.applyFiltering(); // Re-filter and re-group after sort
         this.gridStateChanged$.next({ type: 'sortChanged' });
       },
       
@@ -347,46 +304,32 @@ export class GridService<TData = any> {
       remove: []
     };
     
+    let dataChanged = false;
+
     if (transaction.add) {
       transaction.add.forEach((data, index) => {
         const id = this.getRowId(data, this.rowData.length + index);
         this.rowData.push(data);
-        this.filteredRowData.push(data);
-        const node: IRowNode<TData> = {
-          id,
-          data,
-          rowPinned: false,
-          rowHeight: null,
-          displayed: true,
-          selected: false,
-          expanded: false,
-          group: false,
-          level: 0,
-          firstChild: false,
-          lastChild: true,
-          rowIndex: this.rowData.length - 1,
-          displayedRowIndex: this.rowData.length - 1
-        };
-        this.rowNodes.set(id, node);
-        result.add.push(node);
+        dataChanged = true;
+        
+        // We'll create the actual node during the pipeline re-run
+        // but we can return a placeholder result for now as AG Grid does
       });
     }
     
     if (transaction.update) {
       transaction.update.forEach(data => {
-        const id = this.getRowId(data, 0); // Note: index doesn't matter for id lookup if data has id
-        
-        const existingNode = this.rowNodes.get(id);
-        if (existingNode) {
-          existingNode.data = data;
+        const id = this.getRowId(data, 0);
+        const index = this.rowData.findIndex(r => this.getRowId(r, 0) === id);
+        if (index !== -1) {
+          this.rowData[index] = data;
+          dataChanged = true;
           
-          // Also update in the original rowData array to persist across sorts/filters
-          const index = this.rowData.findIndex(r => this.getRowId(r, 0) === id);
-          if (index !== -1) {
-            this.rowData[index] = data;
+          const existingNode = this.rowNodes.get(id);
+          if (existingNode) {
+            existingNode.data = data;
+            result.update.push(existingNode);
           }
-          
-          result.update.push(existingNode);
         }
       });
     }
@@ -395,35 +338,37 @@ export class GridService<TData = any> {
       transaction.remove.forEach(data => {
         const anyData = data as any;
         const dataId = anyData?.id;
+        const id = this.getRowId(data, 0);
         
-        let nodeToRemove: IRowNode<TData> | undefined;
-        let nodeIdToRemove: string | undefined;
-        
-        // Find node by data id
-        for (const [nodeId, node] of this.rowNodes.entries()) {
-          const nodeDataId = (node.data as any)?.id;
-          if (nodeDataId === dataId) {
-            nodeToRemove = node;
-            nodeIdToRemove = nodeId;
-            break;
+        const index = this.rowData.findIndex(r => this.getRowId(r, 0) === id);
+        if (index !== -1) {
+          const removedData = this.rowData.splice(index, 1)[0];
+          dataChanged = true;
+          
+          const node = this.rowNodes.get(id);
+          if (node) {
+            this.rowNodes.delete(id);
+            result.remove.push(node);
           }
-        }
-
-        if (nodeToRemove && nodeIdToRemove) {
-          this.rowNodes.delete(nodeIdToRemove);
-          const index = this.rowData.findIndex(r => {
-            const anyR = r as any;
-            return anyR?.id === dataId;
-          });
-          if (index !== -1) {
-            this.rowData.splice(index, 1);
-          }
-          result.remove.push(nodeToRemove);
         }
       });
+    }
+
+    if (dataChanged) {
+      this.groupingDirty = true;
+      this.applySorting();
+      this.applyFiltering();
       
-      // Re-index remaining row nodes after remove
-      this.initializeRowNodes();
+      // Populate result.add after pipeline has run so we have the nodes
+      if (transaction.add) {
+        transaction.add.forEach(data => {
+          const id = this.getRowId(data, 0);
+          const node = this.rowNodes.get(id);
+          if (node) result.add.push(node);
+        });
+      }
+
+      this.gridStateChanged$.next({ type: 'transactionApplied' });
     }
 
     return result;
@@ -453,11 +398,10 @@ export class GridService<TData = any> {
       return 0;
     });
 
-    // Also update filtered data
-    this.filteredRowData = [...this.rowData];
-
-    // Re-initialize row nodes with sorted data
-    this.initializeRowNodes();
+    // Also update filtered data if no filter present
+    if (Object.keys(this.filterModel).length === 0) {
+      this.filteredRowData = [...this.rowData];
+    }
   }
 
   private applyFiltering(): void {
@@ -502,7 +446,6 @@ export class GridService<TData = any> {
     
     if (groupColumns.length === 0) {
       // No grouping, use filtered data
-      this.groupedRowData = [];
       this.cachedGroupedData = null;
       this.groupingDirty = true;
       this.initializeRowNodesFromFilteredData();
@@ -515,9 +458,8 @@ export class GridService<TData = any> {
       this.groupingDirty = false;
     }
 
-    // Re-flatten from cache (respects new expansion state)
+    // Re-initialize from cache (respects current expansion state)
     this.updateExpansionStateInCache(this.cachedGroupedData);
-    this.groupedRowData = this.flattenGroupedData(this.cachedGroupedData);
     this.initializeRowNodesFromGroupedData();
   }
 
@@ -625,12 +567,13 @@ export class GridService<TData = any> {
   private initializeRowNodesFromGroupedData(): void {
     // DO NOT CLEAR this.rowNodes - reuse existing nodes to preserve state
     this.displayedRowNodes = [];
+    const flattened = this.flattenGroupedDataWithLevel(this.cachedGroupedData || []);
     
-    this.groupedRowData.forEach((item, index) => {
+    flattened.forEach((entry, index) => {
+      const { item, level } = entry;
       let id: string;
       let data: TData;
       let isGroup = false;
-      let level = 0;
       let expanded = false;
 
       if (this.isGroupRowNode(item)) {
@@ -643,7 +586,6 @@ export class GridService<TData = any> {
           'ag-Grid-AutoColumn': item.groupKey 
         } as TData;
         isGroup = true;
-        level = item.level;
         expanded = item.expanded;
       } else {
         // Regular data node - IMPORTANT: DO NOT CLONE DATA
@@ -662,7 +604,7 @@ export class GridService<TData = any> {
         node.rowIndex = index;
         node.displayedRowIndex = index;
         node.firstChild = index === 0;
-        node.lastChild = index === this.groupedRowData.length - 1;
+        node.lastChild = index === flattened.length - 1;
       } else {
         // Create new node only if it doesn't exist
         node = {
@@ -676,7 +618,7 @@ export class GridService<TData = any> {
           group: isGroup,
           level,
           firstChild: index === 0,
-          lastChild: index === this.groupedRowData.length - 1,
+          lastChild: index === flattened.length - 1,
           rowIndex: index,
           displayedRowIndex: index
         };
@@ -691,17 +633,17 @@ export class GridService<TData = any> {
     return item && 'groupKey' in item;
   }
 
-  private flattenGroupedData(
+  private flattenGroupedDataWithLevel(
     groupedData: (TData | GroupRowNode<TData>)[],
-    result: (TData | GroupRowNode<TData>)[] = []
-  ): (TData | GroupRowNode<TData>)[] {
+    level: number = 0,
+    result: { item: TData | GroupRowNode<TData>, level: number }[] = []
+  ): { item: TData | GroupRowNode<TData>, level: number }[] {
     for (const item of groupedData) {
-      result.push(item);
+      result.push({ item, level });
       
       if (this.isGroupRowNode(item)) {
-        const groupNode = item;
-        if (groupNode.expanded) {
-          this.flattenGroupedData(groupNode.children, result);
+        if (item.expanded) {
+          this.flattenGroupedDataWithLevel(item.children, level + 1, result);
         }
       }
     }
@@ -822,26 +764,61 @@ export class GridService<TData = any> {
   }
 
   private initializeRowNodesFromFilteredData(): void {
-    this.rowNodes.clear();
+    this.groupingDirty = true;
+    // DO NOT CLEAR this.rowNodes - reuse existing nodes
     this.displayedRowNodes = [];
-    this.filteredRowData.forEach((data, index) => {
+    
+    // Separate rows by pinned state
+    const pinnedTopRows: TData[] = [];
+    const pinnedBottomRows: TData[] = [];
+    const normalRows: TData[] = [];
+    
+    this.filteredRowData.forEach(data => {
+      const anyData = data as any;
+      const pinned = anyData?.pinned;
+      
+      if (pinned === 'top') {
+        pinnedTopRows.push(data);
+      } else if (pinned === 'bottom') {
+        pinnedBottomRows.push(data);
+      } else {
+        normalRows.push(data);
+      }
+    });
+    
+    const orderedRows = [...pinnedTopRows, ...normalRows, ...pinnedBottomRows];
+
+    orderedRows.forEach((data, index) => {
       const id = this.getRowId(data, index);
-      const node: IRowNode<TData> = {
-        id,
-        data,
-        rowPinned: false,
-        rowHeight: null,
-        displayed: true,
-        selected: this.selectedRows.has(id),
-        expanded: false,
-        group: false,
-        level: 0,
-        firstChild: index === 0,
-        lastChild: index === this.filteredRowData.length - 1,
-        rowIndex: index,
-        displayedRowIndex: index
-      };
-      this.rowNodes.set(id, node);
+      const anyData = data as any;
+      const rowPinned = anyData?.pinned || false;
+
+      let node = this.rowNodes.get(id);
+      if (node) {
+        node.data = data;
+        node.rowPinned = rowPinned;
+        node.rowIndex = index;
+        node.displayedRowIndex = index;
+        node.firstChild = index === 0;
+        node.lastChild = index === orderedRows.length - 1;
+      } else {
+        node = {
+          id,
+          data,
+          rowPinned,
+          rowHeight: null,
+          displayed: true,
+          selected: this.selectedRows.has(id),
+          expanded: false,
+          group: false,
+          level: 0,
+          firstChild: index === 0,
+          lastChild: index === orderedRows.length - 1,
+          rowIndex: index,
+          displayedRowIndex: index
+        };
+        this.rowNodes.set(id, node);
+      }
       this.displayedRowNodes.push(node);
     });
   }

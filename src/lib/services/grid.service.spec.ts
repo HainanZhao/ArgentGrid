@@ -90,28 +90,36 @@ describe('GridService', () => {
     expect(sortedData[2].age).toBe(35);
   });
 
-  it('should handle transaction - add rows', () => {
-    const newApi = service.createApi(testColumnDefs, testRowData);
-    const result = newApi.applyTransaction({
-      add: [{ id: 4, name: 'Alice Brown', age: 28, email: 'alice@example.com' }]
+  it('should handle transaction - add rows and respect sorting', () => {
+    const sortApi = service.createApi(testColumnDefs, [...testRowData]);
+    sortApi.setSortModel([{ colId: 'name', sort: 'asc' }]);
+    
+    // Initial alpha: Bob Johnson (35), Jane Smith (25), John Doe (30)
+    expect(sortApi.getDisplayedRowAtIndex(0)?.data.name).toBe('Bob Johnson');
+
+    sortApi.applyTransaction({
+      add: [{ id: 4, name: 'Alice', age: 28, email: 'alice@example.com' }]
     });
     
-    expect(result?.add.length).toBe(1);
-    expect(newApi.getRowData().length).toBe(4);
+    // Alice should now be first
+    expect(sortApi.getDisplayedRowAtIndex(0)?.data.name).toBe('Alice');
+    expect(sortApi.getDisplayedRowCount()).toBe(4);
   });
 
-  it('should handle transaction - update rows', () => {
-    const firstNode = api.getDisplayedRowAtIndex(0);
-    if (!firstNode || !firstNode.id) return;
+  it('should handle transaction - update rows and respect filtering', () => {
+    const filterApi = service.createApi(testColumnDefs, [...testRowData]);
+    filterApi.setFilterModel({
+      age: { filterType: 'number', type: 'greaterThan', filter: 30 }
+    });
+    
+    expect(filterApi.getDisplayedRowCount()).toBe(1); // Only Bob (35)
 
-    const newData: TestData = { id: firstNode.data.id, name: 'John Updated', age: 31, email: 'john.updated@example.com' };
-    const result = api.applyTransaction({
-      update: [newData]
+    // Update Jane (25) to be 40
+    filterApi.applyTransaction({
+      update: [{ id: 2, name: 'Jane Smith', age: 40, email: 'jane@example.com' }]
     });
 
-    expect(result?.update.length).toBe(1);
-    const updatedNode = api.getRowNode(firstNode.id);
-    expect(updatedNode?.data.name).toBe('John Updated');
+    expect(filterApi.getDisplayedRowCount()).toBe(2); // Bob and Jane
   });
 
   it('should handle transaction - remove rows', () => {
@@ -270,8 +278,8 @@ describe('GridService', () => {
     });
   });
 
-  // Row Grouping Tests - TODO: Fix test isolation
-  it.skip('should group rows by column', () => {
+  // Row Grouping Tests
+  it('should group rows by column', () => {
     const groupData: any[] = [
       { id: 1, name: 'John', department: 'Engineering', salary: 80000 },
       { id: 2, name: 'Jane', department: 'Engineering', salary: 90000 },
@@ -291,7 +299,7 @@ describe('GridService', () => {
     expect(displayedCount).toBe(2); // 2 groups (Engineering, Sales)
   });
 
-  it.skip('should expand and collapse groups', () => {
+  it('should expand and collapse groups', () => {
     const groupData: any[] = [
       { id: 1, name: 'John', department: 'Engineering' },
       { id: 2, name: 'Jane', department: 'Engineering' },
@@ -309,7 +317,7 @@ describe('GridService', () => {
     expect(displayedCount).toBe(2); // 2 groups
   });
 
-  it.skip('should calculate group aggregations', () => {
+  it('should calculate group aggregations', () => {
     const groupData: any[] = [
       { id: 1, name: 'John', department: 'Engineering', salary: 80000 },
       { id: 2, name: 'Jane', department: 'Engineering', salary: 90000 },
@@ -328,7 +336,7 @@ describe('GridService', () => {
     expect(displayedCount).toBeGreaterThanOrEqual(2); // At least 2 groups
   });
 
-  it.skip('should support multiple row group columns', () => {
+  it('should support multiple row group columns', () => {
     const groupData: any[] = [
       { id: 1, name: 'John', department: 'Engineering', level: 'Senior' },
       { id: 2, name: 'Jane', department: 'Engineering', level: 'Junior' },
@@ -344,7 +352,7 @@ describe('GridService', () => {
     
     // Should have hierarchical groups (Engineering/Senior, Engineering/Junior, Sales/Senior)
     const displayedCount = groupApi.getDisplayedRowCount();
-    expect(displayedCount).toBe(3); // 3 top-level groups
+    expect(displayedCount).toBe(2); // Engineering and Sales top level
   });
 
   it('should get grid state', () => {
@@ -792,5 +800,95 @@ describe('GridService', () => {
   it('should have unique grid id', () => {
     const gridId = api.getGridId();
     expect(gridId).toMatch(/argent-grid-[a-z0-9]{9}/);
+  });
+
+  describe('Corner Cases', () => {
+    it('should handle empty row data', () => {
+      const emptyApi = service.createApi(testColumnDefs, []);
+      expect(emptyApi.getDisplayedRowCount()).toBe(0);
+      expect(emptyApi.getRowData()).toEqual([]);
+    });
+
+    it('should handle null/undefined row data', () => {
+      const nullApi = service.createApi(testColumnDefs, null);
+      expect(nullApi.getDisplayedRowCount()).toBe(0);
+      expect(nullApi.getRowData()).toEqual([]);
+    });
+
+    it('should support custom getRowId in gridOptions', () => {
+      const data = [
+        { customId: 'A', name: 'John' },
+        { customId: 'B', name: 'Jane' }
+      ];
+      const customApi = service.createApi(testColumnDefs, data, {
+        getRowId: (params) => params.data.customId
+      });
+      
+      expect(customApi.getDisplayedRowCount()).toBe(2);
+      expect(customApi.getRowNode('A')).toBeTruthy();
+      expect(customApi.getRowNode('B')).toBeTruthy();
+      expect(customApi.getRowNode('A')?.data.name).toBe('John');
+    });
+
+    it('should handle rows with missing fields', () => {
+      const data = [
+        { id: 1, name: 'John' },
+        { id: 2, age: 30 }
+      ];
+      const missingApi = service.createApi(testColumnDefs, data);
+      expect(missingApi.getDisplayedRowCount()).toBe(2);
+      
+      // Test sorting on missing field
+      missingApi.setSortModel([{ colId: 'age', sort: 'asc' }]);
+      // John (undefined age) should be at the end according to compareValues
+      expect(missingApi.getDisplayedRowAtIndex(0)?.data.id).toBe(2);
+      expect(missingApi.getDisplayedRowAtIndex(1)?.data.id).toBe(1);
+    });
+
+    it('should handle duplicate IDs (last one wins in map)', () => {
+      const data = [
+        { id: 'dup', name: 'First' },
+        { id: 'dup', name: 'Second' }
+      ];
+      const dupApi = service.createApi(testColumnDefs, data);
+      
+      expect(dupApi.getDisplayedRowCount()).toBe(2);
+      
+      const node = dupApi.getRowNode('dup');
+      expect(node?.data.name).toBe('Second');
+    });
+
+    it('should handle update transaction for non-existent row', () => {
+      const api = service.createApi(testColumnDefs, [{ id: 1, name: 'John' }]);
+      const result = api.applyTransaction({
+        update: [{ id: 99, name: 'Missing' }]
+      });
+      
+      expect(result?.update.length).toBe(0);
+      expect(api.getDisplayedRowCount()).toBe(1);
+    });
+
+    it('should handle sorting on non-existent column', () => {
+      const api = service.createApi(testColumnDefs, [{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }]);
+      // Should not crash
+      api.setSortModel([{ colId: 'invalid', sort: 'asc' }]);
+      expect(api.getDisplayedRowCount()).toBe(2);
+    });
+
+    it('should preserve selection across transactions', () => {
+      const api = service.createApi(testColumnDefs, [
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' }
+      ]);
+      
+      const node1 = api.getRowNode('1')!;
+      node1.selected = true;
+      
+      api.applyTransaction({ add: [{ id: 3, name: 'Bob' }] });
+      
+      const sameNode1 = api.getRowNode('1')!;
+      expect(sameNode1.selected).toBe(true);
+      expect(api.getSelectedNodes().length).toBe(1);
+    });
   });
 });
