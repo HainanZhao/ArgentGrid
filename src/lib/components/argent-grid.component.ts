@@ -88,10 +88,14 @@ import { Subject } from 'rxjs';
             class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
             [style.width.px]="getColumnWidth(col)">
             <div class="floating-filter-container" *ngIf="isFilterable(col)">
-              <input class="floating-filter-input" 
+              <input #filterInput
+                     class="floating-filter-input" 
                      [type]="getFilterInputType(col)" 
                      (input)="onFloatingFilterInput($event, col)"
                      [placeholder]="'Filter...'" />
+              <span class="floating-filter-clear" 
+                    *ngIf="hasFilterValue(col, filterInput)"
+                    (click)="clearFloatingFilter(col, filterInput)">✕</span>
             </div>
           </div>
 
@@ -103,10 +107,14 @@ import { Subject } from 'rxjs';
                 class="argent-grid-header-cell"
                 [style.width.px]="getColumnWidth(col)">
                 <div class="floating-filter-container" *ngIf="isFilterable(col)">
-                  <input class="floating-filter-input" 
+                  <input #filterInput
+                         class="floating-filter-input" 
                          [type]="getFilterInputType(col)" 
                          (input)="onFloatingFilterInput($event, col)"
                          [placeholder]="'Filter...'" />
+                  <span class="floating-filter-clear" 
+                        *ngIf="hasFilterValue(col, filterInput)"
+                        (click)="clearFloatingFilter(col, filterInput)">✕</span>
                 </div>
               </div>
             </div>
@@ -118,10 +126,14 @@ import { Subject } from 'rxjs';
             class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
             [style.width.px]="getColumnWidth(col)">
             <div class="floating-filter-container" *ngIf="isFilterable(col)">
-              <input class="floating-filter-input" 
+              <input #filterInput
+                     class="floating-filter-input" 
                      [type]="getFilterInputType(col)" 
                      (input)="onFloatingFilterInput($event, col)"
                      [placeholder]="'Filter...'" />
+              <span class="floating-filter-clear" 
+                    *ngIf="hasFilterValue(col, filterInput)"
+                    (click)="clearFloatingFilter(col, filterInput)">✕</span>
             </div>
           </div>
         </div>
@@ -416,6 +428,9 @@ import { Subject } from 'rxjs';
       width: 100%;
       padding: 2px 4px;
       box-sizing: border-box;
+      position: relative;
+      display: flex;
+      align-items: center;
     }
 
     .floating-filter-input {
@@ -423,10 +438,30 @@ import { Subject } from 'rxjs';
       height: 24px;
       border: 1px solid #d0d0d0;
       border-radius: 2px;
-      padding: 0 6px;
+      padding: 0 20px 0 6px;
       font-size: 12px;
       outline: none;
       box-sizing: border-box;
+    }
+
+    .floating-filter-clear {
+      position: absolute;
+      right: 8px;
+      cursor: pointer;
+      color: #999;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    .floating-filter-clear:hover {
+      background-color: #eee;
+      color: #333;
     }
 
     .floating-filter-input:focus {
@@ -874,6 +909,8 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     const value = input.value;
     const colId = typeof col.colId === 'string' ? col.colId : col.field?.toString() || '';
 
+    this.cdr.detectChanges(); // Update clear button visibility immediately
+
     clearTimeout(this.filterTimeout);
     this.filterTimeout = setTimeout(() => {
       const currentModel = this.gridApi.getFilterModel();
@@ -900,6 +937,24 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     if (filter === 'date') return 'date';
     if (filter === 'boolean') return 'boolean';
     return 'text';
+  }
+
+  hasFilterValue(col: ColDef<TData> | ColGroupDef<TData>, input: HTMLInputElement): boolean {
+    return !!input.value;
+  }
+
+  clearFloatingFilter(col: ColDef<TData> | ColGroupDef<TData>, input: HTMLInputElement): void {
+    if ('children' in col) return;
+    
+    input.value = '';
+    const colId = typeof col.colId === 'string' ? col.colId : col.field?.toString() || '';
+    
+    const currentModel = this.gridApi.getFilterModel();
+    delete currentModel[colId];
+    
+    this.gridApi.setFilterModel(currentModel);
+    this.canvasRenderer?.render();
+    this.cdr.detectChanges();
   }
   
   // Public API methods
