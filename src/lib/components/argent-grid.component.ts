@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, ChangeDetectionStrategy, AfterViewInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { GridApi, GridOptions, ColDef, ColGroupDef, IRowNode, Column } from '../types/ag-grid-types';
 import { GridService } from '../services/grid.service';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
@@ -25,30 +26,46 @@ import { Subject } from 'rxjs';
           </div>
         
           <!-- Left Pinned Columns -->
-          <div
-            *ngFor="let col of getLeftPinnedColumns()"
-            class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
-            [style.width.px]="getColumnWidth(col)"
-            [class.sortable]="isSortable(col)"
-            (click)="onHeaderClick(col)">
-            <div class="argent-grid-header-content">
-              <span class="header-text">{{ getHeaderName(col) }}</span>
-              <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
-            </div>
-            <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
-              &#8942;
+          <div class="argent-grid-header-pinned-left-container"
+               cdkDropList
+               id="left-pinned"
+               [cdkDropListConnectedTo]="['scrollable', 'right-pinned']"
+               cdkDropListOrientation="horizontal"
+               (cdkDropListDropped)="onColumnDropped($event, 'left')">
+            <div
+              *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
+              class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
+              [style.width.px]="getColumnWidth(col)"
+              [class.sortable]="isSortable(col)"
+              (click)="onHeaderClick(col)"
+              cdkDrag
+              [cdkDragData]="col">
+              <div class="argent-grid-header-content">
+                <span class="header-text">{{ getHeaderName(col) }}</span>
+                <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+              </div>
+              <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
+                &#8942;
+              </div>
             </div>
           </div>
           
           <!-- Scrollable Columns -->
-          <div class="argent-grid-header-scrollable">
+          <div class="argent-grid-header-scrollable"
+               cdkDropList
+               id="scrollable"
+               [cdkDropListConnectedTo]="['left-pinned', 'right-pinned']"
+               cdkDropListOrientation="horizontal"
+               (cdkDropListDropped)="onColumnDropped($event, 'none')">
             <div class="argent-grid-header-row">
               <div
-                *ngFor="let col of getNonPinnedColumns()"
+                *ngFor="let col of getNonPinnedColumns(); trackBy: trackByColumn"
                 class="argent-grid-header-cell"
                 [style.width.px]="getColumnWidth(col)"
                 [class.sortable]="isSortable(col)"
-                (click)="onHeaderClick(col)">
+                (click)="onHeaderClick(col)"
+                cdkDrag
+                [cdkDragData]="col">
                 <div class="argent-grid-header-content">
                   <span class="header-text">{{ getHeaderName(col) }}</span>
                   <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
@@ -61,18 +78,27 @@ import { Subject } from 'rxjs';
           </div>
           
           <!-- Right Pinned Columns -->
-          <div
-            *ngFor="let col of getRightPinnedColumns()"
-            class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
-            [style.width.px]="getColumnWidth(col)"
-            [class.sortable]="isSortable(col)"
-            (click)="onHeaderClick(col)">
-            <div class="argent-grid-header-content">
-              <span class="header-text">{{ getHeaderName(col) }}</span>
-              <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
-            </div>
-            <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
-              &#8942;
+          <div class="argent-grid-header-pinned-right-container"
+               cdkDropList
+               id="right-pinned"
+               [cdkDropListConnectedTo]="['left-pinned', 'scrollable']"
+               cdkDropListOrientation="horizontal"
+               (cdkDropListDropped)="onColumnDropped($event, 'right')">
+            <div
+              *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
+              class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
+              [style.width.px]="getColumnWidth(col)"
+              [class.sortable]="isSortable(col)"
+              (click)="onHeaderClick(col)"
+              cdkDrag
+              [cdkDragData]="col">
+              <div class="argent-grid-header-content">
+                <span class="header-text">{{ getHeaderName(col) }}</span>
+                <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
+              </div>
+              <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, col)" *ngIf="hasHeaderMenu(col)">
+                &#8942;
+              </div>
             </div>
           </div>
         </div>
@@ -84,7 +110,7 @@ import { Subject } from 'rxjs';
 
           <!-- Left Pinned Filters -->
           <div
-            *ngFor="let col of getLeftPinnedColumns()"
+            *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
             class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
             [style.width.px]="getColumnWidth(col)">
             <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
@@ -103,7 +129,7 @@ import { Subject } from 'rxjs';
           <div class="argent-grid-header-scrollable">
             <div class="argent-grid-header-row">
               <div
-                *ngFor="let col of getNonPinnedColumns()"
+                *ngFor="let col of getNonPinnedColumns(); trackBy: trackByColumn"
                 class="argent-grid-header-cell"
                 [style.width.px]="getColumnWidth(col)">
                 <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
@@ -122,7 +148,7 @@ import { Subject } from 'rxjs';
 
           <!-- Right Pinned Filters -->
           <div
-            *ngFor="let col of getRightPinnedColumns()"
+            *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
             class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
             [style.width.px]="getColumnWidth(col)">
             <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
@@ -247,6 +273,38 @@ import { Subject } from 'rxjs';
     .argent-grid-header-scrollable {
       overflow: hidden;
       flex: 1;
+    }
+
+    .argent-grid-header-pinned-left-container,
+    .argent-grid-header-pinned-right-container {
+      display: flex;
+    }
+
+    .cdk-drag-preview {
+      box-sizing: border-box;
+      border-radius: 4px;
+      box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
+                  0 8px 10px 1px rgba(0, 0, 0, 0.14),
+                  0 3px 14px 2px rgba(0, 0, 0, 0.12);
+      background: #f5f5f5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 12px;
+      font-weight: 600;
+      opacity: 0.8;
+    }
+
+    .cdk-drag-placeholder {
+      opacity: 0.3;
+    }
+
+    .cdk-drag-animating {
+      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+    }
+
+    .argent-grid-header-cell.cdk-drop-list-dragging .argent-grid-header-cell:not(.cdk-drag-placeholder) {
+      transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
     }
 
     .argent-grid-header-cell {
@@ -505,6 +563,11 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   selectionColumnWidth = 50;
   isAllSelected = false;
   isIndeterminateSelection = false;
+
+  trackByColumn(index: number, col: ColDef<TData> | ColGroupDef<TData>): string {
+    if ('children' in col) return col.groupId || index.toString();
+    return col.colId || col.field?.toString() || index.toString();
+  }
 
   // Cell editing state
   isEditing = false;
@@ -891,6 +954,45 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     }
     
     this.closeHeaderMenu();
+  }
+
+  onColumnDropped(event: CdkDragDrop<any[]>, pinType: 'left' | 'right' | 'none'): void {
+    if (!this.columnDefs) return;
+
+    // Get current groups (deep clones to avoid direct mutation issues during merge)
+    const left = [...this.getLeftPinnedColumns()];
+    const center = [...this.getNonPinnedColumns()];
+    const right = [...this.getRightPinnedColumns()];
+
+    const containerMap: { [key: string]: any[] } = {
+      'left-pinned': left,
+      'scrollable': center,
+      'right-pinned': right
+    };
+
+    const previousContainerData = containerMap[event.previousContainer.id];
+    const currentContainerData = containerMap[event.container.id];
+
+    if (event.previousContainer === event.container) {
+      moveItemInArray(currentContainerData, event.previousIndex, event.currentIndex);
+    } else {
+      transferArrayItem(
+        previousContainerData,
+        currentContainerData,
+        event.previousIndex,
+        event.currentIndex
+      );
+
+      // Update pinned state of the moved column
+      const movedCol = currentContainerData[event.currentIndex] as ColDef<TData>;
+      movedCol.pinned = pinType === 'none' ? null : pinType as any;
+    }
+
+    // Reconstruct full columnDefs array
+    const hidden = this.columnDefs.filter(c => !('children' in c) && c.hide);
+    const newDefs = [...left, ...center, ...right, ...hidden];
+    
+    this.onColumnDefsChanged(newDefs);
   }
 
   // --- Floating Filter Logic ---
