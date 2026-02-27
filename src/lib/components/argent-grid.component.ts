@@ -851,6 +851,13 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     if (this.activeContextMenu) {
       this.closeContextMenu();
     }
+    // Handle closing editor on click outside
+    if (this.isEditing) {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.argent-grid-cell-editor')) {
+        this.stopEditing(true);
+      }
+    }
   }
 
   onCanvasContextMenu(event: MouseEvent): void {
@@ -1140,12 +1147,18 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     const column = this.gridApi.getColumn(colId);
     
-    if (!rowNode || !column || !column.field) return;
+    // Prevent editing on group rows or missing data/column
+    if (!rowNode || rowNode.group || !column || !column.field) return;
     
     // Check if cell is editable
     const colDef = this.getColumnDefForColumn(column);
     if (colDef && colDef.editable === false) return;
     
+    // If already editing another cell, stop it first
+    if (this.isEditing) {
+      this.stopEditing(true);
+    }
+
     const value = (rowNode.data as any)[column.field];
     
     this.editingRowNode = rowNode;
@@ -1161,8 +1174,8 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     }
     
     this.editorPosition = {
-      x: x - this.canvasRenderer?.['scrollLeft'] || 0,
-      y: (rowIndex * this.rowHeight) - (this.canvasRenderer?.['scrollTop'] || 0),
+      x: x - this.canvasRenderer.currentScrollLeft,
+      y: (rowIndex * this.rowHeight) - this.canvasRenderer.currentScrollTop,
       width: column.width,
       height: this.rowHeight
     };
@@ -1181,18 +1194,22 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   stopEditing(save: boolean = true): void {
     if (!this.isEditing || !this.editingRowNode || !this.editingColDef) return;
     
-    if (save && this.editingColDef && this.editingRowNode) {
+    const rowNode = this.editingRowNode;
+    const colDef = this.editingColDef;
+
+    if (save && colDef && rowNode) {
       const newValue = this.editingValue;
-      const colDef = this.editingColDef;
-      
+      const field = colDef.field as string;
+      const oldValue = (rowNode.data as any)[field];
+
       // Apply valueParser if provided
       let parsedValue: any = newValue;
       if (typeof colDef.valueParser === 'function') {
         parsedValue = colDef.valueParser({
-          value: this.editingRowNode.data,
+          value: rowNode.data,
           newValue,
-          data: this.editingRowNode.data,
-          node: this.editingRowNode,
+          data: rowNode.data,
+          node: rowNode,
           colDef,
           api: this.gridApi
         });
@@ -1203,30 +1220,30 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
         colDef.valueSetter({
           value: parsedValue,
           newValue: parsedValue,
-          data: this.editingRowNode.data,
-          node: this.editingRowNode,
+          data: rowNode.data,
+          node: rowNode,
           colDef,
           api: this.gridApi
         });
-      } else if (colDef.field) {
+      } else if (field) {
         // Default: update data directly
-        (this.editingRowNode.data as any)[colDef.field] = parsedValue;
+        (rowNode.data as any)[field] = parsedValue;
       }
       
       // Update via transaction
       this.gridApi.applyTransaction({
-        update: [this.editingRowNode.data]
+        update: [rowNode.data]
       });
       
       // Trigger callback
       if (colDef.onCellValueChanged) {
-        const column = this.gridApi.getColumn(colDef.colId || colDef.field?.toString() || '');
+        const column = this.gridApi.getColumn(colDef.colId || field || '');
         if (column) {
           colDef.onCellValueChanged({
             newValue: parsedValue,
-            oldValue: (this.editingRowNode.data as any)[colDef.field],
-            data: this.editingRowNode.data,
-            node: this.editingRowNode,
+            oldValue,
+            data: rowNode.data,
+            node: rowNode,
             column
           });
         }
@@ -1238,6 +1255,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     this.isEditing = false;
     this.editingRowNode = null;
     this.editingColDef = null;
+    this.cdr.detectChanges();
   }
 
   onEditorInput(event: Event): void {
@@ -1254,18 +1272,46 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       this.stopEditing(false);
     } else if (event.key === 'Tab') {
       event.preventDefault();
+      const currentRowIndex = this.editingRowNode?.displayedRowIndex ?? -1;
+      const currentColId = this.editingColDef?.colId || this.editingColDef?.field?.toString() || '';
+      
       this.stopEditing(true);
-      // TODO: Move to next cell
+
+      // Standard AG Grid Tab behavior: move to next cell
+      if (currentRowIndex !== -1) {
+        this.moveToNextCell(currentRowIndex, currentColId, event.shiftKey);
+      }
+    }
+  }
+
+  private moveToNextCell(rowIndex: number, colId: string, backwards: boolean): void {
+    const columns = this.gridApi.getAllColumns().filter(c => c.visible);
+    const colIndex = columns.findIndex(c => c.colId === colId);
+    
+    if (colIndex === -1) return;
+
+    let nextColIndex = backwards ? colIndex - 1 : colIndex + 1;
+    let nextRowIndex = rowIndex;
+
+    if (nextColIndex >= columns.length) {
+      nextColIndex = 0;
+      nextRowIndex++;
+    } else if (nextColIndex < 0) {
+      nextColIndex = columns.length - 1;
+      nextRowIndex--;
+    }
+
+    if (nextRowIndex >= 0 && nextRowIndex < this.gridApi.getDisplayedRowCount()) {
+      const nextCol = columns[nextColIndex];
+      this.startEditing(nextRowIndex, nextCol.colId);
     }
   }
 
   onEditorBlur(): void {
-    // Delay to allow click events to propagate
-    setTimeout(() => {
-      if (this.isEditing) {
-        this.stopEditing(true);
-      }
-    }, 100);
+    // Save on blur, matching AG Grid default behavior
+    if (this.isEditing) {
+      this.stopEditing(true);
+    }
   }
 
   private getColumnDefForColumn(column: Column): ColDef<TData> | null {

@@ -19,6 +19,10 @@ export class CanvasRenderer<TData = any> {
   private rowHeight: number;
   private scrollTop = 0;
   private scrollLeft = 0;
+
+  get currentScrollTop(): number { return this.scrollTop; }
+  get currentScrollLeft(): number { return this.scrollLeft; }
+
   private animationFrameId: number | null = null;
   private renderPending = false;
   private rowBuffer = 5; // Render extra rows above/below viewport for smooth scrolling
