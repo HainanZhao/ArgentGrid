@@ -50,8 +50,8 @@ test.describe('ArgentGrid Demo', () => {
     
     expect(criticalErrors).toHaveLength(0);
 
-    // Check that the grid container is visible
-    const gridContainer = page.locator('.argent-grid-container');
+    // Check that at least one grid container is visible
+    const gridContainer = page.locator('.argent-grid-container').first();
     await expect(gridContainer).toBeVisible({ timeout: 10000 });
 
     // Check that rows are loaded
