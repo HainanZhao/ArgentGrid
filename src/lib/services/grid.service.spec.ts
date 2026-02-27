@@ -683,6 +683,98 @@ describe('GridService', () => {
     expect(agg.value).toBe(1200); // (100+200+300) * 2
   });
 
+  // Excel Export Tests
+  it('should export data as CSV', () => {
+    const exportData: any[] = [
+      { id: 1, name: 'John', email: 'john@example.com' },
+      { id: 2, name: 'Jane', email: 'jane@example.com' }
+    ];
+    const exportColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID' },
+      { colId: 'name', field: 'name', headerName: 'Name' },
+      { colId: 'email', field: 'email', headerName: 'Email' }
+    ];
+    
+    const exportApi = service.createApi(exportColumnDefs, exportData);
+    
+    // Mock downloadFile to avoid browser API issues in tests
+    (service as any).downloadFile = jest.fn();
+    expect(() => exportApi.exportDataAsCsv()).not.toThrow();
+    expect((service as any).downloadFile).toHaveBeenCalled();
+  });
+
+  it('should export with custom filename', () => {
+    const exportData: any[] = [{ id: 1, name: 'Test' }];
+    const exportColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID' },
+      { colId: 'name', field: 'name', headerName: 'Name' }
+    ];
+    
+    const exportApi = service.createApi(exportColumnDefs, exportData);
+    (service as any).downloadFile = jest.fn();
+    
+    exportApi.exportDataAsCsv({ fileName: 'custom-export.csv' });
+    expect((service as any).downloadFile).toHaveBeenCalledWith(
+      expect.any(String),
+      'custom-export.csv',
+      expect.any(String)
+    );
+  });
+
+  it('should export only selected columns', () => {
+    const exportData: any[] = [
+      { id: 1, name: 'John', email: 'john@example.com' },
+      { id: 2, name: 'Jane', email: 'jane@example.com' }
+    ];
+    const exportColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID' },
+      { colId: 'name', field: 'name', headerName: 'Name' },
+      { colId: 'email', field: 'email', headerName: 'Email' }
+    ];
+    
+    const exportApi = service.createApi(exportColumnDefs, exportData);
+    (service as any).downloadFile = jest.fn();
+    
+    exportApi.exportDataAsCsv({ columnKeys: ['id', 'name'] });
+    const csvContent = (service as any).downloadFile.mock.calls[0][0];
+    // Should not contain email column
+    expect(csvContent).not.toContain('email');
+  });
+
+  it('should skip headers when specified', () => {
+    const exportData: any[] = [{ id: 1, name: 'Test' }];
+    const exportColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID' },
+      { colId: 'name', field: 'name', headerName: 'Name' }
+    ];
+    
+    const exportApi = service.createApi(exportColumnDefs, exportData);
+    (service as any).downloadFile = jest.fn();
+    
+    exportApi.exportDataAsCsv({ skipHeader: true });
+    const csvContent = (service as any).downloadFile.mock.calls[0][0];
+    // First line should be data, not header
+    expect(csvContent).not.toMatch(/^ID,/);
+  });
+
+  it('should export data as Excel', () => {
+    const exportData: any[] = [{ id: 1, name: 'Test' }];
+    const exportColumnDefs: ColDef[] = [
+      { colId: 'id', field: 'id', headerName: 'ID' },
+      { colId: 'name', field: 'name', headerName: 'Name' }
+    ];
+    
+    const exportApi = service.createApi(exportColumnDefs, exportData);
+    (service as any).downloadFile = jest.fn();
+    
+    expect(() => exportApi.exportDataAsExcel()).not.toThrow();
+    expect((service as any).downloadFile).toHaveBeenCalledWith(
+      expect.stringContaining('<table>'),
+      expect.stringContaining('.xlsx'),
+      expect.any(String)
+    );
+  });
+
   it('should get displayed row at index', () => {
     const sortedApi = service.createApi(testColumnDefs, [
       { id: 10, name: 'First', age: 20, email: 'first@example.com' },

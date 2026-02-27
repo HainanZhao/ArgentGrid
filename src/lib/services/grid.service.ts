@@ -796,34 +796,121 @@ export class GridService<TData = any> {
   
   private exportAsCsv(params?: CsvExportParams): void {
     const fileName = params?.fileName || 'export.csv';
-    const delimiter = ',';
-    
-    // Build CSV content
-    const headers = this.getAllColumns()
-      .filter(col => col.visible)
-      .map(col => col.headerName || col.colId);
-    
-    const rows = this.rowData.map(data => {
-      return this.getAllColumns()
-        .filter(col => col.visible && col.field)
-        .map(col => {
-          const value = (data as any)[col.field!];
-          return value !== null && value !== undefined ? String(value) : '';
-        });
+    const delimiter = params?.delimiter || ',';
+    const skipHeader = params?.skipHeader || false;
+    const columnKeys = params?.columnKeys;
+
+    // Get columns to export
+    let columnsToExport = this.getAllColumns().filter(col => col.visible);
+    if (columnKeys && columnKeys.length > 0) {
+      columnsToExport = columnsToExport.filter(col => columnKeys.includes(col.colId));
+    }
+
+    // Build headers
+    const headers = columnsToExport.map(col => {
+      const headerName = col.headerName || col.colId;
+      // Escape quotes and wrap in quotes if contains delimiter
+      if (headerName.includes(delimiter) || headerName.includes('"') || headerName.includes('\n')) {
+        return '"' + headerName.replace(/"/g, '""') + '"';
+      }
+      return headerName;
     });
-    
-    const csvContent = [
-      headers.join(delimiter),
-      ...rows.map(row => row.join(delimiter))
-    ].join('\n');
-    
+
+    // Build rows
+    const rows = this.rowData.map(data => {
+      return columnsToExport.map(col => {
+        const value = (data as any)[col.field!];
+        let cellValue = '';
+        
+        if (value !== null && value !== undefined) {
+          cellValue = String(value);
+        }
+        
+        // Escape quotes and wrap in quotes if contains special chars
+        if (cellValue.includes(delimiter) || cellValue.includes('"') || cellValue.includes('\n')) {
+          return '"' + cellValue.replace(/"/g, '""') + '"';
+        }
+        return cellValue;
+      });
+    });
+
+    // Build CSV content
+    let csvContent = '';
+    if (!skipHeader) {
+      csvContent += headers.join(delimiter) + '\n';
+    }
+    csvContent += rows.map(row => row.join(delimiter)).join('\n');
+
     // Download CSV
-    this.downloadFile(csvContent, fileName, 'text/csv');
+    this.downloadFile(csvContent, fileName, 'text/csv;charset=utf-8;');
   }
-  
+
   private exportAsExcel(params?: ExcelExportParams): void {
-    // TODO: Implement Excel export (requires additional library)
-    console.warn('Excel export not yet implemented');
+    const fileName = params?.fileName || 'export.xlsx';
+    const sheetName = params?.sheetName || 'Sheet1';
+    const skipHeader = params?.skipHeader || false;
+
+    // Get columns to export
+    let columnsToExport = this.getAllColumns().filter(col => col.visible);
+    if (params?.columnKeys && params.columnKeys.length > 0) {
+      columnsToExport = columnsToExport.filter(col => params.columnKeys!.includes(col.colId));
+    }
+
+    // Build HTML table (Excel can open this as .xlsx)
+    let htmlContent = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" 
+            xmlns:x="urn:schemas-microsoft-com:office:excel" 
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="UTF-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>${sheetName}</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          table { border-collapse: collapse; }
+          th, td { border: 1px solid #000; padding: 4px 8px; }
+          th { background-color: #f0f0f0; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <table>
+    `;
+
+    // Add headers
+    if (!skipHeader) {
+      htmlContent += '<thead><tr>';
+      columnsToExport.forEach(col => {
+        htmlContent += `<th>${col.headerName || col.colId}</th>`;
+      });
+      htmlContent += '</tr></thead>';
+    }
+
+    // Add rows
+    htmlContent += '<tbody>';
+    this.rowData.forEach(data => {
+      htmlContent += '<tr>';
+      columnsToExport.forEach(col => {
+        const value = (data as any)[col.field!];
+        const cellValue = value !== null && value !== undefined ? String(value) : '';
+        htmlContent += `<td>${cellValue}</td>`;
+      });
+      htmlContent += '</tr>';
+    });
+    htmlContent += '</tbody></table></body></html>';
+
+    // Download as .xlsx (Excel will open the HTML table)
+    this.downloadFile(htmlContent, fileName, 'application/vnd.ms-excel;charset=utf-8;');
   }
   
   private getAllColumns(): Column[] {

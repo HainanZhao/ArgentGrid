@@ -555,6 +555,7 @@ export interface RowDataTransactionResult {
 
 export interface CsvExportParams {
   fileName?: string;
+  delimiter?: string;
   processCellCallback?: (params: any) => string;
   processHeaderCallback?: (params: any) => string;
   skipHeader?: boolean;
