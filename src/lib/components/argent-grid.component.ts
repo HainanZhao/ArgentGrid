@@ -179,7 +179,8 @@ import { Subject } from 'rxjs';
              [style.top.px]="editorPosition.y"
              [style.left.px]="editorPosition.x"
              [style.width.px]="editorPosition.width"
-             [style.height.px]="editorPosition.height">
+             [style.height.px]="editorPosition.height"
+             (click)="$event.stopPropagation()">
           <input #editorInput
                  type="text"
                  class="argent-grid-editor-input"
@@ -575,6 +576,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   // Cell editing state
   isEditing = false;
+  private isCancelling = false;
   editingValue = '';
   editorPosition = { x: 0, y: 0, width: 100, height: 32 };
   private editingRowNode: IRowNode<TData> | null = null;
@@ -1269,7 +1271,10 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       this.stopEditing(true);
     } else if (event.key === 'Escape') {
       event.preventDefault();
+      this.isCancelling = true;
       this.stopEditing(false);
+      // Reset after a short delay to allow blur event to skip
+      setTimeout(() => this.isCancelling = false, 100);
     } else if (event.key === 'Tab') {
       event.preventDefault();
       const currentRowIndex = this.editingRowNode?.displayedRowIndex ?? -1;
@@ -1308,8 +1313,8 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   onEditorBlur(): void {
-    // Save on blur, matching AG Grid default behavior
-    if (this.isEditing) {
+    // Save on blur, but NOT if we are cancelling via Escape
+    if (this.isEditing && !this.isCancelling) {
       this.stopEditing(true);
     }
   }
