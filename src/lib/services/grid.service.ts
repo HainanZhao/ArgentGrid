@@ -77,7 +77,7 @@ export class GridService<TData = any> {
         width: autoGroupDef.width || 200,
         minWidth: autoGroupDef.minWidth,
         maxWidth: autoGroupDef.maxWidth,
-        pinned: autoGroupDef.pinned || 'left',
+        pinned: this.normalizePinned(autoGroupDef.pinned || 'left'),
         visible: true,
         sort: null
       };
@@ -96,6 +96,12 @@ export class GridService<TData = any> {
       }
     });
   }
+
+  private normalizePinned(pinned: boolean | 'left' | 'right' | null | undefined): 'left' | 'right' | false {
+    if (pinned === 'left' || pinned === true) return 'left';
+    if (pinned === 'right') return 'right';
+    return false;
+  }
   
   private addColumn(def: ColDef<TData>, index: number, isGrouping: boolean): void {
     const colId = def.colId || def.field?.toString() || `col-${index}`;
@@ -113,7 +119,7 @@ export class GridService<TData = any> {
       width: def.width || 150,
       minWidth: def.minWidth,
       maxWidth: def.maxWidth,
-      pinned: def.pinned === true ? 'left' : (def.pinned || false),
+      pinned: this.normalizePinned(def.pinned),
       visible: visible,
       sort: (typeof def.sort === 'object' && def.sort !== null) ? (def.sort as any).sort : def.sort || null,
       sortIndex: def.sortIndex ?? undefined,
