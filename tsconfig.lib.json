@@ -7,5 +7,5 @@
     "inlineSources": true,
     "types": []
   },
-  "exclude": ["src/**/*.spec.ts", "setup-jest.ts"]
+  "exclude": ["src/**/*.spec.ts", "setup-vitest.ts"]
 }

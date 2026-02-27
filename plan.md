@@ -72,4 +72,4 @@ ArgentGrid currently achieves 60fps rendering for 1,000,000+ rows and includes c
 
 3. **Test-Driven Development (TDD)**:
    - Every new UI feature must have a corresponding Playwright E2E test in the `demo-app`.
-   - Logic changes must be verified by Jest unit tests in `src/lib/services/grid.service.spec.ts`.
+       - Logic changes must be verified by Vitest unit tests in `src/lib/services/grid.service.spec.ts`.

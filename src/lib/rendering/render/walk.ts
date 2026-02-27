@@ -1,0 +1,348 @@
+/**
+ * Walker Functions for Canvas Renderer
+ *
+ * Composable iteration patterns for columns and rows.
+ * Based on Glide Data Grid's walker architecture.
+ */
+
+import { Column, IRowNode, GridApi } from '../../types/ag-grid-types';
+import { 
+  ColumnWalkCallback, 
+  RowWalkCallback, 
+  CellWalkCallback,
+  PositionedColumn,
+  VisibleRange 
+} from './types';
+
+// ============================================================================
+// COLUMN WALKERS
+// ============================================================================
+
+/**
+ * Walk through visible columns in render order
+ * Handles pinned columns (left, center, right) correctly
+ */
+export function walkColumns(
+  columns: Column[],
+  scrollX: number,
+  viewportWidth: number,
+  leftPinnedWidth: number,
+  rightPinnedWidth: number,
+  callback: ColumnWalkCallback
+): void {
+  const leftPinned = columns.filter(c => c.pinned === 'left');
+  const rightPinned = columns.filter(c => c.pinned === 'right');
+  const centerColumns = columns.filter(c => !c.pinned);
+
+  // 1. Left pinned columns (no scroll offset)
+  let x = 0;
+  for (const col of leftPinned) {
+    callback(col, x, col.width, true, 'left');
+    x += col.width;
+  }
+
+  // 2. Center columns (with scroll offset and clipping)
+  const centerStartX = leftPinnedWidth;
+  const centerEndX = viewportWidth - rightPinnedWidth;
+  const centerWidth = centerEndX - centerStartX;
+
+  x = leftPinnedWidth - scrollX;
+  for (const col of centerColumns) {
+    // Skip columns completely outside viewport
+    if (x + col.width < centerStartX) {
+      x += col.width;
+      continue;
+    }
+    if (x > centerEndX) {
+      break; // Rest of columns are off-screen
+    }
+
+    callback(col, x, col.width, false);
+    x += col.width;
+  }
+
+  // 3. Right pinned columns (no scroll offset)
+  x = viewportWidth - rightPinnedWidth;
+  for (const col of rightPinned) {
+    callback(col, x, col.width, true, 'right');
+    x += col.width;
+  }
+}
+
+/**
+ * Get positioned columns for rendering
+ */
+export function getPositionedColumns(
+  columns: Column[],
+  scrollX: number,
+  viewportWidth: number,
+  leftPinnedWidth: number,
+  rightPinnedWidth: number
+): PositionedColumn[] {
+  const result: PositionedColumn[] = [];
+
+  walkColumns(columns, scrollX, viewportWidth, leftPinnedWidth, rightPinnedWidth, 
+    (column, x, width, isPinned, pinSide) => {
+      result.push({ column, x, width, isPinned, pinSide });
+    }
+  );
+
+  return result;
+}
+
+/**
+ * Get pinned column widths
+ */
+export function getPinnedWidths(columns: Column[]): { left: number; right: number } {
+  const left = columns
+    .filter(c => c.pinned === 'left')
+    .reduce((sum, c) => sum + c.width, 0);
+  
+  const right = columns
+    .filter(c => c.pinned === 'right')
+    .reduce((sum, c) => sum + c.width, 0);
+
+  return { left, right };
+}
+
+// ============================================================================
+// ROW WALKERS
+// ============================================================================
+
+/**
+ * Walk through visible rows
+ */
+export function walkRows(
+  startRow: number,
+  endRow: number,
+  scrollTop: number,
+  rowHeight: number,
+  getRowNode: (index: number) => IRowNode | null,
+  callback: RowWalkCallback
+): void {
+  for (let rowIndex = startRow; rowIndex < endRow; rowIndex++) {
+    const y = rowIndex * rowHeight - scrollTop;
+    const rowNode = getRowNode(rowIndex);
+    callback(rowIndex, y, rowHeight, rowNode);
+  }
+}
+
+/**
+ * Calculate visible row range with buffer
+ */
+export function getVisibleRowRange(
+  scrollTop: number,
+  viewportHeight: number,
+  rowHeight: number,
+  totalRowCount: number,
+  buffer: number = 5
+): { startRow: number; endRow: number } {
+  const startRow = Math.max(0, Math.floor(scrollTop / rowHeight) - buffer);
+  const visibleRowCount = Math.ceil(viewportHeight / rowHeight);
+  const endRow = Math.min(
+    totalRowCount,
+    startRow + visibleRowCount + buffer * 2
+  );
+
+  return { startRow, endRow };
+}
+
+/**
+ * Get row Y position
+ */
+export function getRowY(rowIndex: number, rowHeight: number, scrollTop: number): number {
+  return rowIndex * rowHeight - scrollTop;
+}
+
+// ============================================================================
+// CELL WALKERS
+// ============================================================================
+
+/**
+ * Walk through all visible cells
+ */
+export function walkCells(
+  columns: Column[],
+  startRow: number,
+  endRow: number,
+  scrollX: number,
+  scrollTop: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  rowHeight: number,
+  getRowNode: (index: number) => IRowNode | null,
+  callback: CellWalkCallback
+): void {
+  const { left: leftPinnedWidth, right: rightPinnedWidth } = getPinnedWidths(columns);
+
+  // Walk columns for each row
+  walkRows(startRow, endRow, scrollTop, rowHeight, getRowNode, (rowIndex, y, height, rowNode) => {
+    walkColumns(columns, scrollX, viewportWidth, leftPinnedWidth, rightPinnedWidth, 
+      (column, x, width, isPinned) => {
+        callback(column, rowIndex, x, y, width, height, rowNode);
+      }
+    );
+  });
+}
+
+// ============================================================================
+// COLUMN UTILITIES
+// ============================================================================
+
+/**
+ * Find column at X position
+ */
+export function getColumnAtX(
+  columns: Column[],
+  x: number,
+  scrollX: number,
+  viewportWidth: number
+): { column: Column | null; index: number; localX: number } {
+  const { left: leftPinnedWidth, right: rightPinnedWidth } = getPinnedWidths(columns);
+
+  const leftPinned = columns.filter(c => c.pinned === 'left');
+  const rightPinned = columns.filter(c => c.pinned === 'right');
+  const centerColumns = columns.filter(c => !c.pinned);
+
+  // Check left pinned
+  if (x < leftPinnedWidth) {
+    let colX = 0;
+    for (let i = 0; i < leftPinned.length; i++) {
+      const col = leftPinned[i];
+      if (x < colX + col.width) {
+        return { column: col, index: columns.indexOf(col), localX: x - colX };
+      }
+      colX += col.width;
+    }
+  }
+
+  // Check right pinned
+  if (x > viewportWidth - rightPinnedWidth) {
+    let colX = viewportWidth - rightPinnedWidth;
+    for (let i = 0; i < rightPinned.length; i++) {
+      const col = rightPinned[i];
+      if (x < colX + col.width) {
+        return { column: col, index: columns.indexOf(col), localX: x - colX };
+      }
+      colX += col.width;
+    }
+  }
+
+  // Check center columns
+  const scrolledX = x - leftPinnedWidth + scrollX;
+  let colX = 0;
+  for (let i = 0; i < centerColumns.length; i++) {
+    const col = centerColumns[i];
+    if (scrolledX < colX + col.width) {
+      return { column: col, index: columns.indexOf(col), localX: scrolledX - colX };
+    }
+    colX += col.width;
+  }
+
+  return { column: null, index: -1, localX: 0 };
+}
+
+/**
+ * Get column index in visible columns array
+ */
+export function getColumnIndex(columns: Column[], colId: string): number {
+  return columns.findIndex(c => c.colId === colId);
+}
+
+/**
+ * Calculate total width of columns
+ */
+export function getTotalColumnWidth(columns: Column[]): number {
+  return columns.reduce((sum, col) => sum + col.width, 0);
+}
+
+// ============================================================================
+// ROW UTILITIES  
+// ============================================================================
+
+/**
+ * Find row at Y position
+ */
+export function getRowAtY(y: number, rowHeight: number, scrollTop: number): number {
+  return Math.floor((y + scrollTop) / rowHeight);
+}
+
+/**
+ * Check if row is visible in viewport
+ */
+export function isRowVisible(
+  rowIndex: number,
+  scrollTop: number,
+  viewportHeight: number,
+  rowHeight: number
+): boolean {
+  const y = rowIndex * rowHeight;
+  const rowBottom = y + rowHeight;
+  const viewportBottom = scrollTop + viewportHeight;
+  
+  return y < viewportBottom && rowBottom > scrollTop;
+}
+
+// ============================================================================
+// VISIBLE RANGE CALCULATION
+// ============================================================================
+
+/**
+ * Calculate complete visible range for rendering
+ */
+export function calculateVisibleRange(
+  columns: Column[],
+  scrollTop: number,
+  scrollLeft: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  rowHeight: number,
+  totalRowCount: number,
+  rowBuffer: number = 5
+): VisibleRange {
+  const { startRow, endRow } = getVisibleRowRange(
+    scrollTop, viewportHeight, rowHeight, totalRowCount, rowBuffer
+  );
+
+  // For columns, we just track indices
+  const centerColumns = columns.filter(c => !c.pinned);
+  const leftPinned = columns.filter(c => c.pinned === 'left');
+  const rightPinned = columns.filter(c => c.pinned === 'right');
+
+  const leftPinnedWidth = leftPinned.reduce((sum, c) => sum + c.width, 0);
+  const rightPinnedWidth = rightPinned.reduce((sum, c) => sum + c.width, 0);
+
+  // Find first and last visible center column
+  let startColumnIndex = leftPinned.length;
+  let endColumnIndex = startColumnIndex + centerColumns.length;
+
+  let x = leftPinnedWidth - scrollLeft;
+  for (let i = 0; i < centerColumns.length; i++) {
+    const col = centerColumns[i];
+    if (x + col.width > leftPinnedWidth) {
+      startColumnIndex = leftPinned.length + i;
+      break;
+    }
+    x += col.width;
+  }
+
+  x = leftPinnedWidth - scrollLeft;
+  for (let i = 0; i < centerColumns.length; i++) {
+    const col = centerColumns[i];
+    if (x > viewportWidth - rightPinnedWidth) {
+      endColumnIndex = leftPinned.length + i;
+      break;
+    }
+    x += col.width;
+  }
+
+  // Add right pinned columns
+  endColumnIndex += rightPinned.length;
+
+  return {
+    startRow,
+    endRow,
+    startColumnIndex,
+    endColumnIndex,
+  };
+}

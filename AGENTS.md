@@ -30,7 +30,7 @@
 2. **DOM headers** - Keep headers as DOM elements for accessibility and CSS styling
 3. **AG Grid API compatibility** - 1:1 TypeScript definitions so users can switch by changing imports
 4. **Headless logic layer** - GridService handles all data operations independently of rendering
-5. **TDD approach** - Tests written before implementation (41 passing tests)
+5. **TDD approach** - Tests written before implementation (209 passing tests)
 
 ## Project Structure
 
@@ -55,8 +55,8 @@ ArgentGrid/
 ├── package.json                        # Angular 18, TypeScript 5.4
 ├── ng-package.json                     # ng-packagr config
 ├── tsconfig.json                       # TypeScript config
-├── jest.config.js                      # Jest test config
-├── setup-jest.ts                       # Jest zone.js setup
+├── vitest.config.ts                    # Vitest test config
+├── setup-vitest.ts                     # Vitest zoneless setup
 └── README.md
 ```
 
@@ -131,7 +131,7 @@ Agents working on this repository should utilize the following tools for high-qu
 
 ## Known Issues / TODOs
 
-1. **Row grouping tests** - Skipped in Jest due to service instance sharing. Playwright E2E tests now cover this logic in a real browser.
+1. **Row grouping tests** - Skipped in Vitest due to service instance sharing. Playwright E2E tests now cover this logic in a real browser.
 
 2. **Column virtualization** - Currently renders all columns; should virtualize horizontal scrolling for wide grids.
 
