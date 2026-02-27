@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, ChangeDetectionStrategy, AfterViewInit, OnChanges, SimpleChanges, ChangeDetectorRef, Inject } from '@angular/core';
 import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
-import { GridApi, GridOptions, ColDef, ColGroupDef, IRowNode, Column, CellRange } from '../types/ag-grid-types';
+import { GridApi, GridOptions, ColDef, ColGroupDef, IRowNode, Column, CellRange, DefaultMenuItem, MenuItemDef, GetContextMenuItemsParams } from '../types/ag-grid-types';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { GridService } from '../services/grid.service';
@@ -84,6 +84,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   // Context Menu state
   activeContextMenu = false;
   contextMenuPosition = { x: 0, y: 0 };
+  contextMenuItems: MenuItemDef[] = [];
   private contextMenuCell: { rowNode: IRowNode<TData>, column: Column } | null = null;
   private initialColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
 
@@ -459,6 +460,27 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     if (!rowNode || !column) return;
     
     this.contextMenuCell = { rowNode, column };
+    
+    // Resolve menu items via API if provided
+    const getContextMenuItems = this.gridApi.getGridOption('getContextMenuItems');
+    if (getContextMenuItems) {
+      const params: GetContextMenuItemsParams<TData> = {
+        node: rowNode,
+        column: column,
+        api: this.gridApi,
+        type: 'cell',
+        event: event
+      };
+      this.contextMenuItems = this.resolveContextMenuItems(getContextMenuItems(params));
+    } else {
+      // Fallback to defaults if no callback provided
+      this.contextMenuItems = this.resolveContextMenuItems([
+        'copy', 'copyWithHeaders', 'separator', 'export', 'separator', 'resetColumns'
+      ]);
+    }
+
+    if (this.contextMenuItems.length === 0) return;
+
     this.activeContextMenu = true;
     
     // Position menu at mouse coordinates (fixed/viewport)
@@ -479,6 +501,47 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     this.selectionChanged.emit(this.gridApi.getSelectedRows());
     
     this.cdr.detectChanges();
+  }
+
+  private resolveContextMenuItems(items: (DefaultMenuItem | MenuItemDef)[]): MenuItemDef[] {
+    const resolved: MenuItemDef[] = [];
+    
+    items.forEach(item => {
+      if (typeof item === 'string') {
+        const defaultItem = this.getDefaultMenuItem(item);
+        if (defaultItem) resolved.push(defaultItem);
+      } else {
+        resolved.push(item);
+      }
+    });
+    
+    return resolved;
+  }
+
+  private getDefaultMenuItem(key: DefaultMenuItem): MenuItemDef | null {
+    switch (key) {
+      case 'copy':
+        return { name: 'Copy Cell', action: () => this.copyContextMenuCell(), icon: '📋' };
+      case 'copyWithHeaders':
+        return this.hasRangeSelection() ? 
+          { name: 'Copy with Headers', action: () => this.copyRangeWithHeaders(), icon: '📋' } : null;
+      case 'export':
+        return { 
+          name: 'Export', 
+          action: () => {}, 
+          icon: '⤓',
+          subMenu: [
+            { name: 'Export to CSV', action: () => this.exportCSV() },
+            { name: 'Export to Excel (.xlsx)', action: () => this.exportExcel() }
+          ]
+        };
+      case 'resetColumns':
+        return { name: 'Reset Columns', action: () => this.resetColumns(), icon: '⟲' };
+      case 'separator':
+        return { name: '', action: () => {}, separator: true };
+      default:
+        return null;
+    }
   }
 
   closeContextMenu(): void {
@@ -509,6 +572,22 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   getAllColumns(): Column[] {
     return this.gridApi?.getAllColumns() || [];
+  }
+
+  onSidebarColumnDropped(event: CdkDragDrop<Column[]>): void {
+    if (!this.columnDefs) return;
+
+    const columns = this.getAllColumns();
+    moveItemInArray(columns, event.previousIndex, event.currentIndex);
+
+    // Map back to ColDefs
+    const newDefs: (ColDef<TData> | ColGroupDef<TData>)[] = [];
+    columns.forEach(col => {
+      const def = this.getColumnDefForColumn(col);
+      if (def) newDefs.push(def);
+    });
+
+    this.onColumnDefsChanged(newDefs);
   }
 
   copyContextMenuCell(): void {

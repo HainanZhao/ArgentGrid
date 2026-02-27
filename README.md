@@ -24,21 +24,10 @@ The demo showcases:
 - 🧪 **TDD Developed**: Comprehensive test coverage with Vitest
 - 🎨 **Hybrid Architecture**: Canvas viewport + DOM headers for accessibility
 
-## Feature Parity Comparison
+## ⚖️ Feature Parity
 
-| Feature | AG Grid Community | AG Grid Enterprise | **ArgentGrid (Current)** |
-| :--- | :--- | :--- | :--- |
-| **Rendering Engine** | DOM-based | DOM-based | **Canvas-based** |
-| **Data Volume Limit** | ~100k rows | Millions (SSRM) | **1M+ rows (Client-side)** |
-| **Sorting & Filtering**| Yes | Yes | **Yes** |
-| **Row Grouping** | No | Yes | **Yes (Basic Hierarchical)** |
-| **Aggregation** | No | Yes | **Yes (Sum/Avg/Min/Max/Count)** |
-| **Export** | CSV only | .xlsx | **HTML-based Excel & CSV** |
-| **Selection** | Row only | Range | **Row (Checkbox/Multi)** |
-| **Header Menus** | Basic | Advanced | **Planned (Phase IV)** |
-| **Context Menus** | No | Yes | **Planned (Phase IV)** |
-| **Drag/Drop Columns**| Yes | Yes | **Planned (Phase IV)** |
-| **Pivoting** | No | Yes | **Planned (Phase V)** |
+For a detailed comparison with AG Grid and our development roadmap, see:
+**[plan](./plan.md)**
 
 ## Installation
 
@@ -192,41 +181,6 @@ This will execute the **Feature Guard Rails** suite which verifies:
 - Cell Editing (Enter/Escape/Tab)
 - Column Pinning & Scroll Sync
 - Column Re-ordering (Drag & Drop)
-
-## Roadmap
-
-### Phase I: API Extraction ✅
-- [x] Map AG Grid TypeScript interfaces
-- [x] Create compatible type definitions
-
-### Phase II: Core Implementation ✅
-- [x] Bootstrap Angular library
-- [x] Canvas renderer setup
-- [x] Basic GridService implementation
-- [x] Virtual scrolling optimization (100,000+ rows)
-
-## 🎉 Phase III: Features - COMPLETE!
-
-All core features implemented:
-- [x] Basic sorting (client-side)
-- [x] Filtering (text, number, date, boolean)
-- [x] Row Grouping (hierarchical, with aggregations)
-- [x] Cell Editing (inline, with valueParser/valueSetter)
-- [x] Column Pinning (left/right sticky columns)
-- [x] Row Pinning (top/bottom pinned rows)
-- [x] Selection (full implementation with checkbox)
-- [x] Aggregation (sum, avg, min, max, count, custom)
-- [x] Excel/CSV Export (with formatting options)
-
-### Phase IV: Advanced Features
-- [ ] Pivot Tables
-- [ ] Tree Data
-- [ ] Master/Detail
-- [ ] Integrated Charts
-- [ ] Excel Export
-
-### Future Considerations
-- [ ] Web Workers for background processing (deprioritized - current virtual scrolling handles 100k rows efficiently)
 
 ### Performance Benchmarking
 
