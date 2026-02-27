@@ -671,8 +671,8 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     // Initialize grid API
     this.gridApi = this.gridService.createApi(this.columnDefs, this.rowData, this.gridOptions);
 
-    // Listen for grid option changes from API
-    this.gridService.gridOptionsChanged$
+    // Listen for grid state changes from API (filters, sorts, options)
+    this.gridService.gridStateChanged$
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         this.canvasRenderer?.render();

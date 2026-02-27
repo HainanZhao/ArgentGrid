@@ -32,7 +32,7 @@ export class GridService<TData = any> {
   private expandedGroups: Set<string> = new Set();
   private gridId: string = '';
   private gridOptions: GridOptions<TData> | null = null;
-  public gridOptionsChanged$ = new Subject<{ key: string, value: any }>();
+  public gridStateChanged$ = new Subject<{ type: string, key?: string, value?: any }>();
   
   createApi(
     columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null,
@@ -235,10 +235,12 @@ export class GridService<TData = any> {
       setFilterModel: (model) => {
         this.filterModel = model;
         this.applyFiltering();
+        this.gridStateChanged$.next({ type: 'filterChanged' });
       },
       getFilterModel: () => ({ ...this.filterModel }),
       onFilterChanged: () => {
         this.applyFiltering();
+        this.gridStateChanged$.next({ type: 'filterChanged' });
       },
       isFilterPresent: () => Object.keys(this.filterModel).length > 0,
       
@@ -246,10 +248,12 @@ export class GridService<TData = any> {
       setSortModel: (model) => {
         this.sortModel = model;
         this.applySorting();
+        this.gridStateChanged$.next({ type: 'sortChanged' });
       },
       getSortModel: () => [...this.sortModel],
       onSortChanged: () => {
-        // TODO: Emit sort changed event
+        this.applySorting();
+        this.gridStateChanged$.next({ type: 'sortChanged' });
       },
       
       // Pagination API
@@ -309,7 +313,7 @@ export class GridService<TData = any> {
           this.gridOptions = {} as GridOptions<TData>;
         }
         this.gridOptions[key] = value;
-        this.gridOptionsChanged$.next({ key: key as string, value });
+        this.gridStateChanged$.next({ type: 'optionChanged', key: key as string, value });
       },
       
       // Group Expansion
