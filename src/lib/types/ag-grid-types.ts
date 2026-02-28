@@ -387,6 +387,15 @@ export interface GridApi<TData = any> {
   // === CLIPBOARD API ===
   copyToClipboard(): void;
   cutToClipboard(): void;
+
+  // === STATE PERSISTENCE API ===
+  getState(): GridState;
+  setState(state: GridState): void;
+  saveState(key?: string): void;
+  restoreState(key?: string): boolean;
+  clearState(key?: string): void;
+  hasState(key?: string): boolean;
+  getUniqueValues(field: string): any[];
   pasteFromClipboard(): void;
 
   // === GRID STATE API ===
