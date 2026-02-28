@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, AfterViewInit, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ArgentGridModule, ArgentGridComponent } from 'argent-grid';
+import { ArgentGridModule, ArgentGridComponent, themeQuartz, colorSchemeDark, iconSetMaterial } from 'argent-grid';
 import { GridApi, ColDef, IRowNode } from 'argent-grid';
 
 interface Employee {
@@ -39,6 +39,11 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
   isSideBarVisible = true;
   isFiltered = false;
   benchmarkResults: any = null;
+  
+  // Theme
+  isDarkMode = false;
+  isCompact = false;
+  currentTheme = 'quartz';
 
   columnDefs: ColDef<Employee>[] = [
     { field: 'id', headerName: 'ID', width: 80, sortable: true, filter: 'number' },
@@ -206,6 +211,30 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
 
   hasState(): boolean {
     return this.gridApi?.hasState('demo-grid-state') || false;
+  }
+
+  toggleDarkMode(): void {
+    this.isDarkMode = !this.isDarkMode;
+    
+    if (this.gridApi) {
+      const theme = this.isDarkMode
+        ? themeQuartz.withPart(colorSchemeDark)
+        : themeQuartz;
+      
+      this.gridApi.setGridOption('theme', theme);
+    }
+  }
+
+  toggleCompactMode(): void {
+    this.isCompact = !this.isCompact;
+    
+    if (this.gridApi) {
+      const theme = this.isCompact
+        ? themeQuartz.withParams({ rowHeight: 32, fontSize: 12, spacing: 4 })
+        : themeQuartz;
+      
+      this.gridApi.setGridOption('theme', theme);
+    }
   }
 
   startFPSCounter(): void {
