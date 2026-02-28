@@ -34,41 +34,16 @@
       }
     },
     "argent-grid-storybook": {
-      "projectType": "application",
-      "root": "src/storybook-app",
-      "sourceRoot": "src/storybook-app",
-      "prefix": "app",
+      "projectType": "library",
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "lib",
       "architect": {
-        "build": {
-          "builder": "@angular-devkit/build-angular:application",
-          "options": {
-            "outputPath": "dist/storybook-app",
-            "index": "src/storybook-app/index.html",
-            "browser": "src/storybook-app/main.ts",
-            "polyfills": ["zone.js"],
-            "tsConfig": "tsconfig.storybook.json",
-            "assets": [],
-            "styles": [],
-            "scripts": []
-          }
-        },
-        "serve": {
-          "builder": "@angular-devkit/build-angular:dev-server",
-          "configurations": {
-            "production": {
-              "buildTarget": "argent-grid-storybook:build:production"
-            },
-            "development": {
-              "buildTarget": "argent-grid-storybook:build:development"
-            }
-          },
-          "defaultConfiguration": "development"
-        },
         "storybook": {
           "builder": "@storybook/angular:start-storybook",
           "options": {
             "configDir": ".storybook",
-            "browserTarget": "argent-grid-storybook:build",
+            "tsConfig": ".storybook/tsconfig.json",
             "compodoc": false,
             "port": 6006
           }
@@ -77,7 +52,7 @@
           "builder": "@storybook/angular:build-storybook",
           "options": {
             "configDir": ".storybook",
-            "browserTarget": "argent-grid-storybook:build",
+            "tsConfig": ".storybook/tsconfig.json",
             "compodoc": false,
             "outputDir": "storybook-static"
           }
