@@ -28,3 +28,4 @@ test-results/
 # Build
 *.js.map
 *.ts.map
+storybook-static/
