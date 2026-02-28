@@ -103,3 +103,8 @@ export {
   drawPinnedRegionBorders,
   drawPinnedRegionShadows,
 } from './lines';
+
+// Live data optimizations
+export {
+  LiveDataOptimizations,
+} from '../live-data-optimizations';

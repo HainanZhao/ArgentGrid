@@ -31,3 +31,6 @@ export { createTheme, extendTheme, mergeThemes, applyTheme, removeTheme } from '
 export { themeQuartz } from './lib/themes/theme-quartz';
 export { colorSchemeLight, colorSchemeDark, colorSchemeAuto, getColorScheme, COLOR_SCHEMES } from './lib/themes/parts/color-schemes';
 export { iconSetQuartz, iconSetMaterial, iconSetMinimal, getIconSet, getIconSvg, ICON_SETS } from './lib/themes/parts/icon-sets';
+
+// Live Data Optimizations
+export { LiveDataOptimizations } from './lib/rendering/live-data-optimizations';
