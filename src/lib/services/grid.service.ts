@@ -1232,9 +1232,41 @@ export class GridService<TData = any> {
         return this.matchesDateFilter(String(value), type, filter, filterTo);
       case 'boolean':
         return this.matchesBooleanFilter(value, filter);
+      case 'set':
+        return this.matchesSetFilter(value, filterItem);
       default:
         return true;
     }
+  }
+
+  private matchesSetFilter(value: any, filterItem: FilterModelItem): boolean {
+    // Set filter: value must be in the selected values array
+    const filterValues = filterItem.values;
+    if (!Array.isArray(filterValues) || filterValues.length === 0) {
+      return true; // No filter applied
+    }
+    return filterValues.includes(value);
+  }
+
+  /**
+   * Get unique values for a column (for Set Filter)
+   */
+  getUniqueValues(field: string): any[] {
+    const values = new Set<any>();
+    
+    this.rowData.forEach(data => {
+      const value = (data as any)[field];
+      if (value !== null && value !== undefined) {
+        values.add(value);
+      }
+    });
+
+    return Array.from(values).sort((a, b) => {
+      if (typeof a === 'string' && typeof b === 'string') {
+        return a.localeCompare(b);
+      }
+      return String(a).localeCompare(String(b));
+    });
   }
 
   private matchesTextFilter(value: string, type: string | undefined, filter: any): boolean {
