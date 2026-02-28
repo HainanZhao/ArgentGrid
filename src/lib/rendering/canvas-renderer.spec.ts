@@ -159,7 +159,9 @@ const createMockGridApi = (): GridApi => {
     getBottomElements: vi.fn(() => []),
     getTopElements: vi.fn(() => []),
     getFooterElements: vi.fn(() => []),
-    getRootElements: vi.fn(() => [])
+    getRootElements: vi.fn(() => []),
+    getCellRanges: vi.fn(() => null),
+    getRowAtY: vi.fn((y: number) => Math.floor(y / 32))
   } as any;
 };
 
@@ -399,7 +401,9 @@ describe('CanvasRenderer', () => {
   });
 
   it('should handle event listener cleanup', () => {
+    const removeSpy = vi.spyOn(mockCanvas, 'removeEventListener');
     renderer.destroy();
-    expect(mockCanvas.removeEventListener).toHaveBeenCalled();
+    expect(removeSpy).toHaveBeenCalled();
+    removeSpy.mockRestore();
   });
 });
