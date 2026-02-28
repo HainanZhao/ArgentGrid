@@ -278,6 +278,16 @@ export function calculateColumnWidth<TData = any>(
 /**
  * Get formatted cell value
  */
+/**
+ * Strip HTML tags from string
+ * Supports basic cellRenderer that returns HTML strings
+ * Note: Only plain text is rendered - colors, backgrounds, etc. are NOT supported
+ */
+export function stripHtmlTags(html: string): string {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, '');
+}
+
 export function getFormattedValue<TData = any>(
   value: any,
   colDef: ColDef<TData> | null,
@@ -287,6 +297,27 @@ export function getFormattedValue<TData = any>(
 ): string {
   if (value === null || value === undefined) {
     return '';
+  }
+
+  // Use custom cellRenderer if provided
+  if (colDef && typeof colDef.cellRenderer === 'function') {
+    try {
+      const result = colDef.cellRenderer({
+        value,
+        data,
+        node: rowNode,
+        colDef,
+        api,
+      });
+      // Handle both string and Promise<string> returns
+      if (typeof result === 'string') {
+        return stripHtmlTags(result);
+      }
+      // For async renderers, return value as string (will be updated on next render)
+      return String(value);
+    } catch (e) {
+      console.warn('Cell renderer error:', e);
+    }
   }
 
   // Use custom formatter if provided

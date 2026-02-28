@@ -86,7 +86,12 @@ ArgentGrid has met its initial implementation goals. We are now entering a matur
 - [x] **Integrated Sparklines**: Mini-charts rendered directly in cells using the Canvas engine.
 
 ### Phase VI: UX Polish & Extensibility 🚧
-- [ ] **Custom Angular Components**: Support for using real Angular components as cell renderers/editors inside the Canvas.
+- [x] **String-Based Cell Renderers**: Support for cellRenderer functions returning plain text (HTML tags stripped).
+  - [x] Basic cellRenderer support
+  - [x] HTML tag stripping (plain text only)
+  - [x] Documentation of limitations (no colors, backgrounds, borders)
+  - [ ] Async cellRenderer (Promise<string>) - Future
+  - [ ] Registered renderer names (cellRenderer: 'myRenderer') - Future
 - [x] **Context Menu API**: Full implementation of `getContextMenuItems` to allow dynamic, user-defined menu actions.
 - [ ] **Advanced Keyboard Navigation**: Full cell-to-cell navigation (Arrows, Tab, Page Up/Down) matching AG Grid behavior.
 - [ ] **State Persistence**: Save/Restore user grid state (order, width, filters) to LocalStorage.
