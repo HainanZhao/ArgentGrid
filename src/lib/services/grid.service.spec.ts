@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideExperimentalZonelessChangeDetection } from '@angular/core';
 import { GridService } from './grid.service';
-import { GridApi, ColDef, FilterModel, IRowNode } from '../types/ag-grid-types';
+import { GridApi, ColDef, FilterModel, IRowNode, GridState } from '../types/ag-grid-types';
 
 interface TestData {
   id: number;
@@ -1707,6 +1707,241 @@ describe('GridService', () => {
       const callback = vi.fn();
       api.forEachNodeAfterFilterAndSort(callback);
       expect(callback).toHaveBeenCalled();
+    });
+  });
+
+  // ============================================================================
+  // STATE PERSISTENCE TESTS
+  // ============================================================================
+
+  describe('State Persistence', () => {
+    beforeEach(() => {
+      // Clear localStorage before each test
+      localStorage.clear();
+    });
+
+    describe('getState', () => {
+      it('should return grid state object', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const state = service.getState();
+        
+        expect(state).toBeDefined();
+        expect(state.columnOrder).toBeDefined();
+        expect(state.filter).toBeDefined();
+        expect(state.sort).toBeDefined();
+      });
+
+      it('should include column order, width, and visibility', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const state = service.getState();
+        
+        expect(state.columnOrder).toHaveLength(4);
+        expect(state.columnOrder?.[0]).toHaveProperty('colId');
+        expect(state.columnOrder?.[0]).toHaveProperty('width');
+        expect(state.columnOrder?.[0]).toHaveProperty('hide');
+      });
+
+      it('should include filter model', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const state = service.getState();
+        
+        expect(state.filter).toEqual({});
+      });
+
+      it('should include sort model', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const state = service.getState();
+        
+        expect(state.sort).toEqual({ sortModel: [] });
+      });
+    });
+
+    describe('setState', () => {
+      it('should restore column state', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const state: GridState = {
+          columnOrder: [
+            { colId: 'id', width: 150, hide: false, pinned: false },
+            { colId: 'name', width: 200, hide: true, pinned: 'left' }
+          ]
+        };
+        
+        expect(() => service.setState(state)).not.toThrow();
+      });
+
+      it('should restore filter state', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const state: GridState = {
+          filter: { id: { filterType: 'number', type: 'greaterThan', filter: 1 } }
+        };
+        
+        expect(() => service.setState(state)).not.toThrow();
+      });
+
+      it('should restore sort state', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const state: GridState = {
+          sort: [{ colId: 'name', sort: 'asc' }]
+        };
+        
+        expect(() => service.setState(state)).not.toThrow();
+      });
+
+      it('should emit state change event', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const stateChangeSpy = vi.fn();
+        service.gridStateChanged$.subscribe(stateChangeSpy);
+        
+        service.setState({ columnOrder: [] });
+        
+        expect(stateChangeSpy).toHaveBeenCalledWith({ type: 'state-restored' });
+      });
+    });
+
+    describe('saveState', () => {
+      it('should save state to localStorage', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        service.saveState('test-key');
+        
+        const saved = localStorage.getItem('test-key');
+        expect(saved).not.toBeNull();
+        expect(() => JSON.parse(saved!)).not.toThrow();
+      });
+
+      it('should use default key if not provided', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        service.saveState();
+        
+        const saved = localStorage.getItem('argent-grid-state');
+        expect(saved).not.toBeNull();
+      });
+
+      it('should emit state saved event', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const stateChangeSpy = vi.fn();
+        service.gridStateChanged$.subscribe(stateChangeSpy);
+        
+        service.saveState('test-key');
+        
+        expect(stateChangeSpy).toHaveBeenCalledWith({ type: 'state-saved', key: 'test-key' });
+      });
+
+      it('should handle errors gracefully without throwing', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        
+        // Just verify the method doesn't throw even if localStorage fails
+        // (We can't easily mock localStorage in jsdom environment)
+        expect(() => service.saveState('test-key')).not.toThrow();
+      });
+    });
+
+    describe('restoreState', () => {
+      it('should restore state from localStorage', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const state: GridState = {
+          columnOrder: [{ colId: 'id', width: 150, hide: false, pinned: false }]
+        };
+        localStorage.setItem('test-key', JSON.stringify(state));
+        
+        const result = service.restoreState('test-key');
+        
+        expect(result).toBe(true);
+      });
+
+      it('should return false if no state exists', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const result = service.restoreState('non-existent-key');
+        
+        expect(result).toBe(false);
+      });
+
+      it('should use default key if not provided', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const state: GridState = { columnOrder: [] };
+        localStorage.setItem('argent-grid-state', JSON.stringify(state));
+        
+        const result = service.restoreState();
+        
+        expect(result).toBe(true);
+      });
+
+      it('should emit state restored event', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const state: GridState = { columnOrder: [] };
+        localStorage.setItem('test-key', JSON.stringify(state));
+        
+        const stateChangeSpy = vi.fn();
+        service.gridStateChanged$.subscribe(stateChangeSpy);
+        
+        service.restoreState('test-key');
+        
+        expect(stateChangeSpy).toHaveBeenCalledWith({ type: 'state-restored', key: 'test-key' });
+      });
+
+      it('should handle invalid JSON gracefully', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        
+        localStorage.setItem('test-key', 'invalid-json');
+        const result = service.restoreState('test-key');
+        
+        expect(result).toBe(false);
+        expect(consoleSpy).toHaveBeenCalled();
+        
+        consoleSpy.mockRestore();
+      });
+    });
+
+    describe('clearState', () => {
+      it('should remove state from localStorage', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        localStorage.setItem('test-key', JSON.stringify({ columnOrder: [] }));
+        
+        service.clearState('test-key');
+        
+        expect(localStorage.getItem('test-key')).toBeNull();
+      });
+
+      it('should use default key if not provided', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        localStorage.setItem('argent-grid-state', JSON.stringify({ columnOrder: [] }));
+        
+        service.clearState();
+        
+        expect(localStorage.getItem('argent-grid-state')).toBeNull();
+      });
+
+      it('should emit state cleared event', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        const stateChangeSpy = vi.fn();
+        service.gridStateChanged$.subscribe(stateChangeSpy);
+        
+        service.clearState('test-key');
+        
+        expect(stateChangeSpy).toHaveBeenCalledWith({ type: 'state-cleared', key: 'test-key' });
+      });
+    });
+
+    describe('hasState', () => {
+      it('should return true if state exists', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        localStorage.setItem('test-key', JSON.stringify({ columnOrder: [] }));
+        
+        expect(service.hasState('test-key')).toBe(true);
+      });
+
+      it('should return false if state does not exist', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        
+        expect(service.hasState('non-existent-key')).toBe(false);
+      });
+
+      it('should use default key if not provided', () => {
+        service.createApi(testColumnDefs, [...testRowData]);
+        localStorage.setItem('argent-grid-state', JSON.stringify({ columnOrder: [] }));
+        
+        expect(service.hasState()).toBe(true);
+      });
     });
   });
 });

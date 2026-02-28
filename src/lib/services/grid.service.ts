@@ -1613,4 +1613,145 @@ export class GridService<TData = any> {
     link.click();
     URL.revokeObjectURL(url);
   }
+
+  // ============================================================================
+  // STATE PERSISTENCE API
+  // ============================================================================
+
+  /**
+   * Get current grid state
+   * Includes: columns (order, size, visibility, pinning), filters, sort, grouping
+   */
+  getState(): GridState {
+    const columns = this.getAllColumns();
+    
+    return {
+      columnOrder: columns.map(col => ({
+        colId: col.colId,
+        width: col.width,
+        hide: !col.visible,
+        pinned: col.pinned,
+        sort: col.sort,
+        sortIndex: col.sortIndex,
+        aggFunc: col.aggFunc
+      })),
+      filter: { ...this.filterModel },
+      sort: { sortModel: [...this.sortModel] },
+      rowGrouping: {
+        rowGroupCols: this.getGroupColumns(),
+        valueCols: [],
+        pivotCols: [],
+        isPivotMode: false
+      }
+    };
+  }
+
+  /**
+   * Restore grid state
+   * Applies column state, filters, sort, and grouping
+   */
+  setState(state: GridState): void {
+    // Restore column state
+    if (state.columnOrder) {
+      const newColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] = [];
+      
+      state.columnOrder.forEach(colState => {
+        const colDef = this.columnDefs?.find(d => 
+          'children' in d ? false : (d as ColDef<TData>).colId === colState.colId || (d as ColDef<TData>).field === colState.colId
+        );
+        
+        if (colDef && !('children' in colDef)) {
+          newColumnDefs.push({
+            ...colDef,
+            width: colState.width,
+            hide: colState.hide,
+            pinned: colState.pinned || false,
+            sort: colState.sort,
+            sortIndex: colState.sortIndex,
+            rowGroup: colState.rowGroupIndex !== undefined
+          });
+        }
+      });
+      
+      if (newColumnDefs.length > 0) {
+        this.columnDefs = newColumnDefs;
+        this.initializeColumns();
+      }
+    }
+
+    // Restore filters
+    if (state.filter) {
+      this.filterModel = { ...state.filter };
+      this.applyFiltering();
+    }
+
+    // Restore sort
+    if (state.sort?.sortModel && state.sort.sortModel.length > 0) {
+      this.sortModel = [...state.sort.sortModel];
+      this.applyFiltering(); // This will trigger sorting
+    }
+
+    // Restore row grouping (handled through column state)
+    // Row grouping is applied when columns are restored with rowGroup: true
+
+    // Emit state change event
+    this.gridStateChanged$.next({ type: 'state-restored' });
+  }
+
+  /**
+   * Save grid state to LocalStorage
+   * @param key - Storage key (default: 'argent-grid-state')
+   */
+  saveState(key: string = 'argent-grid-state'): void {
+    try {
+      const state = this.getState();
+      localStorage.setItem(key, JSON.stringify(state));
+      this.gridStateChanged$.next({ type: 'state-saved', key });
+    } catch (error) {
+      console.warn('Failed to save grid state:', error);
+    }
+  }
+
+  /**
+   * Restore grid state from LocalStorage
+   * @param key - Storage key (default: 'argent-grid-state')
+   * @returns true if state was restored, false if no state found
+   */
+  restoreState(key: string = 'argent-grid-state'): boolean {
+    try {
+      const stateJson = localStorage.getItem(key);
+      if (!stateJson) {
+        return false;
+      }
+      
+      const state: GridState = JSON.parse(stateJson);
+      this.setState(state);
+      this.gridStateChanged$.next({ type: 'state-restored', key });
+      return true;
+    } catch (error) {
+      console.warn('Failed to restore grid state:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Clear grid state from LocalStorage
+   * @param key - Storage key (default: 'argent-grid-state')
+   */
+  clearState(key: string = 'argent-grid-state'): void {
+    try {
+      localStorage.removeItem(key);
+      this.gridStateChanged$.next({ type: 'state-cleared', key });
+    } catch (error) {
+      console.warn('Failed to clear grid state:', error);
+    }
+  }
+
+  /**
+   * Check if state exists in LocalStorage
+   * @param key - Storage key (default: 'argent-grid-state')
+   */
+  hasState(key: string = 'argent-grid-state'): boolean {
+    return localStorage.getItem(key) !== null;
+  }
 }

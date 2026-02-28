@@ -185,6 +185,29 @@ export class DemoPageComponent implements OnInit, AfterViewInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  saveState(): void {
+    this.gridApi?.saveState('demo-grid-state');
+    console.log('✅ Grid state saved!');
+  }
+
+  restoreState(): void {
+    const restored = this.gridApi?.restoreState('demo-grid-state');
+    if (restored) {
+      console.log('✅ Grid state restored!');
+    } else {
+      console.log('⚠️ No saved state found');
+    }
+  }
+
+  clearState(): void {
+    this.gridApi?.clearState('demo-grid-state');
+    console.log('🗑️ Grid state cleared!');
+  }
+
+  hasState(): boolean {
+    return this.gridApi?.hasState('demo-grid-state') || false;
+  }
+
   startFPSCounter(): void {
     const countFPS = () => {
       const now = performance.now();
