@@ -253,7 +253,7 @@ export class ArgentGridComponent<TData = any>
             this.viewportHeight = height;
             this.canvasRenderer?.setViewportDimensions(width, height);
             this.canvasRenderer?.render();
-            this.cdr.detectChanges();
+            this._cdr.detectChanges();
           }
         });
         this.resizeObserver.observe(this.viewportRef.nativeElement);
@@ -288,7 +288,7 @@ export class ArgentGridComponent<TData = any>
         this.sideBarVisible = !!event.value;
       }
       this.canvasRenderer?.render();
-      this.cdr.detectChanges();
+      this._cdr.detectChanges();
     });
 
     // Check if any column has checkbox selection
@@ -326,7 +326,7 @@ export class ArgentGridComponent<TData = any>
     this.updateSelectionState();
 
     // Trigger change detection with OnPush
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   private onColumnDefsChanged(newColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null): void {
@@ -337,7 +337,7 @@ export class ArgentGridComponent<TData = any>
       this.canvasRenderer?.render();
     }
 
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   private onGridOptionsChanged(newOptions: GridOptions<TData> | null): void {
@@ -349,7 +349,7 @@ export class ArgentGridComponent<TData = any>
       });
       this.canvasRenderer?.render();
     }
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   getColumnWidth(col: Column | ColDef<TData> | ColGroupDef<TData>): number {
@@ -464,12 +464,12 @@ export class ArgentGridComponent<TData = any>
 
     this.headerMenuPosition = { x, y };
 
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   closeHeaderMenu(): void {
     this.activeHeaderMenu = null;
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   onContainerClick(event: MouseEvent): void {
@@ -547,7 +547,7 @@ export class ArgentGridComponent<TData = any>
     this.canvasRenderer?.render();
     this.selectionChanged.emit(this.gridApi.getSelectedRows());
 
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   private resolveContextMenuItems(items: (DefaultMenuItem | MenuItemDef)[]): MenuItemDef[] {
@@ -595,7 +595,7 @@ export class ArgentGridComponent<TData = any>
   closeContextMenu(): void {
     this.activeContextMenu = false;
     this.contextMenuCell = null;
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   // Set Filter Methods
@@ -627,13 +627,13 @@ export class ArgentGridComponent<TData = any>
     };
 
     this.activeSetFilter = true;
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   closeSetFilter(): void {
     this.activeSetFilter = false;
     this.activeSetFilterColumn = null;
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   onSetFilterChanged(values: any[]): void {
@@ -690,7 +690,7 @@ export class ArgentGridComponent<TData = any>
     } else {
       this.activeToolPanel = panel;
     }
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   toggleColumnVisibility(col: Column): void {
@@ -699,7 +699,7 @@ export class ArgentGridComponent<TData = any>
       colDef.hide = col.visible; // Toggle
       this.initializeGrid(); // Re-initialize to handle visibility changes correctly
       this.canvasRenderer?.render();
-      this.cdr.detectChanges();
+      this._cdr.detectChanges();
     }
   }
 
@@ -941,7 +941,7 @@ export class ArgentGridComponent<TData = any>
 
     // Force re-render
     this.canvasRenderer?.render();
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   private onResizeMouseUp(): void {
@@ -998,7 +998,7 @@ export class ArgentGridComponent<TData = any>
     const value = input.value;
     const colId = (col as any).colId || (col as any).field?.toString() || '';
 
-    this.cdr.detectChanges(); // Update clear button visibility immediately
+    this._cdr.detectChanges(); // Update clear button visibility immediately
 
     clearTimeout(this.filterTimeout);
     this.filterTimeout = setTimeout(() => {
@@ -1057,7 +1057,7 @@ export class ArgentGridComponent<TData = any>
 
     this.gridApi.setFilterModel(currentModel);
     this.canvasRenderer?.render();
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   // Public API methods
@@ -1192,7 +1192,7 @@ export class ArgentGridComponent<TData = any>
     this.isEditing = false;
     this.editingRowNode = null;
     this.editingColDef = null;
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   onEditorInput(event: Event): void {

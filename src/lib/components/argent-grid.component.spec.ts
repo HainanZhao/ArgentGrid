@@ -14,8 +14,7 @@ describe('ArgentGridComponent - Context Menu', () => {
 
   beforeEach(() => {
     gridService = new GridService();
-    component = new ArgentGridComponent(gridService);
-    component.cdr = mockCdr as any;
+    component = new ArgentGridComponent(mockCdr as any);
   });
 
   describe('resolveContextMenuItems', () => {
