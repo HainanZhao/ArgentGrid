@@ -82,6 +82,9 @@ export class CanvasRenderer<TData = any> {
   // Column prep results cache
   private columnPreps: Map<string, ColumnPrepResult<TData>> = new Map();
 
+  // Column positions cache for O(1) lookup
+  private columnPositions: Map<string, number> = new Map();
+
   // Event listener references for cleanup
   private scrollListener?: (e: Event) => void;
   private resizeListener?: () => void;
@@ -158,6 +161,20 @@ export class CanvasRenderer<TData = any> {
     return result?.column || null;
   }
 
+  /**
+   * Throttle function calls to limit execution rate
+   */
+  private throttle<T extends (...args: any[]) => any>(fn: T, limit: number): T {
+    let inThrottle = false;
+    return ((...args: any[]) => {
+      if (!inThrottle) {
+        fn.apply(this, args);
+        inThrottle = true;
+        setTimeout(() => inThrottle = false, limit);
+      }
+    }) as T;
+  }
+
   private setupEventListeners(): void {
     const container = this.canvas.parentElement;
     if (container) {
@@ -166,7 +183,8 @@ export class CanvasRenderer<TData = any> {
     }
 
     this.mousedownListener = this.handleMouseDown.bind(this);
-    this.mousemoveListener = this.handleMouseMove.bind(this);
+    // Throttle mousemove events to ~60fps to reduce event handler calls
+    this.mousemoveListener = this.throttle(this.handleMouseMove.bind(this), 16);
     this.clickListener = this.handleClick.bind(this);
     this.dblclickListener = this.handleDoubleClick.bind(this);
     this.mouseupListener = this.handleMouseUp.bind(this);
@@ -291,10 +309,15 @@ export class CanvasRenderer<TData = any> {
   private prepareColumns(): void {
     const columns = this.getVisibleColumns();
     this.columnPreps.clear();
+    this.columnPositions.clear();
 
+    // Cache column definitions and positions
+    let x = 0;
     for (const column of columns) {
       const colDef = this.getColumnDef(column);
       this.columnPreps.set(column.colId, prepColumn(this.ctx, column, colDef, this.theme));
+      this.columnPositions.set(column.colId, x);
+      x += column.width;
     }
   }
 
@@ -378,7 +401,7 @@ export class CanvasRenderer<TData = any> {
 
       // Calculate the total bounding box of all columns in the range
       range.columns.forEach(col => {
-        const xPos = this.getColumnX(col, allVisibleColumns, leftPinnedWidth, rightPinnedWidth, viewportWidth);
+        const xPos = this.getColumnX(col, leftPinnedWidth, rightPinnedWidth, viewportWidth);
         minX = Math.min(minX, xPos);
         maxX = Math.max(maxX, xPos + col.width);
       });
@@ -400,35 +423,21 @@ export class CanvasRenderer<TData = any> {
 
   private getColumnX(
     targetCol: Column,
-    allVisibleColumns: Column[],
     leftPinnedWidth: number,
     rightPinnedWidth: number,
     viewportWidth: number
   ): number {
+    // Use cached column position (O(1) lookup)
+    const baseX = this.columnPositions.get(targetCol.colId) || 0;
+    
+    // Adjust for pinned columns and scroll
     if (targetCol.pinned === 'left') {
-      let x = 0;
-      for (const col of allVisibleColumns) {
-        if (col.colId === targetCol.colId) return x;
-        if (col.pinned === 'left') x += col.width;
-      }
+      return baseX;
     } else if (targetCol.pinned === 'right') {
-      let x = viewportWidth - rightPinnedWidth;
-      for (const col of allVisibleColumns) {
-        if (col.pinned === 'right') {
-          if (col.colId === targetCol.colId) return x;
-          x += col.width;
-        }
-      }
+      return viewportWidth - rightPinnedWidth + (baseX - (viewportWidth - rightPinnedWidth));
     } else {
-      let x = leftPinnedWidth - this.scrollLeft;
-      for (const col of allVisibleColumns) {
-        if (!col.pinned) {
-          if (col.colId === targetCol.colId) return x;
-          x += col.width;
-        }
-      }
+      return leftPinnedWidth - this.scrollLeft + (baseX - leftPinnedWidth);
     }
-    return 0;
   }
 
   private renderRow(
