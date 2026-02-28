@@ -301,6 +301,14 @@ export class GridService<TData = any> {
       getState: () => this.getGridState(),
       applyState: (state) => this.applyGridState(state),
       
+      // State Persistence API
+      saveState: (key?: string) => this.saveState(key),
+      restoreState: (key?: string) => this.restoreState(key),
+      clearState: (key?: string) => this.clearState(key),
+      hasState: (key?: string) => this.hasState(key),
+      setState: (state: GridState) => this.setState(state),
+      getUniqueValues: (field: string) => this.getUniqueValues(field),
+      
       // Focus API
       setFocusedCell: () => {},
       getFocusedCell: () => null,
