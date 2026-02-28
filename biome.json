@@ -45,6 +45,11 @@
       "unsafeParameterDecoratorsEnabled": true
     }
   },
+  "html": {
+    "parser": {
+      "interpolation": true
+    }
+  },
   "overrides": [
     {
       "includes": ["**/*.html"],
