@@ -45,6 +45,15 @@
       </button>
     </div>
     <div class="demo-controls">
+      <button class="btn btn-secondary" (click)="saveState()" title="Save grid state to LocalStorage">
+        💾 Save State
+      </button>
+      <button class="btn btn-secondary" (click)="restoreState()" [disabled]="!hasState()" title="Restore grid state from LocalStorage">
+        📥 Restore State
+      </button>
+      <button class="btn btn-secondary" (click)="clearState()" [disabled]="!hasState()" title="Clear saved state">
+        🗑️ Clear State
+      </button>
       <button class="btn btn-secondary" (click)="toggleGrouping()">
         {{ isGrouped ? 'Ungroup' : 'Group by Dept' }}
       </button>
