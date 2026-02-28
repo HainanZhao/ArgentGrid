@@ -58,6 +58,12 @@
       <button class="btn btn-secondary" (click)="toggleFilter()">
         {{ isFiltered ? 'Clear Filter' : 'Filter "Eng"' }}
       </button>
+      <button class="btn btn-secondary" (click)="toggleDarkMode()">
+        {{ isDarkMode ? '☀️ Light Mode' : '🌙 Dark Mode' }}
+      </button>
+      <button class="btn btn-secondary" (click)="toggleCompactMode()">
+        {{ isCompact ? '📏 Comfortable' : '📐 Compact' }}
+      </button>
     </div>
   </header>
 
