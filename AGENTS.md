@@ -125,9 +125,9 @@ api.setGridOption('floatingFilter', true);
 
 Agents working on this repository should utilize the following tools for high-quality contributions:
 
-1.  **Playwright Skill**: Used for running the `demo-app` E2E suite (`npm run test:e2e`).
+1.  **Playwright Skill**: Used for running the root-level E2E suite (`npm run test:e2e`) against Storybook stories.
 2.  **Computer Use (Browser Automation)**: Highly recommended for visual verification of Canvas rendering. Always verify menu positioning, scrolling alignment, and interactive states (like editing) in a live browser before concluding a task.
-3.  **TS Strict Mode**: The library is verified against the `demo-app`'s strict TypeScript configuration. Ensure all property accesses (especially dynamic ones in tests) are type-safe.
+3.  **TS Strict Mode**: The library is verified against a strict TypeScript configuration. Ensure all property accesses (especially dynamic ones in tests) are type-safe.
 
 ## Known Issues / TODOs
 

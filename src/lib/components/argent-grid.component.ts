@@ -1,25 +1,54 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ElementRef, ViewChild, ChangeDetectionStrategy, AfterViewInit, OnChanges, SimpleChanges, ChangeDetectorRef, Inject } from '@angular/core';
 import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
-import { GridApi, GridOptions, ColDef, ColGroupDef, IRowNode, Column, CellRange, DefaultMenuItem, MenuItemDef, GetContextMenuItemsParams } from '../types/ag-grid-types';
+import {
+  AfterViewInit,
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  EventEmitter,
+  Inject,
+  Input,
+  OnChanges,
+  OnDestroy,
+  OnInit,
+  Output,
+  SimpleChanges,
+  ViewChild,
+} from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { GridService } from '../services/grid.service';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
+import { GridService } from '../services/grid.service';
+import {
+  CellRange,
+  ColDef,
+  ColGroupDef,
+  Column,
+  DefaultMenuItem,
+  GetContextMenuItemsParams,
+  GridApi,
+  GridOptions,
+  IRowNode,
+  MenuItemDef,
+} from '../types/ag-grid-types';
 
 @Component({
   selector: 'argent-grid',
   templateUrl: './argent-grid.component.html',
   styleUrls: ['./argent-grid.component.css'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, AfterViewInit, OnChanges {
+export class ArgentGridComponent<TData = any>
+  implements OnInit, OnDestroy, AfterViewInit, OnChanges
+{
   @Input() columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
   @Input() rowData: TData[] | null = null;
   @Input() gridOptions: GridOptions<TData> | null = null;
+  @Input() theme: any;
   @Input() height = '500px';
   @Input() width = '100%';
   @Input() rowHeight = 32;
-  
+
   @Output() gridReady = new EventEmitter<GridApi<TData>>();
   @Output() rowClicked = new EventEmitter<{ data: TData; node: IRowNode<TData> }>();
   @Output() selectionChanged = new EventEmitter<IRowNode<TData>[]>();
@@ -41,8 +70,9 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   get totalWidth(): number {
     if (!this.gridApi) return 0;
-    return this.gridApi.getAllColumns()
-      .filter(col => col.visible)
+    return this.gridApi
+      .getAllColumns()
+      .filter((col) => col.visible)
       .reduce((sum, col) => sum + col.width, 0);
   }
 
@@ -75,7 +105,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   // Range Selection state
   isRangeSelecting = false;
-  private rangeStartCell: { rowIndex: number, colId: string } | null = null;
+  private rangeStartCell: { rowIndex: number; colId: string } | null = null;
 
   // Side Bar state
   sideBarVisible = false;
@@ -85,7 +115,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   activeContextMenu = false;
   contextMenuPosition = { x: 0, y: 0 };
   contextMenuItems: MenuItemDef[] = [];
-  private contextMenuCell: { rowNode: IRowNode<TData>, column: Column } | null = null;
+  private contextMenuCell: { rowNode: IRowNode<TData>; column: Column } | null = null;
 
   // Set Filter
   activeSetFilter = false;
@@ -102,7 +132,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   private horizontalScrollListener?: (e: Event) => void;
   private resizeObserver?: ResizeObserver;
 
-  constructor(@Inject(ChangeDetectorRef) private cdr: ChangeDetectorRef) {}
+  constructor(@Inject(ChangeDetectorRef) private _cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
     this.initialColumnDefs = this.columnDefs ? JSON.parse(JSON.stringify(this.columnDefs)) : null;
@@ -111,18 +141,18 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   ngOnChanges(changes: SimpleChanges): void {
     // Handle rowData changes after initialization
-    if (changes['rowData'] && !changes['rowData'].firstChange) {
-      this.onRowDataChanged(changes['rowData'].currentValue);
+    if (changes.rowData && !changes.rowData.firstChange) {
+      this.onRowDataChanged(changes.rowData.currentValue);
     }
 
     // Handle columnDefs changes
-    if (changes['columnDefs'] && !changes['columnDefs'].firstChange) {
-      this.onColumnDefsChanged(changes['columnDefs'].currentValue);
+    if (changes.columnDefs && !changes.columnDefs.firstChange) {
+      this.onColumnDefsChanged(changes.columnDefs.currentValue);
     }
 
     // Handle gridOptions changes
-    if (changes['gridOptions'] && !changes['gridOptions'].firstChange) {
-      this.onGridOptionsChanged(changes['gridOptions'].currentValue);
+    if (changes.gridOptions && !changes.gridOptions.firstChange) {
+      this.onGridOptionsChanged(changes.gridOptions.currentValue);
     }
   }
 
@@ -148,28 +178,28 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       // Range Selection Logic
       this.canvasRenderer.onMouseDown = (event, rowIndex, colId) => {
         if (event.button !== 0 || !colId || rowIndex === -1) return;
-        
+
         const rangeSelectionEnabled = this.gridApi?.getGridOption('enableRangeSelection');
         if (!rangeSelectionEnabled) return;
 
         this.isRangeSelecting = true;
         this.rangeStartCell = { rowIndex, colId };
-        
+
         // Clear previous selection if not holding Shift/Ctrl
         if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
           this.gridApi?.clearRangeSelection();
         }
       };
 
-      this.canvasRenderer.onMouseMove = (event, rowIndex, colId) => {
+      this.canvasRenderer.onMouseMove = (_event, rowIndex, colId) => {
         if (!this.isRangeSelecting || !this.rangeStartCell || !colId || rowIndex === -1) return;
 
         const start = this.rangeStartCell;
         const end = { rowIndex, colId };
 
         const columns = this.canvasRenderer.getAllColumns();
-        const startColIdx = columns.findIndex(c => c.colId === start.colId);
-        const endColIdx = columns.findIndex(c => c.colId === end.colId);
+        const startColIdx = columns.findIndex((c) => c.colId === start.colId);
+        const endColIdx = columns.findIndex((c) => c.colId === end.colId);
 
         if (startColIdx === -1 || endColIdx === -1) return;
 
@@ -178,7 +208,10 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
           endRow: Math.max(start.rowIndex, end.rowIndex),
           startColumn: columns[Math.min(startColIdx, endColIdx)].colId,
           endColumn: columns[Math.max(startColIdx, endColIdx)].colId,
-          columns: columns.slice(Math.min(startColIdx, endColIdx), Math.max(startColIdx, endColIdx) + 1)
+          columns: columns.slice(
+            Math.min(startColIdx, endColIdx),
+            Math.max(startColIdx, endColIdx) + 1
+          ),
         };
 
         this.gridApi?.addCellRange(range);
@@ -199,24 +232,28 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       // Synchronize horizontal scroll with DOM header
       this.horizontalScrollListener = () => {
         if (this.headerScrollableRef) {
-          this.headerScrollableRef.nativeElement.scrollLeft = this.viewportRef.nativeElement.scrollLeft;
+          this.headerScrollableRef.nativeElement.scrollLeft =
+            this.viewportRef.nativeElement.scrollLeft;
         }
         if (this.headerScrollableFilterRef) {
-          this.headerScrollableFilterRef.nativeElement.scrollLeft = this.viewportRef.nativeElement.scrollLeft;
+          this.headerScrollableFilterRef.nativeElement.scrollLeft =
+            this.viewportRef.nativeElement.scrollLeft;
         }
       };
-      
-      this.viewportRef.nativeElement.addEventListener('scroll', this.horizontalScrollListener, { passive: true });
+
+      this.viewportRef.nativeElement.addEventListener('scroll', this.horizontalScrollListener, {
+        passive: true,
+      });
 
       // Add ResizeObserver to handle sidebar toggling and other size changes
       if (typeof ResizeObserver !== 'undefined') {
-        this.resizeObserver = new ResizeObserver(entries => {
+        this.resizeObserver = new ResizeObserver((entries) => {
           for (const entry of entries) {
             const { width, height } = entry.contentRect;
             this.viewportHeight = height;
             this.canvasRenderer?.setViewportDimensions(width, height);
             this.canvasRenderer?.render();
-            this.cdr.detectChanges();
+            this._cdr.detectChanges();
           }
         });
         this.resizeObserver.observe(this.viewportRef.nativeElement);
@@ -246,20 +283,17 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     this.gridApi = this.gridService.createApi(this.columnDefs, this.rowData, this.gridOptions);
 
     // Listen for grid state changes from API (filters, sorts, options)
-    this.gridService.gridStateChanged$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe((event) => {
-        if (event.type === 'optionChanged' && event.key === 'sideBar') {
-          this.sideBarVisible = !!event.value;
-        }
-        this.canvasRenderer?.render();
-        this.cdr.detectChanges();
-      });
+    this.gridService.gridStateChanged$.pipe(takeUntil(this.destroy$)).subscribe((event) => {
+      if (event.type === 'optionChanged' && event.key === 'sideBar') {
+        this.sideBarVisible = !!event.value;
+      }
+      this.canvasRenderer?.render();
+      this._cdr.detectChanges();
+    });
 
     // Check if any column has checkbox selection
-    this.showSelectionColumn = this.columnDefs?.some(col =>
-      !('children' in col) && col.checkboxSelection
-    ) || false;
+    this.showSelectionColumn =
+      this.columnDefs?.some((col) => !('children' in col) && col.checkboxSelection) || false;
 
     // Canvas renderer will be initialized in ngAfterViewInit
 
@@ -292,7 +326,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     this.updateSelectionState();
 
     // Trigger change detection with OnPush
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   private onColumnDefsChanged(newColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null): void {
@@ -302,22 +336,22 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       this.gridApi.setColumnDefs(newColumnDefs);
       this.canvasRenderer?.render();
     }
-    
-    this.cdr.detectChanges();
+
+    this._cdr.detectChanges();
   }
 
   private onGridOptionsChanged(newOptions: GridOptions<TData> | null): void {
     this.gridOptions = newOptions;
     if (this.gridApi && newOptions) {
       // Update all options in the API
-      Object.keys(newOptions).forEach(key => {
+      Object.keys(newOptions).forEach((key) => {
         this.gridApi.setGridOption(key as any, (newOptions as any)[key]);
       });
       this.canvasRenderer?.render();
     }
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
-  
+
   getColumnWidth(col: Column | ColDef<TData> | ColGroupDef<TData>): number {
     if ('children' in col) {
       // Column group - sum children widths
@@ -328,25 +362,25 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   getLeftPinnedColumns(): Column[] {
     if (!this.gridApi) return [];
-    return this.gridApi.getAllColumns().filter(col => {
+    return this.gridApi.getAllColumns().filter((col) => {
       return col.visible && col.pinned === 'left';
     });
   }
 
   getRightPinnedColumns(): Column[] {
     if (!this.gridApi) return [];
-    return this.gridApi.getAllColumns().filter(col => {
+    return this.gridApi.getAllColumns().filter((col) => {
       return col.visible && col.pinned === 'right';
     });
   }
 
   getNonPinnedColumns(): Column[] {
     if (!this.gridApi) return [];
-    return this.gridApi.getAllColumns().filter(col => {
+    return this.gridApi.getAllColumns().filter((col) => {
       return col.visible && !col.pinned;
     });
   }
-  
+
   isSortable(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
     // If it has children, it's a group and cannot be sorted directly
     if ('children' in col) return false;
@@ -358,34 +392,34 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
     // It's likely a Column object, look up its ColDef
     const colDef = this.getColumnDefForColumn(col as any);
-    return colDef ? (colDef.sortable !== false) : true;
+    return colDef ? colDef.sortable !== false : true;
   }
-  
+
   getHeaderName(col: Column | ColDef<TData> | ColGroupDef<TData>): string {
     if ('children' in col) {
       return col.headerName || '';
     }
     return col.headerName || (col as any).field?.toString() || '';
   }
-  
+
   getSortIndicator(col: Column | ColDef<TData> | ColGroupDef<TData>): string {
     if ('children' in col || !col.sort) {
       return '';
     }
     return col.sort === 'asc' ? '▲' : '▼';
   }
-  
+
   onHeaderClick(col: Column | ColDef<TData> | ColGroupDef<TData>): void {
     if (!this.isSortable(col) || 'children' in col) {
       return;
     }
-    
+
     // Toggle sort
     const currentSort = col.sort;
     const newSort = currentSort === 'asc' ? 'desc' : currentSort === 'desc' ? null : 'asc';
-    
+
     const colId = (col as any).colId || (col as any).field?.toString() || '';
-    
+
     // Update the column directly if it's a Column object
     if ('colId' in col && !(col as any).children) {
       (col as any).sort = newSort;
@@ -405,36 +439,37 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   onHeaderMenuClick(event: MouseEvent, col: Column | ColDef<TData> | ColGroupDef<TData>): void {
     event.stopPropagation();
-    
+
     if (this.activeHeaderMenu === col) {
       this.closeHeaderMenu();
       return;
     }
 
     this.activeHeaderMenu = col;
-    
+
     // Position menu below the icon using fixed (viewport) coordinates
     const target = event.target as HTMLElement;
     const rect = target.getBoundingClientRect();
-    
+
     let x = rect.right - 200; // Align right, assuming menu width ~200px
     let y = rect.bottom + 4;
 
     // Prevent menu from going off-screen
     if (x < 0) x = 0;
     if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
-    if (y + 250 > window.innerHeight) { // Assuming max menu height ~250px
+    if (y + 250 > window.innerHeight) {
+      // Assuming max menu height ~250px
       y = rect.top - 250; // Show above if overflows bottom
     }
-    
+
     this.headerMenuPosition = { x, y };
-    
-    this.cdr.detectChanges();
+
+    this._cdr.detectChanges();
   }
 
   closeHeaderMenu(): void {
     this.activeHeaderMenu = null;
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   onContainerClick(event: MouseEvent): void {
@@ -455,19 +490,19 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   onCanvasContextMenu(event: MouseEvent): void {
     event.preventDefault();
-    
+
     // Get hit test from canvas renderer to know which cell was clicked
     const hitTest = this.canvasRenderer.getHitTestResult(event);
     if (!hitTest || hitTest.rowIndex === -1) return;
-    
+
     const rowNode = this.gridApi.getDisplayedRowAtIndex(hitTest.rowIndex);
-    const columns = this.gridApi.getAllColumns().filter(col => col.visible);
+    const columns = this.gridApi.getAllColumns().filter((col) => col.visible);
     const column = columns[hitTest.columnIndex];
-    
+
     if (!rowNode || !column) return;
-    
+
     this.contextMenuCell = { rowNode, column };
-    
+
     // Resolve menu items via API if provided
     const getContextMenuItems = this.gridApi.getGridOption('getContextMenuItems');
     if (getContextMenuItems) {
@@ -476,20 +511,25 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
         column: column,
         api: this.gridApi,
         type: 'cell',
-        event: event
+        event: event,
       };
       this.contextMenuItems = this.resolveContextMenuItems(getContextMenuItems(params));
     } else {
       // Fallback to defaults if no callback provided
       this.contextMenuItems = this.resolveContextMenuItems([
-        'copy', 'copyWithHeaders', 'separator', 'export', 'separator', 'resetColumns'
+        'copy',
+        'copyWithHeaders',
+        'separator',
+        'export',
+        'separator',
+        'resetColumns',
       ]);
     }
 
     if (this.contextMenuItems.length === 0) return;
 
     this.activeContextMenu = true;
-    
+
     // Position menu at mouse coordinates (fixed/viewport)
     let x = event.clientX;
     let y = event.clientY;
@@ -499,21 +539,21 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     if (y + 200 > window.innerHeight) y = window.innerHeight - 200;
 
     this.contextMenuPosition = { x, y };
-    
+
     // Select the row
     this.gridApi.deselectAll();
     rowNode.selected = true;
     this.updateSelectionState();
     this.canvasRenderer?.render();
     this.selectionChanged.emit(this.gridApi.getSelectedRows());
-    
-    this.cdr.detectChanges();
+
+    this._cdr.detectChanges();
   }
 
   private resolveContextMenuItems(items: (DefaultMenuItem | MenuItemDef)[]): MenuItemDef[] {
     const resolved: MenuItemDef[] = [];
-    
-    items.forEach(item => {
+
+    items.forEach((item) => {
       if (typeof item === 'string') {
         const defaultItem = this.getDefaultMenuItem(item);
         if (defaultItem) resolved.push(defaultItem);
@@ -521,7 +561,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
         resolved.push(item);
       }
     });
-    
+
     return resolved;
   }
 
@@ -530,17 +570,18 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       case 'copy':
         return { name: 'Copy Cell', action: () => this.copyContextMenuCell(), icon: '📋' };
       case 'copyWithHeaders':
-        return this.hasRangeSelection() ? 
-          { name: 'Copy with Headers', action: () => this.copyRangeWithHeaders(), icon: '📋' } : null;
+        return this.hasRangeSelection()
+          ? { name: 'Copy with Headers', action: () => this.copyRangeWithHeaders(), icon: '📋' }
+          : null;
       case 'export':
-        return { 
-          name: 'Export', 
-          action: () => {}, 
+        return {
+          name: 'Export',
+          action: () => {},
           icon: '⤓',
           subMenu: [
             { name: 'Export to CSV', action: () => this.exportCSV() },
-            { name: 'Export to Excel (.xlsx)', action: () => this.exportExcel() }
-          ]
+            { name: 'Export to Excel (.xlsx)', action: () => this.exportExcel() },
+          ],
         };
       case 'resetColumns':
         return { name: 'Reset Columns', action: () => this.resetColumns(), icon: '⟲' };
@@ -554,7 +595,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   closeContextMenu(): void {
     this.activeContextMenu = false;
     this.contextMenuCell = null;
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   // Set Filter Methods
@@ -569,28 +610,30 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     event.preventDefault();
 
     this.activeSetFilterColumn = col as Column;
-    
+
     const field = col.field;
     if (!field || !this.gridApi) return;
 
     this.setFilterValues = this.gridService.getUniqueValues(field as string);
-    const colDef = 'field' in col ? col as ColDef<TData> : null;
-    this.setFilterValueFormatter = colDef?.valueFormatter ? (colDef.valueFormatter as any) : undefined;
+    const colDef = 'field' in col ? (col as ColDef<TData>) : null;
+    this.setFilterValueFormatter = colDef?.valueFormatter
+      ? (colDef.valueFormatter as any)
+      : undefined;
 
     const rect = (event.target as HTMLElement).getBoundingClientRect();
     this.setFilterPosition = {
       x: rect.left,
-      y: rect.bottom + 5
+      y: rect.bottom + 5,
     };
 
     this.activeSetFilter = true;
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   closeSetFilter(): void {
     this.activeSetFilter = false;
     this.activeSetFilterColumn = null;
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   onSetFilterChanged(values: any[]): void {
@@ -608,8 +651,8 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
         ...this.gridApi.getFilterModel(),
         [field]: {
           filterType: 'set',
-          values: values
-        }
+          values: values,
+        },
       });
     }
 
@@ -647,7 +690,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     } else {
       this.activeToolPanel = panel;
     }
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   toggleColumnVisibility(col: Column): void {
@@ -656,7 +699,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       colDef.hide = col.visible; // Toggle
       this.initializeGrid(); // Re-initialize to handle visibility changes correctly
       this.canvasRenderer?.render();
-      this.cdr.detectChanges();
+      this._cdr.detectChanges();
     }
   }
 
@@ -672,7 +715,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
     // Map back to ColDefs
     const newDefs: (ColDef<TData> | ColGroupDef<TData>)[] = [];
-    columns.forEach(col => {
+    columns.forEach((col) => {
       const def = this.getColumnDefForColumn(col);
       if (def) newDefs.push(def);
     });
@@ -682,10 +725,10 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   copyContextMenuCell(): void {
     if (!this.contextMenuCell || !this.contextMenuCell.column.field) return;
-    
+
     const val = (this.contextMenuCell.rowNode.data as any)[this.contextMenuCell.column.field];
     if (val !== undefined && val !== null) {
-      navigator.clipboard.writeText(String(val)).catch(err => {
+      navigator.clipboard.writeText(String(val)).catch((err) => {
         console.error('Failed to copy text: ', err);
       });
     }
@@ -702,20 +745,22 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
     const range = ranges[0];
     const columns = range.columns;
-    
-    let text = columns.map(c => this.getHeaderName(c)).join('\t') + '\n';
+
+    let text = `${columns.map((c) => this.getHeaderName(c)).join('\t')}\n`;
 
     for (let i = range.startRow; i <= range.endRow; i++) {
       const node = this.gridApi.getDisplayedRowAtIndex(i);
       if (node) {
-        text += columns.map(c => {
-          const val = (node.data as any)[c.field || ''];
-          return val !== null && val !== undefined ? String(val) : '';
-        }).join('\t') + '\n';
+        text += `${columns
+          .map((c) => {
+            const val = (node.data as any)[c.field || ''];
+            return val !== null && val !== undefined ? String(val) : '';
+          })
+          .join('\t')}\n`;
       }
     }
 
-    navigator.clipboard.writeText(text).catch(err => {
+    navigator.clipboard.writeText(text).catch((err) => {
       console.error('Failed to copy range: ', err);
     });
     this.closeContextMenu();
@@ -736,7 +781,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       // Deep copy back the original defs
       const restored = JSON.parse(JSON.stringify(this.initialColumnDefs));
       this.onColumnDefsChanged(restored);
-      
+
       // Also clear sort model
       this.gridApi.setSortModel([]);
     }
@@ -745,10 +790,10 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   sortColumnMenu(direction: 'asc' | 'desc' | null): void {
     if (!this.activeHeaderMenu) return;
-    
+
     const col = this.activeHeaderMenu as any;
     const colId = col.colId || col.field?.toString() || '';
-    
+
     // Update original ColDef to ensure persistence
     const colDef = this.getColumnDefForColumn(col);
     if (colDef) {
@@ -757,44 +802,44 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
     this.gridApi.setSortModel(direction ? [{ colId, sort: direction }] : []);
     this.canvasRenderer?.render();
-    
+
     this.closeHeaderMenu();
   }
 
   hideColumnMenu(): void {
     if (!this.activeHeaderMenu) return;
-    
+
     const col = this.activeHeaderMenu as any;
-    
+
     // Update the original column definition
     const colDef = this.getColumnDefForColumn(col);
     if (colDef) {
       colDef.hide = true;
     }
-    
+
     // Create new array to trigger change detection and API update
     if (this.columnDefs) {
       this.onColumnDefsChanged([...this.columnDefs]);
     }
-    
+
     this.closeHeaderMenu();
   }
 
   pinColumnMenu(pin: 'left' | 'right' | null): void {
     if (!this.activeHeaderMenu) return;
-    
+
     const col = this.activeHeaderMenu as any;
-    
+
     // Update the original column definition
     const colDef = this.getColumnDefForColumn(col);
     if (colDef) {
       colDef.pinned = pin as any;
     }
-    
+
     if (this.columnDefs) {
       this.onColumnDefsChanged([...this.columnDefs]);
     }
-    
+
     this.closeHeaderMenu();
   }
 
@@ -808,8 +853,8 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
     const containerMap: { [key: string]: any[] } = {
       'left-pinned': left,
-      'scrollable': center,
-      'right-pinned': right
+      scrollable: center,
+      'right-pinned': right,
     };
 
     const previousContainerData = containerMap[event.previousContainer.id];
@@ -829,25 +874,25 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       const movedCol = currentContainerData[event.currentIndex] as Column;
       const colDef = this.getColumnDefForColumn(movedCol);
       if (colDef) {
-        colDef.pinned = pinType === 'none' ? null : pinType as any;
+        colDef.pinned = pinType === 'none' ? null : (pinType as any);
       }
     }
 
     // Map internal Columns back to their original ColDefs in the new order
     const orderedVisibleColDefs: (ColDef<TData> | ColGroupDef<TData>)[] = [];
-    [...left, ...center, ...right].forEach(col => {
+    [...left, ...center, ...right].forEach((col) => {
       const def = this.getColumnDefForColumn(col);
       if (def) orderedVisibleColDefs.push(def);
     });
 
     // Reconstruct full columnDefs array, maintaining hidden columns
-    const hidden = this.columnDefs.filter(c => {
+    const hidden = this.columnDefs.filter((c) => {
       if ('children' in c) return false;
       return (c as ColDef).hide;
     });
-    
+
     const newDefs = [...orderedVisibleColDefs, ...hidden];
-    
+
     this.onColumnDefsChanged(newDefs);
   }
 
@@ -884,10 +929,10 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
     const deltaX = event.clientX - this.resizeStartX;
     const newWidth = Math.max(20, this.resizeStartWidth + deltaX);
-    
+
     // Update internal column width
     this.resizeColumn.width = newWidth;
-    
+
     // Update original ColDef
     const colDef = this.getColumnDefForColumn(this.resizeColumn);
     if (colDef) {
@@ -896,7 +941,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
     // Force re-render
     this.canvasRenderer?.render();
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   private onResizeMouseUp(): void {
@@ -908,11 +953,11 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   hasFloatingFilters(): boolean {
     if (this.gridApi?.getGridOption('floatingFilter')) return true;
-    
+
     if (!this.columnDefs) return false;
-    return this.columnDefs.some(col => {
+    return this.columnDefs.some((col) => {
       if ('children' in col) {
-        return col.children.some(child => 'floatingFilter' in child && child.floatingFilter);
+        return col.children.some((child) => 'floatingFilter' in child && child.floatingFilter);
       }
       return col.floatingFilter;
     });
@@ -922,10 +967,10 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     const colDef = this.getColumnDefForColumn(col as any);
     if (!colDef || 'children' in colDef) return false;
     if (!colDef.filter) return false;
-    
+
     if (colDef.floatingFilter === true) return true;
     if (colDef.floatingFilter === false) return false;
-    
+
     return !!this.gridApi?.getGridOption('floatingFilter');
   }
 
@@ -948,17 +993,17 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   onFloatingFilterInput(event: Event, col: Column | ColDef<TData> | ColGroupDef<TData>): void {
     const colDef = this.getColumnDefForColumn(col as any);
     if (!colDef || 'children' in colDef) return;
-    
+
     const input = event.target as HTMLInputElement;
     const value = input.value;
     const colId = (col as any).colId || (col as any).field?.toString() || '';
 
-    this.cdr.detectChanges(); // Update clear button visibility immediately
+    this._cdr.detectChanges(); // Update clear button visibility immediately
 
     clearTimeout(this.filterTimeout);
     this.filterTimeout = setTimeout(() => {
       const currentModel = this.gridApi.getFilterModel();
-      
+
       if (!value) {
         delete currentModel[colId];
       } else {
@@ -966,7 +1011,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
         currentModel[colId] = {
           filterType: filterType as any,
           type: filterType === 'text' ? 'contains' : 'equals',
-          filter: value
+          filter: value,
         };
       }
 
@@ -990,25 +1035,31 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     return model[colId]?.filter || '';
   }
 
-  hasFilterValue(col: Column | ColDef<TData> | ColGroupDef<TData>, input: HTMLInputElement): boolean {
+  hasFilterValue(
+    col: Column | ColDef<TData> | ColGroupDef<TData>,
+    _input: HTMLInputElement
+  ): boolean {
     return !!this.getFloatingFilterValue(col);
   }
 
-  clearFloatingFilter(col: Column | ColDef<TData> | ColGroupDef<TData>, input: HTMLInputElement): void {
+  clearFloatingFilter(
+    col: Column | ColDef<TData> | ColGroupDef<TData>,
+    input: HTMLInputElement
+  ): void {
     const colDef = this.getColumnDefForColumn(col as any);
     if (!colDef || 'children' in colDef) return;
-    
+
     input.value = '';
     const colId = (col as any).colId || (col as any).field?.toString() || '';
-    
+
     const currentModel = this.gridApi.getFilterModel();
     delete currentModel[colId];
-    
+
     this.gridApi.setFilterModel(currentModel);
     this.canvasRenderer?.render();
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
-  
+
   // Public API methods
   getApi(): GridApi<TData> {
     return this.gridApi;
@@ -1026,42 +1077,42 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   startEditing(rowIndex: number, colId: string): void {
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     const column = this.gridApi.getColumn(colId);
-    
+
     // Prevent editing on group rows or missing data/column
     if (!rowNode || rowNode.group || !column || !column.field) return;
-    
+
     // Check if cell is editable
     const colDef = this.getColumnDefForColumn(column);
     if (colDef && colDef.editable === false) return;
-    
+
     // If already editing another cell, stop it first
     if (this.isEditing) {
       this.stopEditing(true);
     }
 
     const value = (rowNode.data as any)[column.field];
-    
+
     this.editingRowNode = rowNode;
     this.editingColDef = colDef;
     this.editingValue = value !== null && value !== undefined ? String(value) : '';
-    
+
     // Calculate editor position based on row and column
-    const columns = this.gridApi.getAllColumns().filter(c => c.visible);
+    const columns = this.gridApi.getAllColumns().filter((c) => c.visible);
     let x = 0;
     for (const col of columns) {
       if (col.colId === colId) break;
       x += col.width;
     }
-    
+
     this.editorPosition = {
       x: x - this.canvasRenderer.currentScrollLeft,
-      y: (rowIndex * this.rowHeight) - this.canvasRenderer.currentScrollTop,
+      y: rowIndex * this.rowHeight - this.canvasRenderer.currentScrollTop,
       width: column.width,
-      height: this.rowHeight
+      height: this.rowHeight,
     };
-    
+
     this.isEditing = true;
-    
+
     // Focus input after view update
     setTimeout(() => {
       if (this.editorInputRef) {
@@ -1074,7 +1125,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
   stopEditing(save: boolean = true): void {
     if (!this.isEditing) return;
-    
+
     const rowNode = this.editingRowNode;
     const colDef = this.editingColDef;
 
@@ -1097,7 +1148,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
           data: rowNode.data,
           node: rowNode,
           colDef,
-          api: this.gridApi
+          api: this.gridApi,
         });
       }
 
@@ -1109,7 +1160,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
           data: rowNode.data,
           node: rowNode,
           colDef,
-          api: this.gridApi
+          api: this.gridApi,
         });
       } else if (field) {
         // Default: update data directly
@@ -1118,9 +1169,9 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
 
       // Update via transaction
       this.gridApi.applyTransaction({
-        update: [rowNode.data]
+        update: [rowNode.data],
       });
-      
+
       // Trigger callback
       if (colDef.onCellValueChanged) {
         const column = this.gridApi.getColumn(colDef.colId || field || '');
@@ -1130,18 +1181,18 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
             oldValue,
             data: rowNode.data,
             node: rowNode,
-            column
+            column,
           });
         }
       }
-      
+
       this.canvasRenderer?.render();
     }
-    
+
     this.isEditing = false;
     this.editingRowNode = null;
     this.editingColDef = null;
-    this.cdr.detectChanges();
+    this._cdr.detectChanges();
   }
 
   onEditorInput(event: Event): void {
@@ -1160,7 +1211,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       event.preventDefault();
       const currentRowIndex = this.editingRowNode?.displayedRowIndex ?? -1;
       const currentColId = this.editingColDef?.colId || this.editingColDef?.field?.toString() || '';
-      
+
       this.stopEditing(true);
 
       // Standard AG Grid Tab behavior: move to next cell
@@ -1171,9 +1222,9 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   }
 
   private moveToNextCell(rowIndex: number, colId: string, backwards: boolean): void {
-    const columns = this.gridApi.getAllColumns().filter(c => c.visible);
-    const colIndex = columns.findIndex(c => c.colId === colId);
-    
+    const columns = this.gridApi.getAllColumns().filter((c) => c.visible);
+    const colIndex = columns.findIndex((c) => c.colId === colId);
+
     if (colIndex === -1) return;
 
     let nextColIndex = backwards ? colIndex - 1 : colIndex + 1;
@@ -1199,15 +1250,17 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
       this.stopEditing(true);
     }
   }
-  private getColumnDefForColumn(column: Column | ColDef<TData> | ColGroupDef<TData>): ColDef<TData> | null {
+  private getColumnDefForColumn(
+    column: Column | ColDef<TData> | ColGroupDef<TData>
+  ): ColDef<TData> | null {
     if (!this.columnDefs) return null;
-    
+
     const colId = (column as any).colId || (column as any).field?.toString();
     if (!colId) return null;
 
     for (const def of this.columnDefs) {
       if ('children' in def) {
-        const found = def.children.find(c => {
+        const found = def.children.find((c) => {
           const cDef = c as ColDef;
           return cDef.colId === colId || cDef.field?.toString() === colId;
         });
@@ -1271,7 +1324,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   updateSelectionState(): void {
     const selectedCount = this.gridApi.getSelectedRows().length;
     const totalCount = this.gridApi.getDisplayedRowCount();
-    
+
     this.isAllSelected = selectedCount === totalCount && totalCount > 0;
     this.isIndeterminateSelection = selectedCount > 0 && selectedCount < totalCount;
   }

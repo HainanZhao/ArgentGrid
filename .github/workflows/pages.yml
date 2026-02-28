@@ -7,12 +7,12 @@ on:
 
     paths:
       - 'src/**'
-      - 'demo-app/**'
       - '.github/workflows/pages.yml'
       - 'package.json'
       - 'package-lock.json'
       - 'ng-package.json'
       - 'tsconfig.json'
+      - 'tsconfig.storybook.json'
   workflow_dispatch:
 
 permissions:
@@ -39,21 +39,15 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: './package-lock.json'
 
       - name: Install root dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Build ArgentGrid library
         run: npm run build
 
-      - name: Install demo app dependencies
-        working-directory: ./demo-app
-        run: npm install
-
-      - name: Build demo app
-        working-directory: ./demo-app
-        run: npm run build:gh-pages
+      - name: Build Storybook
+        run: npm run build-storybook
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -61,7 +55,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './demo-app/dist/argent-grid-demo/browser'
+          path: './storybook-static'
 
       - name: Deploy to GitHub Pages
         id: deployment

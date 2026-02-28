@@ -86,10 +86,7 @@ export class DamageTracker {
   /**
    * Mark dirty based on selection change
    */
-  markSelectionChanged(
-    oldSelection: Set<number>,
-    newSelection: Set<number>
-  ): void {
+  markSelectionChanged(oldSelection: Set<number>, newSelection: Set<number>): void {
     // Mark rows that changed selection state
     for (const row of oldSelection) {
       if (!newSelection.has(row)) {
@@ -186,7 +183,7 @@ export class DamageTracker {
    * Get dirty cells
    */
   getDirtyCells(): Array<[number, number]> {
-    return Array.from(this.damagedCells).map(key => {
+    return Array.from(this.damagedCells).map((key) => {
       const [col, row] = key.split(',').map(Number);
       return [col, row];
     });
@@ -201,16 +198,8 @@ export class DamageTracker {
    * - If too many individual cells, promote to row/column
    * - If too many rows/columns, promote to full redraw
    */
-  optimize(thresholds: {
-    maxCells?: number;
-    maxRows?: number;
-    maxColumns?: number;
-  } = {}): void {
-    const {
-      maxCells = 50,
-      maxRows = 100,
-      maxColumns = 20,
-    } = thresholds;
+  optimize(thresholds: { maxCells?: number; maxRows?: number; maxColumns?: number } = {}): void {
+    const { maxCells = 50, maxRows = 100, maxColumns = 20 } = thresholds;
 
     // If too many cells, check if we should promote to rows
     if (this.damagedCells.size > maxCells) {
@@ -361,8 +350,7 @@ export function getDirtyBounds(
 
     const width = columnWidths[col] || 0;
 
-    if (x + width >= 0 && x <= viewportWidth &&
-        y + rowHeight >= 0 && y <= viewportHeight) {
+    if (x + width >= 0 && x <= viewportWidth && y + rowHeight >= 0 && y <= viewportHeight) {
       rects.push({
         x: Math.max(0, x),
         y: Math.max(0, y),

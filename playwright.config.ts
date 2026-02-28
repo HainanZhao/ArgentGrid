@@ -8,16 +8,21 @@ export default defineConfig({
   workers: process.env['CI'] ? 1 : undefined,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:4200',
+    baseURL: 'http://localhost:6006',
     trace: 'on-first-retry',
   },
+
   projects: [
     {
       name: 'chromium',
-      use: { 
-        ...devices['Desktop Chrome'],
-        viewport: { width: 1920, height: 1080 }
-      },
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
+
+  webServer: {
+    command: 'npx http-server storybook-static -p 6006',
+    url: 'http://localhost:6006',
+    reuseExistingServer: !process.env['CI'],
+    timeout: 120000,
+  },
 });

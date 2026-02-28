@@ -141,59 +141,58 @@ npm run test:coverage # With coverage
 npm run lint
 ```
 
-## 🎨 Demo App Development
+## 🎨 Storybook Development
 
-The repository includes a standalone Angular application for visual testing and performance benchmarking. It is configured to import `argent-grid` directly from the `src/` folder using TypeScript path mapping.
+ArgentGrid uses **Storybook** for component development, documentation, and visual testing. Each feature (Sorting, Grouping, Theming, etc.) is documented as an isolated story.
 
-**Why this is better:**
-- **No Build Step:** You don't need to run `npm run build` in the root every time you change the library.
-- **HMR / Live Reload:** Changes in `src/` are detected by the Angular dev-server, triggering an immediate browser refresh.
-- **Easier Debugging:** Sourcemaps point directly to your original library source code.
-
-### Run Demo App
+### Run Storybook
 
 ```bash
-cd demo-app
-npm install
-npm start
+# Start Storybook dev server
+npm run storybook
 ```
 
-Open [http://localhost:4200](http://localhost:4200) to view the demo.
+Open [http://localhost:6006](http://localhost:6006) to view the stories and interact with the grid.
+
+### Build Storybook
+
+```bash
+# Build static Storybook site
+npm run build-storybook
+```
+
+Output will be in the `./storybook-static` directory.
 
 ### E2E Testing (Playwright)
 
-argent-grid uses Playwright for end-to-end testing of visual and interactive features (like Canvas rendering, dragging, and menu interactions).
-
-**Prerequisites:**
-The demo app must be running (`npm start` inside `demo-app/`).
+ArgentGrid uses Playwright for end-to-end testing against the Storybook stories. These tests verify visual rendering, interactivity (dragging, resizing), and complex logic (filtering, grouping).
 
 **Run Tests:**
 ```bash
-cd demo-app
-npx playwright test
+# Run all E2E tests
+npm run test:e2e
 ```
 
 This will execute the **Feature Guard Rails** suite which verifies:
 - Row Grouping & Expansion
 - Floating Filters
-- Cell Editing (Enter/Escape/Tab)
+- Cell Editing
 - Column Pinning & Scroll Sync
 - Column Re-ordering (Drag & Drop)
 
 ### Performance Benchmarking
 
-ArgentGrid includes a built-in benchmarking suite to measure rendering efficiency, scroll performance, and memory overhead.
+ArgentGrid includes a benchmarking suite to measure rendering efficiency and scroll performance under heavy load (100,000+ rows).
 
 **Option 1: Interactive (UI)**
-1. Start the demo app: `cd demo-app && npm start`
-2. Open [http://localhost:4200](http://localhost:4200)
-3. Click the **🚀 Benchmark** button in the header.
-4. View real-time **ms frame** metrics and a detailed report covering initial render, scrolling, and selection updates.
+1. Start Storybook: `npm run storybook`
+2. Open [http://localhost:6006](http://localhost:6006)
+3. Navigate to **ArgentGrid / Benchmark**
+4. View real-time **ms frame** metrics and a detailed report.
 
 **Option 2: Automated (CLI)**
-To run the automated performance test and see results in your terminal:
+To run the automated performance test:
 ```bash
-cd demo-app
 npx playwright test e2e/benchmark.spec.ts --reporter=list
 ```
 

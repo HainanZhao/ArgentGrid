@@ -61,7 +61,7 @@ export const DARK_THEME: PartialTheme = {
 
   textCell: '#cccccc',
   textHeader: '#ffffff',
-  
+
   borderColor: '#3c3c3c',
   headerBorderColor: '#3c3c3c',
   gridLineColor: '#3c3c3c',
@@ -78,13 +78,13 @@ export function mergeTheme(base: GridTheme, ...overrides: PartialTheme[]): GridT
   if (overrides.length === 0) return base;
 
   let result = { ...base };
-  
+
   for (const override of overrides) {
     if (override) {
       result = { ...result, ...override };
     }
   }
-  
+
   return result;
 }
 
@@ -113,7 +113,7 @@ export function getRowTheme(
   if (isSelected) {
     return { bgCell: baseTheme.bgSelection };
   }
-  
+
   if (isHovered) {
     return { bgCell: baseTheme.bgHover };
   }
@@ -192,10 +192,7 @@ export function getThemePreset(name: string): PartialTheme {
 /**
  * Create a complete theme from a preset name and optional overrides
  */
-export function createTheme(
-  presetName: string = 'default',
-  overrides?: PartialTheme
-): GridTheme {
+export function createTheme(presetName: string = 'default', overrides?: PartialTheme): GridTheme {
   const preset = getThemePreset(presetName);
   return mergeTheme(DEFAULT_THEME, preset, overrides || {});
 }

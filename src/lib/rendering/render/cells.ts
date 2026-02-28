@@ -4,9 +4,9 @@
  * Handles drawing of individual cells with prep/draw cycle optimization.
  */
 
-import { Column, IRowNode, ColDef, GridApi } from '../../types/ag-grid-types';
-import { CellDrawContext, ColumnPrepResult, GridTheme } from './types';
+import { ColDef, Column, GridApi, IRowNode } from '../../types/ag-grid-types';
 import { getFontFromTheme } from './theme';
+import { CellDrawContext, ColumnPrepResult, GridTheme } from './types';
 
 /**
  * Get value from object using path (e.g. 'pivotData.NY.salary')
@@ -14,8 +14,8 @@ import { getFontFromTheme } from './theme';
 export function getValueByPath(obj: any, path: string): any {
   if (!path || !obj) return undefined;
   if (!path.includes('.')) return obj[path];
-  
-  return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+
+  return path.split('.').reduce((acc, part) => acc?.[part], obj);
 }
 
 // ============================================================================
@@ -75,7 +75,7 @@ export function drawCell<TData = any>(
   prep: ColumnPrepResult<TData>,
   context: CellDrawContext<TData>
 ): void {
-  const { x, y, width, height, value, formattedValue, column, rowNode } = context;
+  const { rowNode } = context;
 
   // Draw cell background
   drawCellBackground(ctx, context);
@@ -113,7 +113,7 @@ export function drawCellBackground<TData = any>(
  */
 export function drawCellContent<TData = any>(
   ctx: CanvasRenderingContext2D,
-  prep: ColumnPrepResult<TData>,
+  _prep: ColumnPrepResult<TData>,
   context: CellDrawContext<TData>
 ): void {
   const { x, y, width, height, formattedValue, theme } = context;
@@ -142,10 +142,10 @@ export function drawCellContent<TData = any>(
  */
 export function drawGroupIndicators<TData = any>(
   ctx: CanvasRenderingContext2D,
-  prep: ColumnPrepResult<TData>,
+  _prep: ColumnPrepResult<TData>,
   context: CellDrawContext<TData>
 ): void {
-  const { x, y, width, height, column, rowNode, theme, isEvenRow } = context;
+  const { x, y, height, column, rowNode, theme } = context;
 
   if (!rowNode) return;
 
@@ -174,7 +174,7 @@ export function drawGroupIndicators<TData = any>(
       const size = theme.groupIndicatorSize;
       const centerX = Math.floor(indicatorX + size / 2);
       const centerY = Math.floor(indicatorY);
-      
+
       // Horizontal line
       ctx.moveTo(Math.floor(indicatorX), centerY);
       ctx.lineTo(Math.floor(indicatorX + size), centerY);
@@ -212,7 +212,7 @@ export function truncateText(
 
   while (start < end) {
     const mid = Math.floor((start + end) / 2);
-    const truncated = text.slice(0, mid) + '...';
+    const truncated = `${text.slice(0, mid)}...`;
 
     if (ctx.measureText(truncated).width <= maxWidth) {
       start = mid + 1;
@@ -221,16 +221,13 @@ export function truncateText(
     }
   }
 
-  return text.slice(0, Math.max(0, start - 1)) + '...';
+  return `${text.slice(0, Math.max(0, start - 1))}...`;
 }
 
 /**
  * Measure text width
  */
-export function measureText(
-  ctx: CanvasRenderingContext2D,
-  text: string
-): number {
+export function measureText(ctx: CanvasRenderingContext2D, text: string): number {
   return ctx.measureText(text).width;
 }
 
@@ -240,7 +237,7 @@ export function measureText(
 export function calculateColumnWidth<TData = any>(
   ctx: CanvasRenderingContext2D,
   column: Column,
-  colDef: ColDef<TData> | null,
+  _colDef: ColDef<TData> | null,
   theme: GridTheme,
   sampleData: any[],
   maxRows: number = 100
@@ -369,13 +366,7 @@ export function renderRow<TData = any>(
 
     const x = getCellX(column);
     const value = column.field ? getValueByPath(rowNode.data, column.field) : undefined;
-    const formattedValue = getFormattedValue(
-      value,
-      prep.colDef,
-      rowNode.data,
-      rowNode,
-      api
-    );
+    const formattedValue = getFormattedValue(value, prep.colDef, rowNode.data, rowNode, api);
 
     const context: CellDrawContext<TData> = {
       ctx,

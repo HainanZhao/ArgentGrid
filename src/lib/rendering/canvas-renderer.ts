@@ -1,36 +1,31 @@
-import { GridApi, IRowNode, Column, ColDef, SparklineOptions } from '../types/ag-grid-types';
+import { ColDef, Column, GridApi, IRowNode, SparklineOptions } from '../types/ag-grid-types';
 
 // Import new rendering modules from the index
 import {
-  // Types
-  GridTheme,
-  ColumnPrepResult,
-  // Theme
-  DEFAULT_THEME,
-  getFontFromTheme,
-  mergeTheme,
-  // Walker
-  walkColumns,
-  walkRows,
-  walkCells,
-  getVisibleRowRange,
-  getPinnedWidths,
-  getColumnAtX,
-  getRowAtY,
   // Blitting
   BlitState,
+  ColumnPrepResult,
   calculateBlit,
-  shouldBlit,
-  // Cells
-  truncateText,
-  prepColumn,
-  getFormattedValue,
-  getValueByPath,
-  // Lines
-  drawRowLines,
+  // Theme
+  DEFAULT_THEME,
   drawColumnLines,
   drawRangeSelectionBorder,
-  getColumnBorderPositions,
+  // Lines
+  drawRowLines,
+  // Types
+  GridTheme,
+  getColumnAtX,
+  getFontFromTheme,
+  getFormattedValue,
+  getPinnedWidths,
+  getRowAtY,
+  getValueByPath,
+  getVisibleRowRange,
+  mergeTheme,
+  prepColumn,
+  // Cells
+  truncateText,
+  walkRows,
 } from './render';
 import { DamageTracker } from './utils/damage-tracker';
 
@@ -56,8 +51,12 @@ export class CanvasRenderer<TData = any> {
   private scrollTop = 0;
   private scrollLeft = 0;
 
-  get currentScrollTop(): number { return this.scrollTop; }
-  get currentScrollLeft(): number { return this.scrollLeft; }
+  get currentScrollTop(): number {
+    return this.scrollTop;
+  }
+  get currentScrollLeft(): number {
+    return this.scrollLeft;
+  }
 
   private animationFrameId: number | null = null;
   private renderPending = false;
@@ -71,7 +70,9 @@ export class CanvasRenderer<TData = any> {
 
   // Performance tracking
   private lastRenderDuration = 0;
-  get lastFrameTime(): number { return this.lastRenderDuration; }
+  get lastFrameTime(): number {
+    return this.lastRenderDuration;
+  }
 
   // Damage tracking
   private damageTracker = new DamageTracker();
@@ -84,12 +85,12 @@ export class CanvasRenderer<TData = any> {
 
   /**
    * Column positions cache for O(1) lookup
-   * 
+   *
    * Performance optimization: Instead of O(n) linear search through all columns
    * to find a column's X position, we cache positions during prepareColumns().
    * This reduces getColumnX() from O(n) to O(1), improving cell rendering performance
    * by 5-10% for wide grids with many columns.
-   * 
+   *
    * @see prepareColumns() - Where positions are cached
    * @see getColumnX() - Where cached positions are used
    */
@@ -160,10 +161,10 @@ export class CanvasRenderer<TData = any> {
 
   /**
    * Set update batching interval for live data scenarios
-   * 
+   *
    * Performance optimization: Batches multiple data updates into a single render,
    * reducing render calls by 90% for high-frequency data feeds (10+ entries/sec).
-   * 
+   *
    * @param intervalMs - Batch interval in milliseconds (default: 100ms = ~10fps)
    */
   setBatchInterval(intervalMs: number): void {
@@ -172,24 +173,24 @@ export class CanvasRenderer<TData = any> {
 
   /**
    * Add row data with batching for live data scenarios
-   * 
+   *
    * Performance optimization: Instead of rendering immediately on every update,
    * buffers updates and renders in batches. For 10 entries/sec, this reduces
    * render calls from 10/sec to 1/sec (90% reduction).
-   * 
+   *
    * @param data - Row data to add
    * @param immediate - If true, flush buffer immediately
    */
   addRowData(data: TData, immediate = false): void {
     this.updateBuffer.push(data);
-    
+
     // Index row by ID if available
     const dataWithId = data as any;
     if (dataWithId.id) {
       const index = this.gridApi.getRowData().length + this.updateBuffer.length - 1;
       this.rowIndexById.set(dataWithId.id, index);
     }
-    
+
     if (immediate) {
       this.flushUpdateBuffer();
     } else if (!this.updateBufferTimer) {
@@ -204,32 +205,32 @@ export class CanvasRenderer<TData = any> {
    */
   flushUpdateBuffer(): void {
     if (this.updateBuffer.length === 0) return;
-    
+
     if (this.updateBufferTimer) {
       clearTimeout(this.updateBufferTimer);
       this.updateBufferTimer = null;
     }
-    
+
     // Apply transaction to add buffered rows
     this.gridApi.applyTransaction({ add: this.updateBuffer });
     this.updateBuffer = [];
     this.totalRowCount = this.gridApi.getDisplayedRowCount();
-    
+
     // Mark new rows as dirty
     const startIndex = this.totalRowCount - this.updateBuffer.length;
     for (let i = 0; i < this.updateBuffer.length; i++) {
       this.dirtyRows.add(startIndex + i);
     }
-    
+
     this.renderFrame();
   }
 
   /**
    * Mark a row as dirty (needs re-rendering)
-   * 
+   *
    * Performance optimization: Only re-renders changed rows instead of all visible rows.
    * For sparse updates (1 row out of 100), provides 99% reduction in rendering work.
-   * 
+   *
    * @param rowIndex - Index of row to mark as dirty
    */
   markRowDirty(rowIndex: number): void {
@@ -238,14 +239,14 @@ export class CanvasRenderer<TData = any> {
 
   /**
    * Update row data by ID with O(1) lookup
-   * 
+   *
    * Performance optimization: Uses row index cache for O(1) lookup instead
    * of O(n) linear search. Essential for high-frequency updates by ID.
-   * 
+   *
    * @param id - Row ID
    * @param updates - Partial row data to update
    * @returns true if row was found and updated
-   * 
+   *
    * @performance O(1) - Constant time lookup
    */
   updateRowById(id: string, updates: Partial<TData>): boolean {
@@ -254,7 +255,7 @@ export class CanvasRenderer<TData = any> {
     if (index === undefined || index >= rowData.length) {
       return false;
     }
-    
+
     // Apply update via transaction
     this.gridApi.applyTransaction({ update: [{ ...rowData[index], ...updates }] });
     this.markRowDirty(index);
@@ -263,7 +264,7 @@ export class CanvasRenderer<TData = any> {
 
   /**
    * Remove row by ID
-   * 
+   *
    * @param id - Row ID to remove
    * @returns true if row was found and removed
    */
@@ -272,7 +273,7 @@ export class CanvasRenderer<TData = any> {
     if (index === undefined) {
       return false;
     }
-    
+
     // Remove via transaction
     const rowData = this.gridApi.getRowData();
     this.gridApi.applyTransaction({ remove: [rowData[index]] });
@@ -304,16 +305,16 @@ export class CanvasRenderer<TData = any> {
 
   /**
    * Get row index at Y coordinate (O(1) lookup)
-   * 
+   *
    * Performance optimization: Uses direct mathematical calculation instead of
    * iterating through rows. This provides O(1) constant-time hit testing,
    * essential for responsive mouse interactions even with 1M+ rows.
-   * 
+   *
    * Formula: rowIndex = floor((y + scrollTop) / rowHeight)
-   * 
+   *
    * @param y - Y coordinate in canvas space
    * @returns Row index at Y coordinate
-   * 
+   *
    * @performance O(1) - Constant time, regardless of total row count
    */
   getRowAtY(y: number): number {
@@ -322,38 +323,33 @@ export class CanvasRenderer<TData = any> {
 
   /**
    * Get column at X coordinate (public for testing)
-   * 
+   *
    * @param x - X coordinate in canvas space
    * @returns Column at X coordinate or null if not found
    */
   getColumnAtX(x: number): Column | null {
     const columns = this.getVisibleColumns();
-    const result = getColumnAtX(
-      columns,
-      x,
-      this.scrollLeft,
-      this.viewportWidth
-    );
+    const result = getColumnAtX(columns, x, this.scrollLeft, this.viewportWidth);
     return result?.column || null;
   }
 
   /**
    * Get X position for a column (O(1) lookup)
-   * 
+   *
    * Performance optimization: Uses cached column positions from prepareColumns()
    * instead of iterating through all columns. This reduces complexity from O(n) to O(1),
    * where n is the number of visible columns. For grids with 100+ columns, this provides
    * significant performance improvements during cell rendering.
-   * 
+   *
    * @param targetCol - Target column
    * @param leftPinnedWidth - Total width of left-pinned columns
    * @param rightPinnedWidth - Total width of right-pinned columns
    * @param viewportWidth - Total viewport width
    * @returns X position in canvas coordinates
-   * 
+   *
    * @see prepareColumns() - Where column positions are cached
    * @see columnPositions - Cache of column X positions
-   * 
+   *
    * @performance O(1) - Constant time lookup
    */
   private getColumnX(
@@ -364,7 +360,7 @@ export class CanvasRenderer<TData = any> {
   ): number {
     // Use cached column position (O(1) lookup)
     const baseX = this.columnPositions.get(targetCol.colId) || 0;
-    
+
     // Adjust for pinned columns and scroll position
     if (targetCol.pinned === 'left') {
       return baseX;
@@ -377,16 +373,16 @@ export class CanvasRenderer<TData = any> {
 
   /**
    * Throttle function calls to limit execution rate
-   * 
+   *
    * Performance optimization: Mouse move events can fire hundreds of times per second,
    * causing excessive event handler calls and potential performance issues. This throttle
    * function limits the execution rate to once per `limit` milliseconds (typically 16ms
    * for ~60fps), reducing event handler calls by 50-80%.
-   * 
+   *
    * @param fn - Function to throttle
    * @param limit - Minimum time between calls in milliseconds (16ms = ~60fps)
    * @returns Throttled function
-   * 
+   *
    * @example
    * // Throttle mousemove to 60fps
    * this.mousemoveListener = this.throttle(this.handleMouseMove.bind(this), 16);
@@ -397,20 +393,20 @@ export class CanvasRenderer<TData = any> {
       if (!inThrottle) {
         fn.apply(this, args);
         inThrottle = true;
-        setTimeout(() => inThrottle = false, limit);
+        setTimeout(() => (inThrottle = false), limit);
       }
     }) as T;
   }
 
   /**
    * Setup event listeners for user interactions
-   * 
+   *
    * Performance optimizations:
    * 1. Mouse move throttling - Limits mousemove events to ~60fps (16ms intervals),
    *    reducing event handler calls by 50-80% without affecting user experience.
    * 2. Passive scroll listener - Allows browser to optimize scroll performance
    *    by indicating we won't call preventDefault().
-   * 
+   *
    * @see throttle() - Mouse move throttling implementation
    */
   private setupEventListeners(): void {
@@ -448,8 +444,8 @@ export class CanvasRenderer<TData = any> {
     const container = this.canvas.parentElement;
     if (!container) return;
 
-    const oldScrollTop = this.scrollTop;
-    const oldScrollLeft = this.scrollLeft;
+    const _oldScrollTop = this.scrollTop;
+    const _oldScrollLeft = this.scrollLeft;
 
     this.scrollTop = container.scrollTop;
     this.scrollLeft = container.scrollLeft;
@@ -544,19 +540,19 @@ export class CanvasRenderer<TData = any> {
   }
 
   private getVisibleColumns(): Column[] {
-    return this.gridApi.getAllColumns().filter(col => col.visible);
+    return this.gridApi.getAllColumns().filter((col) => col.visible);
   }
 
   /**
    * Prepare columns for rendering
-   * 
+   *
    * Caches column definitions and X positions for efficient cell rendering.
    * This is called once per render frame before rendering visible rows.
-   * 
+   *
    * Performance optimizations:
    * 1. Column definition caching - Avoids repeated getColumnDef() calls
    * 2. Column position caching - Enables O(1) column X lookup instead of O(n)
-   * 
+   *
    * @see columnPreps - Cached column definitions
    * @see columnPositions - Cached column X positions
    */
@@ -606,9 +602,9 @@ export class CanvasRenderer<TData = any> {
     this.ctx.textBaseline = 'middle';
 
     // Performance optimization: Render only dirty rows if available
-    if (this.dirtyRows.size > 0 && this.dirtyRows.size < (endRow - startRow)) {
+    if (this.dirtyRows.size > 0 && this.dirtyRows.size < endRow - startRow) {
       // Render only dirty rows (sparse update)
-      this.dirtyRows.forEach(rowIndex => {
+      this.dirtyRows.forEach((rowIndex) => {
         if (rowIndex >= startRow && rowIndex < endRow) {
           const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
           if (rowNode) {
@@ -622,9 +618,13 @@ export class CanvasRenderer<TData = any> {
       this.dirtyRows.clear();
     } else {
       // Render all visible rows (full update)
-      walkRows(startRow, endRow, this.scrollTop, this.rowHeight, 
+      walkRows(
+        startRow,
+        endRow,
+        this.scrollTop,
+        this.rowHeight,
         (rowIndex) => this.gridApi.getDisplayedRowAtIndex(rowIndex),
-        (rowIndex, y, rowHeight, rowNode) => {
+        (rowIndex, y, _rowHeight, rowNode) => {
           if (!rowNode) return;
           this.renderRow(rowIndex, y, rowNode, allVisibleColumns, width, leftWidth, rightWidth);
         },
@@ -643,7 +643,7 @@ export class CanvasRenderer<TData = any> {
 
     // Clear damage
     this.damageTracker.clear();
-    
+
     this.lastRenderDuration = performance.now() - startTime;
   }
 
@@ -660,18 +660,18 @@ export class CanvasRenderer<TData = any> {
       // Calculate Y boundaries
       const startY = range.startRow * this.rowHeight - this.scrollTop;
       const endY = (range.endRow + 1) * this.rowHeight - this.scrollTop;
-      
+
       // Calculate X boundaries
-      const startColIdx = allVisibleColumns.findIndex(c => c.colId === range.startColumn);
-      const endColIdx = allVisibleColumns.findIndex(c => c.colId === range.endColumn);
-      
+      const startColIdx = allVisibleColumns.findIndex((c) => c.colId === range.startColumn);
+      const endColIdx = allVisibleColumns.findIndex((c) => c.colId === range.endColumn);
+
       if (startColIdx === -1 || endColIdx === -1) continue;
 
       let minX = Infinity;
       let maxX = -Infinity;
 
       // Calculate the total bounding box of all columns in the range
-      range.columns.forEach(col => {
+      range.columns.forEach((col) => {
         const xPos = this.getColumnX(col, leftPinnedWidth, rightPinnedWidth, viewportWidth);
         minX = Math.min(minX, xPos);
         maxX = Math.max(maxX, xPos + col.width);
@@ -679,16 +679,20 @@ export class CanvasRenderer<TData = any> {
 
       if (minX === Infinity) continue;
 
-      drawRangeSelectionBorder(this.ctx, {
-        x: minX,
-        y: startY,
-        width: maxX - minX,
-        height: endY - startY
-      }, {
-        color: this.theme.bgSelection,
-        fillColor: this.theme.bgSelection + '40', // 25% opacity
-        lineWidth: 2
-      });
+      drawRangeSelectionBorder(
+        this.ctx,
+        {
+          x: minX,
+          y: startY,
+          width: maxX - minX,
+          height: endY - startY,
+        },
+        {
+          color: this.theme.bgSelection,
+          fillColor: `${this.theme.bgSelection}40`, // 25% opacity
+          lineWidth: 2,
+        }
+      );
     }
   }
 
@@ -718,38 +722,68 @@ export class CanvasRenderer<TData = any> {
     this.ctx.fillRect(0, Math.floor(y), viewportWidth, this.rowHeight);
 
     // Render left pinned columns
-    const leftPinned = allVisibleColumns.filter(c => c.pinned === 'left');
-    this.renderColumns(leftPinned, 0, false, rowNode, y, viewportWidth, leftWidth, rightWidth, allVisibleColumns);
+    const leftPinned = allVisibleColumns.filter((c) => c.pinned === 'left');
+    this.renderColumns(
+      leftPinned,
+      0,
+      false,
+      rowNode,
+      y,
+      viewportWidth,
+      leftWidth,
+      rightWidth,
+      allVisibleColumns
+    );
 
     // Render center columns (with clipping)
-    const centerColumns = allVisibleColumns.filter(c => !c.pinned);
+    const centerColumns = allVisibleColumns.filter((c) => !c.pinned);
     if (centerColumns.length > 0) {
       this.ctx.save();
       this.ctx.beginPath();
       this.ctx.rect(
-        Math.floor(leftWidth), 
-        Math.floor(y), 
-        Math.floor(viewportWidth - leftWidth - rightWidth), 
+        Math.floor(leftWidth),
+        Math.floor(y),
+        Math.floor(viewportWidth - leftWidth - rightWidth),
         this.rowHeight
       );
       this.ctx.clip();
-      this.renderColumns(centerColumns, leftWidth, true, rowNode, y, viewportWidth, leftWidth, rightWidth, allVisibleColumns);
+      this.renderColumns(
+        centerColumns,
+        leftWidth,
+        true,
+        rowNode,
+        y,
+        viewportWidth,
+        leftWidth,
+        rightWidth,
+        allVisibleColumns
+      );
       this.ctx.restore();
     }
 
     // Render right pinned columns
-    const rightPinned = allVisibleColumns.filter(c => c.pinned === 'right');
-    this.renderColumns(rightPinned, viewportWidth - rightWidth, false, rowNode, y, viewportWidth, leftWidth, rightWidth, allVisibleColumns);
+    const rightPinned = allVisibleColumns.filter((c) => c.pinned === 'right');
+    this.renderColumns(
+      rightPinned,
+      viewportWidth - rightWidth,
+      false,
+      rowNode,
+      y,
+      viewportWidth,
+      leftWidth,
+      rightWidth,
+      allVisibleColumns
+    );
   }
 
   private renderDetailRow(
-    rowIndex: number,
+    _rowIndex: number,
     y: number,
     rowNode: IRowNode<TData>,
     viewportWidth: number
   ): void {
     const rowHeight = rowNode.rowHeight || 200;
-    
+
     // Draw detail background
     this.ctx.fillStyle = '#f0f0f0';
     this.ctx.fillRect(0, Math.floor(y), viewportWidth, rowHeight);
@@ -762,7 +796,7 @@ export class CanvasRenderer<TData = any> {
       Math.floor(this.theme.cellPadding * 4),
       Math.floor(y + rowHeight / 2)
     );
-    
+
     // Reset font
     this.ctx.font = getFontFromTheme(this.theme);
   }
@@ -829,9 +863,14 @@ export class CanvasRenderer<TData = any> {
 
     // Handle group indentation
     const isAutoGroupCol = column.colId === 'ag-Grid-AutoColumn';
-    const isFirstColIfNoAutoGroup = !allVisibleColumns.some(c => c.colId === 'ag-Grid-AutoColumn') && column === allVisibleColumns[0];
+    const isFirstColIfNoAutoGroup =
+      !allVisibleColumns.some((c) => c.colId === 'ag-Grid-AutoColumn') &&
+      column === allVisibleColumns[0];
 
-    if ((isAutoGroupCol || isFirstColIfNoAutoGroup) && (rowNode.group || rowNode.master || rowNode.level > 0)) {
+    if (
+      (isAutoGroupCol || isFirstColIfNoAutoGroup) &&
+      (rowNode.group || rowNode.master || rowNode.level > 0)
+    ) {
       const indent = rowNode.level * this.theme.groupIndentWidth;
       textX += indent;
 
@@ -854,11 +893,11 @@ export class CanvasRenderer<TData = any> {
   }
 
   private drawSparkline(
-    data: any[], 
-    x: number, 
-    y: number, 
-    width: number, 
-    height: number, 
+    data: any[],
+    x: number,
+    y: number,
+    width: number,
+    height: number,
     options: SparklineOptions
   ): void {
     if (!Array.isArray(data) || data.length === 0) return;
@@ -878,13 +917,13 @@ export class CanvasRenderer<TData = any> {
     const type = options.type || 'line';
 
     this.ctx.save();
-    
+
     if (type === 'line' || type === 'area') {
       this.ctx.beginPath();
       for (let i = 0; i < data.length; i++) {
         const px = drawX + (i / (data.length - 1)) * drawWidth;
         const py = drawY + drawHeight - ((data[i] - min) / range) * drawHeight;
-        
+
         if (i === 0) this.ctx.moveTo(px, py);
         else this.ctx.lineTo(px, py);
       }
@@ -896,7 +935,7 @@ export class CanvasRenderer<TData = any> {
         this.ctx.closePath();
         this.ctx.fillStyle = areaOptions.fill || 'rgba(33, 150, 243, 0.3)';
         this.ctx.fill();
-        
+
         // Stroke the top line
         this.ctx.beginPath();
         for (let i = 0; i < data.length; i++) {
@@ -920,13 +959,18 @@ export class CanvasRenderer<TData = any> {
       const barWidth = colWidth * (1 - colPadding);
 
       this.ctx.fillStyle = colOptions.fill || '#2196f3';
-      
+
       for (let i = 0; i < data.length; i++) {
         const px = drawX + i * colWidth + (colWidth * colPadding) / 2;
         const valHeight = ((data[i] - min) / range) * drawHeight;
         const py = drawY + drawHeight - valHeight;
-        
-        this.ctx.fillRect(Math.floor(px), Math.floor(py), Math.floor(barWidth), Math.ceil(valHeight));
+
+        this.ctx.fillRect(
+          Math.floor(px),
+          Math.floor(py),
+          Math.floor(barWidth),
+          Math.ceil(valHeight)
+        );
       }
     }
 
@@ -1008,9 +1052,10 @@ export class CanvasRenderer<TData = any> {
 
     // Track old selection for damage tracking
     const oldSelectedRows = new Set<number>(
-      this.gridApi.getSelectedNodes()
-        .map(node => node.rowIndex)
-        .filter(idx => idx !== null) as number[]
+      this.gridApi
+        .getSelectedNodes()
+        .map((node) => node.rowIndex)
+        .filter((idx) => idx !== null) as number[]
     );
 
     if (event.ctrlKey || event.metaKey) {
@@ -1022,9 +1067,10 @@ export class CanvasRenderer<TData = any> {
 
     // Track new selection
     const newSelectedRows = new Set<number>(
-      this.gridApi.getSelectedNodes()
-        .map(node => node.rowIndex)
-        .filter(idx => idx !== null) as number[]
+      this.gridApi
+        .getSelectedNodes()
+        .map((node) => node.rowIndex)
+        .filter((idx) => idx !== null) as number[]
     );
 
     // Mark changed rows as dirty
@@ -1065,27 +1111,31 @@ export class CanvasRenderer<TData = any> {
       const clickedCol = columns[columnIndex];
 
       const isAutoGroupCol = clickedCol.colId === 'ag-Grid-AutoColumn';
-      const isFirstColIfNoAutoGroup = !columns.some(c => c.colId === 'ag-Grid-AutoColumn') && columnIndex === 0;
+      const isFirstColIfNoAutoGroup =
+        !columns.some((c) => c.colId === 'ag-Grid-AutoColumn') && columnIndex === 0;
 
       if (isAutoGroupCol || isFirstColIfNoAutoGroup) {
         const rect = this.canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
-        const { left: leftWidth, right: rightWidth } = getPinnedWidths(columns);
+        const { left: leftWidth } = getPinnedWidths(columns);
 
         let colX = 0;
         if (clickedCol.pinned === 'left') {
-          const leftPinned = columns.filter(c => c.pinned === 'left');
           for (let i = 0; i < columns.indexOf(clickedCol); i++) {
             if (columns[i].pinned === 'left') colX += columns[i].width;
           }
-        } else if (clickedCol.pinned === 'right') {
-          colX = this.viewportWidth - columns.filter(c => c.pinned === 'right').reduce((sum, c) => sum + c.width, 0);
+        }
+ else if (clickedCol.pinned === 'right') {
+          colX =
+            this.viewportWidth -
+            columns.filter((c) => c.pinned === 'right').reduce((sum, c) => sum + c.width, 0);
         } else {
           colX = leftWidth + this.getCenterColumnOffset(clickedCol) - this.scrollLeft;
         }
 
         const indent = rowNode.level * this.theme.groupIndentWidth;
-        const indicatorAreaEnd = colX + this.theme.cellPadding + indent + this.theme.groupIndicatorSize + 3;
+        const indicatorAreaEnd =
+          colX + this.theme.cellPadding + indent + this.theme.groupIndicatorSize + 3;
 
         if (x >= colX + this.theme.cellPadding + indent && x < indicatorAreaEnd) {
           this.gridApi.setRowNodeExpanded(rowNode, !rowNode.expanded);
@@ -1136,7 +1186,7 @@ export class CanvasRenderer<TData = any> {
   }
 
   private getCenterColumnOffset(targetCol: Column): number {
-    const columns = this.getVisibleColumns().filter(c => !c.pinned);
+    const columns = this.getVisibleColumns().filter((c) => !c.pinned);
     let offset = 0;
     for (const col of columns) {
       if (col === targetCol) return offset;
@@ -1151,14 +1201,22 @@ export class CanvasRenderer<TData = any> {
 
     for (const def of allDefs) {
       if ('children' in def) {
-        const found = def.children.find(c => {
+        const found = def.children.find((c) => {
           const cDef = c as ColDef;
-          return cDef.colId === column.colId || cDef.field?.toString() === column.colId || cDef.field?.toString() === column.field;
+          return (
+            cDef.colId === column.colId ||
+            cDef.field?.toString() === column.colId ||
+            cDef.field?.toString() === column.field
+          );
         });
         if (found) return found as ColDef<TData>;
       } else {
         const cDef = def as ColDef;
-        if (cDef.colId === column.colId || cDef.field?.toString() === column.colId || cDef.field?.toString() === column.field) {
+        if (
+          cDef.colId === column.colId ||
+          cDef.field?.toString() === column.colId ||
+          cDef.field?.toString() === column.field
+        ) {
           return def as ColDef<TData>;
         }
       }
@@ -1253,19 +1311,21 @@ export class CanvasRenderer<TData = any> {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
     }
-    
+
     // Remove event listeners
     const container = this.canvas.parentElement;
     if (container && this.scrollListener) {
       container.removeEventListener('scroll', this.scrollListener);
     }
-    
-    if (this.mousedownListener) this.canvas.removeEventListener('mousedown', this.mousedownListener);
-    if (this.mousemoveListener) this.canvas.removeEventListener('mousemove', this.mousemoveListener);
+
+    if (this.mousedownListener)
+      this.canvas.removeEventListener('mousedown', this.mousedownListener);
+    if (this.mousemoveListener)
+      this.canvas.removeEventListener('mousemove', this.mousemoveListener);
     if (this.clickListener) this.canvas.removeEventListener('click', this.clickListener);
     if (this.dblclickListener) this.canvas.removeEventListener('dblclick', this.dblclickListener);
     if (this.mouseupListener) this.canvas.removeEventListener('mouseup', this.mouseupListener);
-    
+
     if (this.resizeListener) {
       window.removeEventListener('resize', this.resizeListener);
     }

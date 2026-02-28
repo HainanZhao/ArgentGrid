@@ -4,7 +4,7 @@
  * Draws grid lines (borders) efficiently.
  */
 
-import { Column, IRowNode } from '../../types/ag-grid-types';
+import { Column } from '../../types/ag-grid-types';
 import { GridTheme, Rectangle } from './types';
 
 // ============================================================================
@@ -137,9 +137,9 @@ export function getColumnBorderPositions(
 ): number[] {
   const positions: number[] = [];
 
-  const leftPinned = columns.filter(c => c.pinned === 'left');
-  const rightPinned = columns.filter(c => c.pinned === 'right');
-  const centerColumns = columns.filter(c => !c.pinned);
+  const leftPinned = columns.filter((c) => c.pinned === 'left');
+  const rightPinned = columns.filter((c) => c.pinned === 'right');
+  const centerColumns = columns.filter((c) => !c.pinned);
 
   // Left pinned column borders
   let x = 0;
@@ -261,11 +261,7 @@ export function drawRangeSelectionBorder(
     lineWidth?: number;
   } = {}
 ): void {
-  const {
-    color = '#1976d2',
-    fillColor = 'rgba(25, 118, 210, 0.1)',
-    lineWidth = 1
-  } = options;
+  const { color = '#1976d2', fillColor = 'rgba(25, 118, 210, 0.1)', lineWidth = 1 } = options;
 
   // Draw fill
   if (fillColor) {
@@ -332,12 +328,7 @@ export function drawPinnedRegionShadows(
 ): void {
   // Left shadow (on the right edge of left pinned)
   if (leftPinnedWidth > 0) {
-    const gradient = ctx.createLinearGradient(
-      leftPinnedWidth,
-      0,
-      leftPinnedWidth + 4,
-      0
-    );
+    const gradient = ctx.createLinearGradient(leftPinnedWidth, 0, leftPinnedWidth + 4, 0);
     gradient.addColorStop(0, 'rgba(0, 0, 0, 0.1)');
     gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
@@ -348,12 +339,7 @@ export function drawPinnedRegionShadows(
   // Right shadow (on the left edge of right pinned)
   if (rightPinnedWidth > 0) {
     const shadowX = viewportWidth - rightPinnedWidth;
-    const gradient = ctx.createLinearGradient(
-      shadowX - 4,
-      0,
-      shadowX,
-      0
-    );
+    const gradient = ctx.createLinearGradient(shadowX - 4, 0, shadowX, 0);
     gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
     gradient.addColorStop(1, 'rgba(0, 0, 0, 0.1)');
 

@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { CanvasRenderer } from './canvas-renderer';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GridApi } from '../types/ag-grid-types';
+import { CanvasRenderer } from './canvas-renderer';
 
 // Mock canvas context with ALL required methods
 const mockCanvasContext = {
@@ -35,7 +35,7 @@ const mockCanvasContext = {
   strokeStyle: '#000000',
   font: '13px sans-serif',
   textAlign: 'start',
-  textBaseline: 'alphabetic'
+  textBaseline: 'alphabetic',
 } as unknown as CanvasRenderingContext2D;
 
 // Mock GridApi
@@ -52,7 +52,6 @@ const createMockGridApi = (): GridApi => {
     getLastRenderedRow: vi.fn(() => 100),
     getFirstRenderedColumn: vi.fn(),
     getLastRenderedColumn: vi.fn(),
-    getRowNode: vi.fn(),
     forEachNode: vi.fn(),
     forEachNodeAfterFilter: vi.fn(),
     forEachNodeAfterFilterAndSort: vi.fn(),
@@ -167,7 +166,7 @@ const createMockGridApi = (): GridApi => {
     isPaginationEnabled: vi.fn(() => false),
     getCellRanges: vi.fn(() => null),
     getRowAtY: vi.fn((y: number) => Math.floor(y / 32)),
-    getRowY: vi.fn((rowIndex: number) => rowIndex * 32)
+    getRowY: vi.fn((rowIndex: number) => rowIndex * 32),
   } as any;
 };
 
@@ -178,7 +177,9 @@ describe('CanvasRenderer', () => {
   let mockCanvas: HTMLCanvasElement;
 
   beforeAll(() => {
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => mockCanvasContext as any);
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      () => mockCanvasContext as any
+    );
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -191,29 +192,29 @@ describe('CanvasRenderer', () => {
     mockCanvas = document.createElement('canvas');
     mockCanvas.width = 800;
     mockCanvas.height = 600;
-    
+
     // Mock scrollHeight and clientHeight using Object.defineProperty
     Object.defineProperty(mockCanvas, 'scrollHeight', {
       value: 3200,
       writable: true,
-      configurable: true
+      configurable: true,
     });
     Object.defineProperty(mockCanvas, 'clientHeight', {
       value: 600,
       writable: true,
-      configurable: true
+      configurable: true,
     });
-    
+
     mockApi = createMockGridApi();
     mockContainer = document.createElement('div');
     mockContainer.style.height = '600px';
     mockContainer.style.overflow = 'auto';
     mockContainer.appendChild(mockCanvas);
-    
+
     vi.spyOn(mockCanvas, 'parentElement', 'get').mockReturnValue(mockContainer);
     vi.spyOn(mockContainer, 'scrollHeight', 'get').mockReturnValue(3200);
     vi.spyOn(mockContainer, 'clientHeight', 'get').mockReturnValue(600);
-    
+
     renderer = new CanvasRenderer(mockCanvas, mockApi, 32);
   });
 
@@ -265,7 +266,7 @@ describe('CanvasRenderer', () => {
     Object.defineProperty(container, 'clientHeight', {
       value: 800,
       writable: true,
-      configurable: true
+      configurable: true,
     });
     window.dispatchEvent(new Event('resize'));
     expect(container).toBeTruthy();

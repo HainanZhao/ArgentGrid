@@ -1,15 +1,15 @@
 /**
  * Theme Builder - Create and customize themes programmatically
- * 
+ *
  * Inspired by AG Grid's new Theming API (v32.2+)
  */
 
-import type { 
+import type {
+  PartialThemeParameters,
   GridThemeObject as Theme,
-  ThemeParameters, 
-  PartialThemeParameters, 
+  ThemeBuilder,
+  ThemeParameters,
   ThemePart,
-  ThemeBuilder 
 } from './types';
 
 // ============================================================================
@@ -39,7 +39,7 @@ class ThemeBuilderImpl implements ThemeBuilder {
 
   /**
    * Create a new theme with overridden parameters
-   * 
+   *
    * @example
    * ```typescript
    * const myTheme = themeQuartz.withParams({
@@ -65,7 +65,7 @@ class ThemeBuilderImpl implements ThemeBuilder {
 
   /**
    * Add a theme part to the theme
-   * 
+   *
    * @example
    * ```typescript
    * const myTheme = themeQuartz
@@ -99,7 +99,7 @@ class ThemeBuilderImpl implements ThemeBuilder {
    */
   toCSS(): string {
     const cssVars: string[] = [];
-    
+
     // Convert parameters to CSS custom properties
     Object.entries(this.parameters).forEach(([key, value]) => {
       const cssVarName = camelToKebab(key);
@@ -107,7 +107,7 @@ class ThemeBuilderImpl implements ThemeBuilder {
     });
 
     // Add parts CSS
-    this.parts.forEach(part => {
+    this.parts.forEach((part) => {
       if (part.css) {
         cssVars.push(part.css);
       }
@@ -123,7 +123,7 @@ class ThemeBuilderImpl implements ThemeBuilder {
 
 /**
  * Create a new theme
- * 
+ *
  * @example
  * ```typescript
  * const myTheme = createTheme({
@@ -147,7 +147,7 @@ export function createTheme(config: {
 
 /**
  * Create a theme by extending an existing theme
- * 
+ *
  * @example
  * ```typescript
  * const myTheme = extendTheme(themeQuartz, {
@@ -156,10 +156,7 @@ export function createTheme(config: {
  * });
  * ```
  */
-export function extendTheme(
-  baseTheme: ThemeBuilder,
-  params: PartialThemeParameters
-): ThemeBuilder {
+export function extendTheme(baseTheme: ThemeBuilder, params: PartialThemeParameters): ThemeBuilder {
   return baseTheme.withParams(params);
 }
 
@@ -209,7 +206,7 @@ export function applyTheme(
   container: HTMLElement | ShadowRoot = document.documentElement
 ): void {
   const css = theme.toCSS();
-  
+
   // Remove existing theme styles
   const existingStyle = container.querySelector('style[data-ag-theme]');
   if (existingStyle) {
@@ -220,7 +217,7 @@ export function applyTheme(
   const style = document.createElement('style');
   style.setAttribute('data-ag-theme', theme.name);
   style.textContent = css;
-  
+
   // Append to container
   container.appendChild(style);
 }

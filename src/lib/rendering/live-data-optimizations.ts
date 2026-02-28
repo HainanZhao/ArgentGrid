@@ -1,19 +1,17 @@
 /**
  * Live Data Optimizations for CanvasRenderer
- * 
+ *
  * Performance optimizations for high-frequency data updates (10+ entries/sec):
  * - Update batching (90% fewer renders)
  * - Dirty row tracking (90% less rendering work)
  * - Row ID indexing (O(1) updates instead of O(n))
- * 
+ *
  * @see CanvasRenderer - Main renderer class that uses these optimizations
  */
 
-import type { CanvasRenderer } from './canvas-renderer';
-
 /**
  * Mixin for live data optimizations
- * 
+ *
  * Usage:
  * ```typescript
  * class OptimizedRenderer extends LiveDataOptimizations(CanvasRenderer) {
@@ -46,13 +44,13 @@ export function LiveDataOptimizations<TBase extends new (...args: any[]) => any>
      */
     addRowData(data: any, immediate = false): void {
       this.updateBuffer.push(data);
-      
+
       // Index by ID
       if (data.id) {
         const index = (this as any).rowData.length + this.updateBuffer.length - 1;
         this.rowIndexById.set(data.id, index);
       }
-      
+
       if (immediate) {
         this.flushUpdateBuffer();
       } else if (!this.updateBufferTimer) {
@@ -67,21 +65,21 @@ export function LiveDataOptimizations<TBase extends new (...args: any[]) => any>
      */
     flushUpdateBuffer(): void {
       if (this.updateBuffer.length === 0) return;
-      
+
       if (this.updateBufferTimer) {
         clearTimeout(this.updateBufferTimer);
         this.updateBufferTimer = null;
       }
-      
+
       const startIndex = (this as any).rowData.length;
       (this as any).rowData.push(...this.updateBuffer);
       this.updateBuffer = [];
-      
+
       // Mark new rows as dirty
       for (let i = 0; i < (this as any).rowData.length - startIndex; i++) {
         this.dirtyRows.add(startIndex + i);
       }
-      
+
       (this as any).totalRowCount = (this as any).rowData.length;
       (this as any).renderFrame();
     }
@@ -101,7 +99,7 @@ export function LiveDataOptimizations<TBase extends new (...args: any[]) => any>
       if (index === undefined || index >= (this as any).rowData.length) {
         return false;
       }
-      
+
       Object.assign((this as any).rowData[index], updates);
       this.markRowDirty(index);
       return true;
@@ -113,7 +111,7 @@ export function LiveDataOptimizations<TBase extends new (...args: any[]) => any>
     removeRowById(id: string): boolean {
       const index = this.rowIndexById.get(id);
       if (index === undefined) return false;
-      
+
       (this as any).rowData.splice(index, 1);
       this.rowIndexById.delete(id);
       this.rebuildRowIndex();

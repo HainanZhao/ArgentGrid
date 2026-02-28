@@ -5,7 +5,7 @@
  * Based on Glide Data Grid's blitting architecture.
  */
 
-import { Rectangle, BlitResult, BufferPair } from './types';
+import { BlitResult, BufferPair, Rectangle } from './types';
 
 // ============================================================================
 // BLIT THRESHOLDS
@@ -99,7 +99,7 @@ export function calculateBlit(
     };
   }
 
-  const dirtyRegions: Rectangle[] = [];
+  const _dirtyRegions: Rectangle[] = [];
 
   // Vertical scroll (most common)
   if (Math.abs(deltaY) >= MIN_BLIT_DELTA && Math.abs(deltaX) < MIN_BLIT_DELTA) {
@@ -127,19 +127,27 @@ export function calculateBlit(
       },
       dirtyRegions: [
         // Top strip that needs redraw
-        ...(deltaY > 0 ? [{
-          x: leftPinnedWidth,
-          y: 0,
-          width: centerWidth,
-          height: absDelta,
-        }] : []),
+        ...(deltaY > 0
+          ? [
+              {
+                x: leftPinnedWidth,
+                y: 0,
+                width: centerWidth,
+                height: absDelta,
+              },
+            ]
+          : []),
         // Bottom strip that needs redraw
-        ...(deltaY < 0 ? [{
-          x: leftPinnedWidth,
-          y: viewportSize.height - absDelta,
-          width: centerWidth,
-          height: absDelta,
-        }] : []),
+        ...(deltaY < 0
+          ? [
+              {
+                x: leftPinnedWidth,
+                y: viewportSize.height - absDelta,
+                width: centerWidth,
+                height: absDelta,
+              },
+            ]
+          : []),
       ],
       deltaX,
       deltaY,
@@ -171,19 +179,27 @@ export function calculateBlit(
       },
       dirtyRegions: [
         // Left strip that needs redraw
-        ...(deltaX > 0 ? [{
-          x: leftPinnedWidth,
-          y: 0,
-          width: absDelta,
-          height: viewportSize.height,
-        }] : []),
+        ...(deltaX > 0
+          ? [
+              {
+                x: leftPinnedWidth,
+                y: 0,
+                width: absDelta,
+                height: viewportSize.height,
+              },
+            ]
+          : []),
         // Right strip that needs redraw
-        ...(deltaX < 0 ? [{
-          x: viewportSize.width - rightPinnedWidth - absDelta,
-          y: 0,
-          width: absDelta,
-          height: viewportSize.height,
-        }] : []),
+        ...(deltaX < 0
+          ? [
+              {
+                x: viewportSize.width - rightPinnedWidth - absDelta,
+                y: 0,
+                width: absDelta,
+                height: viewportSize.height,
+              },
+            ]
+          : []),
       ],
       deltaX,
       deltaY,
@@ -248,15 +264,11 @@ export function blitLastFrame(
 /**
  * Create a buffer pair for double buffering
  */
-export function createBufferPair(
-  width: number,
-  height: number,
-  dpr: number = 1
-): BufferPair {
+export function createBufferPair(width: number, height: number, dpr: number = 1): BufferPair {
   const front = document.createElement('canvas');
   const back = document.createElement('canvas');
 
-  [front, back].forEach(canvas => {
+  [front, back].forEach((canvas) => {
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);
     canvas.style.width = `${width}px`;
@@ -307,7 +319,7 @@ export function resizeBufferPair(
   height: number,
   dpr: number = 1
 ): void {
-  [buffers.front, buffers.back].forEach(canvas => {
+  [buffers.front, buffers.back].forEach((canvas) => {
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);
     canvas.style.width = `${width}px`;
@@ -356,14 +368,14 @@ export class BlitState {
     if (!this.lastCanvas) {
       this.lastCanvas = document.createElement('canvas');
     }
-    
+
     // Only resize if dimensions changed, as setting width/height clears the canvas
     // and is an expensive operation.
     if (this.lastCanvas.width !== canvas.width || this.lastCanvas.height !== canvas.height) {
       this.lastCanvas.width = canvas.width;
       this.lastCanvas.height = canvas.height;
     }
-    
+
     const ctx = this.lastCanvas.getContext('2d')!;
     ctx.drawImage(canvas, 0, 0);
   }

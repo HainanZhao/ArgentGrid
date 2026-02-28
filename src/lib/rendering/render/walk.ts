@@ -5,13 +5,13 @@
  * Based on Glide Data Grid's walker architecture.
  */
 
-import { Column, IRowNode, GridApi } from '../../types/ag-grid-types';
-import { 
-  ColumnWalkCallback, 
-  RowWalkCallback, 
+import { Column, GridApi, IRowNode } from '../../types/ag-grid-types';
+import {
   CellWalkCallback,
+  ColumnWalkCallback,
   PositionedColumn,
-  VisibleRange 
+  RowWalkCallback,
+  VisibleRange,
 } from './types';
 
 // ============================================================================
@@ -30,9 +30,9 @@ export function walkColumns(
   rightPinnedWidth: number,
   callback: ColumnWalkCallback
 ): void {
-  const leftPinned = columns.filter(c => c.pinned === 'left');
-  const rightPinned = columns.filter(c => c.pinned === 'right');
-  const centerColumns = columns.filter(c => !c.pinned);
+  const leftPinned = columns.filter((c) => c.pinned === 'left');
+  const rightPinned = columns.filter((c) => c.pinned === 'right');
+  const centerColumns = columns.filter((c) => !c.pinned);
 
   // 1. Left pinned columns (no scroll offset)
   let x = 0;
@@ -44,7 +44,7 @@ export function walkColumns(
   // 2. Center columns (with scroll offset and clipping)
   const centerStartX = leftPinnedWidth;
   const centerEndX = viewportWidth - rightPinnedWidth;
-  const centerWidth = centerEndX - centerStartX;
+  const _centerWidth = centerEndX - centerStartX;
 
   x = leftPinnedWidth - scrollX;
   for (const col of centerColumns) {
@@ -81,7 +81,12 @@ export function getPositionedColumns(
 ): PositionedColumn[] {
   const result: PositionedColumn[] = [];
 
-  walkColumns(columns, scrollX, viewportWidth, leftPinnedWidth, rightPinnedWidth, 
+  walkColumns(
+    columns,
+    scrollX,
+    viewportWidth,
+    leftPinnedWidth,
+    rightPinnedWidth,
     (column, x, width, isPinned, pinSide) => {
       result.push({ column, x, width, isPinned, pinSide });
     }
@@ -94,13 +99,9 @@ export function getPositionedColumns(
  * Get pinned column widths
  */
 export function getPinnedWidths(columns: Column[]): { left: number; right: number } {
-  const left = columns
-    .filter(c => c.pinned === 'left')
-    .reduce((sum, c) => sum + c.width, 0);
-  
-  const right = columns
-    .filter(c => c.pinned === 'right')
-    .reduce((sum, c) => sum + c.width, 0);
+  const left = columns.filter((c) => c.pinned === 'left').reduce((sum, c) => sum + c.width, 0);
+
+  const right = columns.filter((c) => c.pinned === 'right').reduce((sum, c) => sum + c.width, 0);
 
   return { left, right };
 }
@@ -124,7 +125,7 @@ export function walkRows(
   for (let rowIndex = startRow; rowIndex < endRow; rowIndex++) {
     const y = api ? api.getRowY(rowIndex) - scrollTop : rowIndex * rowHeight - scrollTop;
     const rowNode = getRowNode(rowIndex);
-    const height = (api && rowNode) ? (rowNode.rowHeight || rowHeight) : rowHeight;
+    const height = api && rowNode ? rowNode.rowHeight || rowHeight : rowHeight;
     callback(rowIndex, y, height, rowNode);
   }
 }
@@ -142,19 +143,13 @@ export function getVisibleRowRange(
 ): { startRow: number; endRow: number } {
   if (api) {
     const startRow = Math.max(0, api.getRowAtY(scrollTop) - buffer);
-    const endRow = Math.min(
-      totalRowCount,
-      api.getRowAtY(scrollTop + viewportHeight) + buffer + 1
-    );
+    const endRow = Math.min(totalRowCount, api.getRowAtY(scrollTop + viewportHeight) + buffer + 1);
     return { startRow, endRow };
   }
 
   const startRow = Math.max(0, Math.floor(scrollTop / rowHeight) - buffer);
   const visibleRowCount = Math.ceil(viewportHeight / rowHeight);
-  const endRow = Math.min(
-    totalRowCount,
-    startRow + visibleRowCount + buffer * 2
-  );
+  const endRow = Math.min(totalRowCount, startRow + visibleRowCount + buffer * 2);
 
   return { startRow, endRow };
 }
@@ -180,7 +175,7 @@ export function walkCells(
   scrollX: number,
   scrollTop: number,
   viewportWidth: number,
-  viewportHeight: number,
+  _viewportHeight: number,
   rowHeight: number,
   getRowNode: (index: number) => IRowNode | null,
   callback: CellWalkCallback
@@ -189,8 +184,13 @@ export function walkCells(
 
   // Walk columns for each row
   walkRows(startRow, endRow, scrollTop, rowHeight, getRowNode, (rowIndex, y, height, rowNode) => {
-    walkColumns(columns, scrollX, viewportWidth, leftPinnedWidth, rightPinnedWidth, 
-      (column, x, width, isPinned) => {
+    walkColumns(
+      columns,
+      scrollX,
+      viewportWidth,
+      leftPinnedWidth,
+      rightPinnedWidth,
+      (column, x, width, _isPinned) => {
         callback(column, rowIndex, x, y, width, height, rowNode);
       }
     );
@@ -212,9 +212,9 @@ export function getColumnAtX(
 ): { column: Column | null; index: number; localX: number } {
   const { left: leftPinnedWidth, right: rightPinnedWidth } = getPinnedWidths(columns);
 
-  const leftPinned = columns.filter(c => c.pinned === 'left');
-  const rightPinned = columns.filter(c => c.pinned === 'right');
-  const centerColumns = columns.filter(c => !c.pinned);
+  const leftPinned = columns.filter((c) => c.pinned === 'left');
+  const rightPinned = columns.filter((c) => c.pinned === 'right');
+  const centerColumns = columns.filter((c) => !c.pinned);
 
   // Check left pinned
   if (x < leftPinnedWidth) {
@@ -258,7 +258,7 @@ export function getColumnAtX(
  * Get column index in visible columns array
  */
 export function getColumnIndex(columns: Column[], colId: string): number {
-  return columns.findIndex(c => c.colId === colId);
+  return columns.findIndex((c) => c.colId === colId);
 }
 
 /**
@@ -269,7 +269,7 @@ export function getTotalColumnWidth(columns: Column[]): number {
 }
 
 // ============================================================================
-// ROW UTILITIES  
+// ROW UTILITIES
 // ============================================================================
 
 /**
@@ -291,7 +291,7 @@ export function isRowVisible(
   const y = rowIndex * rowHeight;
   const rowBottom = y + rowHeight;
   const viewportBottom = scrollTop + viewportHeight;
-  
+
   return y < viewportBottom && rowBottom > scrollTop;
 }
 
@@ -313,13 +313,17 @@ export function calculateVisibleRange(
   rowBuffer: number = 5
 ): VisibleRange {
   const { startRow, endRow } = getVisibleRowRange(
-    scrollTop, viewportHeight, rowHeight, totalRowCount, rowBuffer
+    scrollTop,
+    viewportHeight,
+    rowHeight,
+    totalRowCount,
+    rowBuffer
   );
 
   // For columns, we just track indices
-  const centerColumns = columns.filter(c => !c.pinned);
-  const leftPinned = columns.filter(c => c.pinned === 'left');
-  const rightPinned = columns.filter(c => c.pinned === 'right');
+  const centerColumns = columns.filter((c) => !c.pinned);
+  const leftPinned = columns.filter((c) => c.pinned === 'left');
+  const rightPinned = columns.filter((c) => c.pinned === 'right');
 
   const leftPinnedWidth = leftPinned.reduce((sum, c) => sum + c.width, 0);
   const rightPinnedWidth = rightPinned.reduce((sum, c) => sum + c.width, 0);
