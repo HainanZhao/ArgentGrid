@@ -5,13 +5,6 @@
     "baseUrl": ".",
     "paths": {}
   },
-  "include": [
-    "src/**/*.ts",
-    "src/storybook-app/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "dist-storybook"
-  ]
+  "include": ["src/**/*.ts", "src/storybook-app/**/*.ts"],
+  "exclude": ["node_modules", "dist", "dist-storybook"]
 }

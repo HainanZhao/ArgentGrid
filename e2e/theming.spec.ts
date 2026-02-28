@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 test.describe('Theming Stories', () => {
   test('should load Light Mode story', async ({ page }) => {

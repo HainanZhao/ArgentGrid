@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 test.describe('Grouping Stories', () => {
   test('should load Row Grouping story', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 test.describe('Benchmark Stories', () => {
   test('should load Benchmark 10K story', async ({ page }) => {

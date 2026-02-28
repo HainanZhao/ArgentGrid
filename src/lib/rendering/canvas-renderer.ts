@@ -1124,8 +1124,7 @@ export class CanvasRenderer<TData = any> {
           for (let i = 0; i < columns.indexOf(clickedCol); i++) {
             if (columns[i].pinned === 'left') colX += columns[i].width;
           }
-        }
- else if (clickedCol.pinned === 'right') {
+        } else if (clickedCol.pinned === 'right') {
           colX =
             this.viewportWidth -
             columns.filter((c) => c.pinned === 'right').reduce((sum, c) => sum + c.width, 0);

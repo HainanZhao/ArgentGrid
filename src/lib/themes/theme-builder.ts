@@ -198,6 +198,57 @@ function camelToKebab(str: string): string {
 }
 
 /**
+ * Get CSS variables from theme as a map
+ * Returns CSS custom properties that can be applied to an element's style
+ */
+export function getThemeCSSVariables(theme: ThemeBuilder): Record<string, string> {
+  const params = theme.parameters;
+  const parts = theme.parts;
+
+  // Collect all parameters from theme and parts
+  let allParams = { ...params };
+
+  // Merge parameters from all parts (later parts override earlier ones)
+  for (const part of parts) {
+    if (part.params) {
+      allParams = { ...allParams, ...part.params };
+    }
+  }
+
+  // Map to CSS variables
+  return {
+    '--ag-background-color': allParams.backgroundColor || allParams.rowBackgroundColor || '#ffffff',
+    '--ag-foreground-color': allParams.foregroundColor || '#181d1f',
+    '--ag-secondary-foreground-color': allParams.secondaryForegroundColor || '#666666',
+    '--ag-header-background-color': allParams.headerBackgroundColor || '#f8f9fa',
+    '--ag-header-foreground-color': allParams.foregroundColor || '#181d1f',
+    '--ag-odd-row-background-color': allParams.rowEvenBackgroundColor || '#f8f9fa',
+    '--ag-row-hover-color':
+      allParams.rowHoverBackgroundColor || allParams.cellHoverBackgroundColor || '#f0f2f5',
+    '--ag-selected-row-background-color': allParams.rowSelectedBackgroundColor || '#e3f2fd',
+    '--ag-border-color': allParams.borderColor || '#babed1',
+    '--ag-cell-horizontal-padding': `${String(allParams.cellPadding || allParams.spacing || 8)}px`,
+    '--ag-header-height': `${String(allParams.headerHeight || 48)}px`,
+    '--ag-row-height': `${String(allParams.rowHeight || 32)}px`,
+    '--ag-font-size': `${String(allParams.fontSize || 14)}px`,
+    '--ag-font-family':
+      allParams.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  };
+}
+
+/**
+ * Apply theme CSS variables to a specific element
+ * This updates both the element's inline styles and any CSS that uses these variables
+ */
+export function applyThemeCSSVariables(theme: ThemeBuilder, element: HTMLElement): void {
+  const cssVars = getThemeCSSVariables(theme);
+
+  Object.entries(cssVars).forEach(([key, value]) => {
+    element.style.setProperty(key, value);
+  });
+}
+
+/**
  * Apply theme to a container element
  * Injects CSS custom properties
  */
@@ -233,4 +284,64 @@ export function removeTheme(
   if (existingStyle) {
     existingStyle.remove();
   }
+}
+
+// ============================================================================
+// THEME CONVERTER - Convert ThemeBuilder to Canvas Renderer format
+// ============================================================================
+
+/**
+ * Convert ThemeBuilder parameters to internal GridTheme format
+ * This allows the new Theming API to work with the canvas renderer
+ */
+export function convertThemeToGridTheme(theme: ThemeBuilder): Record<string, any> {
+  const params = theme.parameters;
+  const parts = theme.parts;
+
+  // Collect all parameters from theme and parts
+  let allParams = { ...params };
+
+  // Merge parameters from all parts (later parts override earlier ones)
+  for (const part of parts) {
+    if (part.params) {
+      allParams = { ...allParams, ...part.params };
+    }
+  }
+
+  // Map ThemeParameters to internal GridTheme format
+  const gridTheme: Record<string, any> = {
+    // Background colors
+    bgCell: allParams.backgroundColor || allParams.rowBackgroundColor || '#ffffff',
+    bgCellEven: allParams.rowEvenBackgroundColor || '#f8f9fa',
+    bgHeader: allParams.headerBackgroundColor || '#f8f9fa',
+    bgSelection: allParams.rowSelectedBackgroundColor || '#e3f2fd',
+    bgHover: allParams.rowHoverBackgroundColor || allParams.cellHoverBackgroundColor || '#f0f2f5',
+    bgGroupRow: allParams.groupRowBackgroundColor || '#f5f5f5',
+
+    // Text colors
+    textCell: allParams.foregroundColor || '#181d1f',
+    textHeader: allParams.foregroundColor || '#181d1f',
+
+    // Typography
+    fontFamily:
+      allParams.fontFamily || '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    fontSize: allParams.fontSize || 14,
+    fontWeight: allParams.fontWeight || 'normal',
+
+    // Borders
+    borderColor: allParams.borderColor || '#babed1',
+    headerBorderColor: allParams.borderColor || '#babed1',
+    gridLineColor: allParams.borderColor || '#babed1',
+
+    // Spacing
+    cellPadding: allParams.cellPadding || allParams.spacing || 8,
+    headerHeight: allParams.headerHeight || 48,
+    rowHeight: allParams.rowHeight || 32,
+
+    // Group/Tree
+    groupIndentWidth: allParams.groupRowIndentWidth || 24,
+    groupIndicatorSize: allParams.iconSize || 12,
+  };
+
+  return gridTheme;
 }

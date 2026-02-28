@@ -10,10 +10,10 @@ const mockCdr = {
 
 describe('ArgentGridComponent - Context Menu', () => {
   let component: ArgentGridComponent;
-  let gridService: GridService;
+  let _gridService: GridService;
 
   beforeEach(() => {
-    gridService = new GridService();
+    _gridService = new GridService();
     component = new ArgentGridComponent(mockCdr as any);
   });
 

@@ -1,9 +1,9 @@
-import { test, expect } from '@playwright/test';
+import { test } from '@playwright/test';
 
 test.describe('ArgentGrid Screenshots', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async () => {
     // Skip if not in CI
-    test.skip(!process.env['CI'], 'Screenshot tests only run in CI');
+    test.skip(!process.env.CI, 'Screenshot tests only run in CI');
   });
 
   test('capture default grid screenshot', async ({ page }) => {
@@ -13,7 +13,7 @@ test.describe('ArgentGrid Screenshots', () => {
 
     await page.screenshot({
       path: 'e2e/screenshots/grid-default.png',
-      fullPage: false
+      fullPage: false,
     });
   });
 
@@ -24,7 +24,7 @@ test.describe('ArgentGrid Screenshots', () => {
 
     await page.screenshot({
       path: 'e2e/screenshots/grid-dark-mode.png',
-      fullPage: false
+      fullPage: false,
     });
   });
 
@@ -35,7 +35,7 @@ test.describe('ArgentGrid Screenshots', () => {
 
     await page.screenshot({
       path: 'e2e/screenshots/grid-grouping.png',
-      fullPage: false
+      fullPage: false,
     });
   });
 
@@ -46,7 +46,7 @@ test.describe('ArgentGrid Screenshots', () => {
 
     await page.screenshot({
       path: 'e2e/screenshots/benchmark.png',
-      fullPage: false
+      fullPage: false,
     });
   });
 });
