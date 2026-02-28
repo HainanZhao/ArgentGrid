@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist-storybook",
+    "baseUrl": ".",
+    "paths": {}
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/storybook-app/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-storybook"
+  ]
+}

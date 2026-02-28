@@ -35,3 +35,6 @@ e2e/screenshots/
 # package-lock.json
 
 screenshots/
+
+.angular/
+storybook-static/

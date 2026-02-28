@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "../dist-storybook",
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "node",
+    "lib": ["ES2022", "dom"],
+    "strict": false,
+    "noImplicitAny": false,
+    "noImplicitReturns": false,
+    "noFallthroughCasesInSwitch": false,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "useDefineForClassFields": false,
+    "importHelpers": true,
+    "paths": {}
+  },
+  "include": [
+    "../src/**/*.ts",
+    "*.ts"
+  ],
+  "exclude": [
+    "../node_modules",
+    "../dist",
+    "../dist-storybook",
+    "../src/**/*.spec.ts"
+  ]
+}

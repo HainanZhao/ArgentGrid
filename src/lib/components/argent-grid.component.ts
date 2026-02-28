@@ -16,6 +16,7 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   @Input() columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
   @Input() rowData: TData[] | null = null;
   @Input() gridOptions: GridOptions<TData> | null = null;
+  @Input() theme: any;
   @Input() height = '500px';
   @Input() width = '100%';
   @Input() rowHeight = 32;
