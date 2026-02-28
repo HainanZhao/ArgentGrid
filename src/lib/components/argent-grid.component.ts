@@ -86,6 +86,13 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
   contextMenuPosition = { x: 0, y: 0 };
   contextMenuItems: MenuItemDef[] = [];
   private contextMenuCell: { rowNode: IRowNode<TData>, column: Column } | null = null;
+
+  // Set Filter
+  activeSetFilter = false;
+  setFilterPosition = { x: 0, y: 0 };
+  setFilterValues: any[] = [];
+  setFilterValueFormatter?: (value: any) => string;
+  private activeSetFilterColumn: Column | null = null;
   private initialColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
 
   private gridApi!: GridApi<TData>;
@@ -548,6 +555,89 @@ export class ArgentGridComponent<TData = any> implements OnInit, OnDestroy, Afte
     this.activeContextMenu = false;
     this.contextMenuCell = null;
     this.cdr.detectChanges();
+  }
+
+  // Set Filter Methods
+  isSetFilter(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
+    if ('children' in col) return false;
+    const colDef = col as ColDef<TData>;
+    return colDef.filter === 'set';
+  }
+
+  openSetFilter(event: MouseEvent, col: Column | ColDef<TData>): void {
+    event.stopPropagation();
+    event.preventDefault();
+
+    this.activeSetFilterColumn = col as Column;
+    
+    const field = col.field;
+    if (!field || !this.gridApi) return;
+
+    this.setFilterValues = this.gridService.getUniqueValues(field as string);
+    const colDef = 'field' in col ? col as ColDef<TData> : null;
+    this.setFilterValueFormatter = colDef?.valueFormatter ? (colDef.valueFormatter as any) : undefined;
+
+    const rect = (event.target as HTMLElement).getBoundingClientRect();
+    this.setFilterPosition = {
+      x: rect.left,
+      y: rect.bottom + 5
+    };
+
+    this.activeSetFilter = true;
+    this.cdr.detectChanges();
+  }
+
+  closeSetFilter(): void {
+    this.activeSetFilter = false;
+    this.activeSetFilterColumn = null;
+    this.cdr.detectChanges();
+  }
+
+  onSetFilterChanged(values: any[]): void {
+    if (!this.activeSetFilterColumn || !this.gridApi) return;
+
+    const field = this.activeSetFilterColumn.field;
+    if (!field) return;
+
+    if (values.length === 0) {
+      const currentModel = this.gridApi.getFilterModel();
+      delete (currentModel as any)[field];
+      this.gridApi.setFilterModel(currentModel);
+    } else {
+      this.gridApi.setFilterModel({
+        ...this.gridApi.getFilterModel(),
+        [field]: {
+          filterType: 'set',
+          values: values
+        }
+      });
+    }
+
+    this.closeSetFilter();
+    this.canvasRenderer?.render();
+  }
+
+  hasSetFilterValue(col: Column | ColDef<TData>): boolean {
+    if (!this.gridApi) return false;
+    const field = 'field' in col ? col.field : null;
+    if (!field) return false;
+
+    const model = this.gridApi.getFilterModel();
+    const filter = (model as any)[field];
+    return filter && filter.filterType === 'set' && filter.values && filter.values.length > 0;
+  }
+
+  getSetFilterCount(col: Column | ColDef<TData>): number {
+    if (!this.gridApi) return 0;
+    const field = 'field' in col ? col.field : null;
+    if (!field) return 0;
+
+    const model = this.gridApi.getFilterModel();
+    const filter = (model as any)[field];
+    if (filter && filter.filterType === 'set' && Array.isArray(filter.values)) {
+      return filter.values.length;
+    }
+    return 0;
   }
 
   // Side Bar Methods
