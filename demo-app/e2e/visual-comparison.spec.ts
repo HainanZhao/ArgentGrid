@@ -35,19 +35,20 @@ test.describe('ArgentGrid Visual Comparison', () => {
     await page.waitForSelector('.loading', { state: 'detached', timeout: 60000 });
     await page.waitForTimeout(2000);
     
-    // Use the grid container
-    const gridContainer = page.locator('.grid-wrapper .argent-grid-container').first();
+    // Find the argent-grid component and scroll its viewport
+    const gridComponent = page.locator('argent-grid').first();
+    const viewport = gridComponent.locator('.argent-grid-viewport').first();
     
     // Capture initial view (top)
     await page.screenshot({ path: 'e2e/screenshots/argentgrid-scroll-top.png' });
     
     // Scroll down
-    await gridContainer.evaluate(el => el.scrollTop = 5000);
+    await viewport.evaluate(el => el.scrollTop = 5000);
     await page.waitForTimeout(500);
     await page.screenshot({ path: 'e2e/screenshots/argentgrid-scroll-middle.png' });
     
     // Scroll to bottom
-    await gridContainer.evaluate(el => el.scrollTop = el.scrollHeight - el.clientHeight);
+    await viewport.evaluate(el => el.scrollTop = el.scrollHeight - el.clientHeight);
     await page.waitForTimeout(500);
     await page.screenshot({ path: 'e2e/screenshots/argentgrid-scroll-bottom.png' });
     
