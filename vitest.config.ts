@@ -1,6 +1,6 @@
-import { defineConfig } from 'vitest/config';
 import fs from 'node:fs';
 import path from 'node:path';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [
@@ -20,7 +20,7 @@ export default defineConfig({
             }
             return match;
           });
-          
+
           newCode = newCode.replace(/styleUrls:\s*\[\s*['"]([^'"]+)['"]\s*\]/g, (match, p1) => {
             const stylePath = path.resolve(path.dirname(id), p1);
             if (fs.existsSync(stylePath)) {
@@ -33,11 +33,11 @@ export default defineConfig({
             }
             return match;
           });
-          
+
           return { code: newCode, map: null };
         }
-      }
-    }
+      },
+    },
   ],
   test: {
     globals: true,
@@ -48,8 +48,8 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.spec.ts', 'src/**/types/**']
+      exclude: ['src/**/*.spec.ts', 'src/**/types/**'],
     },
-    testTimeout: 10000
-  }
+    testTimeout: 10000,
+  },
 });

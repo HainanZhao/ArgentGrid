@@ -19,14 +19,6 @@
     "importHelpers": true,
     "paths": {}
   },
-  "include": [
-    "../src/**/*.ts",
-    "*.ts"
-  ],
-  "exclude": [
-    "../node_modules",
-    "../dist",
-    "../dist-storybook",
-    "../src/**/*.spec.ts"
-  ]
+  "include": ["../src/**/*.ts", "*.ts"],
+  "exclude": ["../node_modules", "../dist", "../dist-storybook", "../src/**/*.spec.ts"]
 }

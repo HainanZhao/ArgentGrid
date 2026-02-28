@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 test.describe('ArgentGrid Stories', () => {
   test('should load ArgentGrid Default story', async ({ page }) => {
@@ -17,8 +17,8 @@ test.describe('ArgentGrid Stories', () => {
     await expect(grid).toBeVisible({ timeout: 10000 });
 
     // No critical errors
-    const criticalErrors = errors.filter(e => 
-      e.includes('NG0203') || e.includes('NG0201') || e.includes('NullInjectorError')
+    const criticalErrors = errors.filter(
+      (e) => e.includes('NG0203') || e.includes('NG0201') || e.includes('NullInjectorError')
     );
     expect(criticalErrors).toHaveLength(0);
   });

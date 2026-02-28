@@ -19,6 +19,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
 import { GridService } from '../services/grid.service';
+import { applyThemeCSSVariables, convertThemeToGridTheme } from '../themes/theme-builder';
 import {
   CellRange,
   ColDef,
@@ -132,7 +133,10 @@ export class ArgentGridComponent<TData = any>
   private horizontalScrollListener?: (e: Event) => void;
   private resizeObserver?: ResizeObserver;
 
-  constructor(@Inject(ChangeDetectorRef) private _cdr: ChangeDetectorRef) {}
+  constructor(
+    @Inject(ChangeDetectorRef) private _cdr: ChangeDetectorRef,
+    private _elementRef: ElementRef<HTMLElement>
+  ) {}
 
   ngOnInit(): void {
     this.initialColumnDefs = this.columnDefs ? JSON.parse(JSON.stringify(this.columnDefs)) : null;
@@ -154,15 +158,40 @@ export class ArgentGridComponent<TData = any>
     if (changes.gridOptions && !changes.gridOptions.firstChange) {
       this.onGridOptionsChanged(changes.gridOptions.currentValue);
     }
+
+    // Handle theme changes
+    if (changes.theme && !changes.theme.firstChange) {
+      // Apply theme CSS variables to the grid container
+      if (changes.theme.currentValue) {
+        applyThemeCSSVariables(changes.theme.currentValue, this._elementRef.nativeElement);
+      }
+
+      // Update canvas renderer theme if it's initialized
+      if (this.canvasRenderer) {
+        const convertedTheme = changes.theme.currentValue
+          ? convertThemeToGridTheme(changes.theme.currentValue)
+          : undefined;
+        this.canvasRenderer.setTheme(convertedTheme);
+      }
+    }
   }
 
   ngAfterViewInit(): void {
     // Setup canvas renderer after view is initialized
     if (this.canvasRef && !this.canvasRenderer) {
+      // Convert theme from ThemeBuilder format to internal GridTheme format
+      const convertedTheme = this.theme ? convertThemeToGridTheme(this.theme) : undefined;
+
+      // Apply theme CSS variables to the grid container
+      if (this.theme) {
+        applyThemeCSSVariables(this.theme, this._elementRef.nativeElement);
+      }
+
       this.canvasRenderer = new CanvasRenderer(
         this.canvasRef.nativeElement,
         this.gridApi,
-        this.rowHeight
+        this.rowHeight,
+        convertedTheme
       );
 
       // Wire up cell editing callback

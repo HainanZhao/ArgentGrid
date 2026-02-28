@@ -37,8 +37,11 @@ export {
 } from './lib/themes/parts/icon-sets';
 export {
   applyTheme,
+  applyThemeCSSVariables,
+  convertThemeToGridTheme,
   createTheme,
   extendTheme,
+  getThemeCSSVariables,
   mergeThemes,
   removeTheme,
 } from './lib/themes/theme-builder';

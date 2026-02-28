@@ -7,14 +7,14 @@ const config: StorybookConfig = {
     '@storybook/addon-actions',
     '@storybook/addon-controls',
     '@storybook/addon-docs',
-    '@chromatic-com/storybook'
+    '@chromatic-com/storybook',
   ],
   framework: {
     name: '@storybook/angular',
     options: {},
   },
   docs: {
-    autodocs: true
+    autodocs: true,
   },
 };
 
