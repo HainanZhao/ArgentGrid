@@ -37,6 +37,7 @@
     "@angular/core": "^18.2.14",
     "@angular/platform-browser": "^18.0.0",
     "@angular/platform-browser-dynamic": "^18.0.0",
+    "@biomejs/biome": "2.4.4",
     "@chromatic-com/storybook": "^3.2.7",
     "@playwright/test": "^1.58.2",
     "@storybook/addon-actions": "^8.6.17",
@@ -63,7 +64,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "lint": "eslint src/**/*.ts",
+    "lint": "biome lint src",
+    "check": "biome check src",
+    "format": "biome format src --write",
     "clean": "rm -rf dist",
     "storybook": "ng run argent-grid-storybook:storybook",
     "build-storybook": "ng run argent-grid-storybook:build-storybook"

@@ -1,8 +1,8 @@
-import type { Meta, StoryObj } from '@storybook/angular';
-import { moduleMetadata } from '@storybook/angular';
-import { ArgentGridComponent, ArgentGridModule, themeQuartz, colorSchemeDark, colorSchemeLight } from '../public-api';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+import type { Meta, StoryObj } from '@storybook/angular';
+import { moduleMetadata } from '@storybook/angular';
+import { ArgentGridComponent, ArgentGridModule, colorSchemeDark, themeQuartz } from '../public-api';
 
 interface Employee {
   id: number;

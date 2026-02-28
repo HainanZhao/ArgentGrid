@@ -1,7 +1,7 @@
+import { BrowserModule } from '@angular/platform-browser';
 import type { Meta, StoryObj } from '@storybook/angular';
 import { moduleMetadata } from '@storybook/angular';
 import { ArgentGridComponent, ArgentGridModule, themeQuartz } from '../public-api';
-import { BrowserModule } from '@angular/platform-browser';
 
 interface Employee {
   id: number;
@@ -30,7 +30,15 @@ export default meta;
 type Story = StoryObj<ArgentGridComponent<Employee>>;
 
 function generateData(count: number): Employee[] {
-  const departments = ['Engineering', 'Sales', 'Marketing', 'HR', 'Finance', 'Operations', 'Support'];
+  const departments = [
+    'Engineering',
+    'Sales',
+    'Marketing',
+    'HR',
+    'Finance',
+    'Operations',
+    'Support',
+  ];
   const roles = ['Software Engineer', 'Manager', 'Director', 'VP', 'Intern', 'Analyst'];
   const locations = ['New York', 'San Francisco', 'London', 'Singapore', 'Remote', 'Berlin'];
 
@@ -41,7 +49,9 @@ function generateData(count: number): Employee[] {
     role: roles[Math.floor(Math.random() * roles.length)],
     salary: Math.floor(Math.random() * 150000) + 50000,
     location: locations[Math.floor(Math.random() * locations.length)],
-    startDate: new Date(Date.now() - Math.random() * 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    startDate: new Date(Date.now() - Math.random() * 5 * 365 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0],
   }));
 }
 
@@ -63,7 +73,8 @@ export const TextFilter: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Text filters on Name, Department, and Role columns. Click filter icon to open filter menu.',
+        story:
+          'Text filters on Name, Department, and Role columns. Click filter icon to open filter menu.',
       },
     },
   },
@@ -86,7 +97,8 @@ export const NumberFilter: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Number filters on ID and Salary columns. Supports equals, greater than, less than, etc.',
+        story:
+          'Number filters on ID and Salary columns. Supports equals, greater than, less than, etc.',
       },
     },
   },
@@ -110,7 +122,8 @@ export const SetFilter: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Set filters on Department and Location columns. Allows quick multi-select from a list of unique values.',
+        story:
+          'Set filters on Department and Location columns. Allows quick multi-select from a list of unique values.',
       },
     },
   },
@@ -144,10 +157,22 @@ export const FloatingFilters: Story = {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80, filter: 'number', floatingFilter: true },
       { field: 'name', headerName: 'Name', width: 200, filter: 'text', floatingFilter: true },
-      { field: 'department', headerName: 'Department', width: 180, filter: 'set', floatingFilter: true },
+      {
+        field: 'department',
+        headerName: 'Department',
+        width: 180,
+        filter: 'set',
+        floatingFilter: true,
+      },
       { field: 'role', headerName: 'Role', width: 250, filter: 'text', floatingFilter: true },
       { field: 'salary', headerName: 'Salary', width: 120, filter: 'number', floatingFilter: true },
-      { field: 'location', headerName: 'Location', width: 150, filter: 'set', floatingFilter: true },
+      {
+        field: 'location',
+        headerName: 'Location',
+        width: 150,
+        filter: 'set',
+        floatingFilter: true,
+      },
     ],
     rowData: generateData(50),
     height: '450px',
@@ -157,7 +182,8 @@ export const FloatingFilters: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Floating filters appear below column headers for quick filtering without opening filter menus.',
+        story:
+          'Floating filters appear below column headers for quick filtering without opening filter menus.',
       },
     },
   },
@@ -168,7 +194,13 @@ export const CombinedFilters: Story = {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80, filter: 'number', floatingFilter: true },
       { field: 'name', headerName: 'Name', width: 200, filter: 'text' },
-      { field: 'department', headerName: 'Department', width: 180, filter: 'set', floatingFilter: true },
+      {
+        field: 'department',
+        headerName: 'Department',
+        width: 180,
+        filter: 'set',
+        floatingFilter: true,
+      },
       { field: 'role', headerName: 'Role', width: 250, filter: 'text' },
       { field: 'salary', headerName: 'Salary', width: 120, filter: 'number', floatingFilter: true },
       { field: 'location', headerName: 'Location', width: 150, filter: 'set' },

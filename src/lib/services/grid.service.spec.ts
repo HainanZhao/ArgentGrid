@@ -1,7 +1,7 @@
-import { TestBed } from '@angular/core/testing';
 import { provideExperimentalZonelessChangeDetection } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { ColDef, FilterModel, GridApi, GridState } from '../types/ag-grid-types';
 import { GridService } from './grid.service';
-import { GridApi, ColDef, FilterModel, IRowNode, GridState } from '../types/ag-grid-types';
 
 interface TestData {
   id: number;
@@ -13,26 +13,23 @@ interface TestData {
 describe('GridService', () => {
   let service: GridService<TestData>;
   let api: GridApi<TestData>;
-  
-  const testColumnDefs: (ColDef<TestData>)[] = [
+
+  const testColumnDefs: ColDef<TestData>[] = [
     { colId: 'id', field: 'id', headerName: 'ID', width: 100 },
     { colId: 'name', field: 'name', headerName: 'Name', width: 150 },
     { colId: 'age', field: 'age', headerName: 'Age', width: 80, sortable: true },
-    { colId: 'email', field: 'email', headerName: 'Email', width: 200 }
+    { colId: 'email', field: 'email', headerName: 'Email', width: 200 },
   ];
-  
+
   const testRowData: TestData[] = [
     { id: 1, name: 'John Doe', age: 30, email: 'john@example.com' },
     { id: 2, name: 'Jane Smith', age: 25, email: 'jane@example.com' },
-    { id: 3, name: 'Bob Johnson', age: 35, email: 'bob@example.com' }
+    { id: 3, name: 'Bob Johnson', age: 35, email: 'bob@example.com' },
   ];
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [
-        GridService,
-        provideExperimentalZonelessChangeDetection()
-      ]
+      providers: [GridService, provideExperimentalZonelessChangeDetection()],
     });
     service = TestBed.inject(GridService);
     api = service.createApi(testColumnDefs, [...testRowData]);
@@ -74,7 +71,7 @@ describe('GridService', () => {
     const sortApi = service.createApi(testColumnDefs, [...testRowData]);
     // Sort by age descending
     sortApi.setSortModel([{ colId: 'age', sort: 'desc' }]);
-    
+
     const sortedData = sortApi.getRowData();
     expect(sortedData[0].age).toBe(35);
     expect(sortedData[2].age).toBe(25);
@@ -84,7 +81,7 @@ describe('GridService', () => {
     const sortApi = service.createApi(testColumnDefs, [...testRowData]);
     // Sort by age ascending
     sortApi.setSortModel([{ colId: 'age', sort: 'asc' }]);
-    
+
     const sortedData = sortApi.getRowData();
     expect(sortedData[0].age).toBe(25);
     expect(sortedData[2].age).toBe(35);
@@ -93,14 +90,14 @@ describe('GridService', () => {
   it('should handle transaction - add rows and respect sorting', () => {
     const sortApi = service.createApi(testColumnDefs, [...testRowData]);
     sortApi.setSortModel([{ colId: 'name', sort: 'asc' }]);
-    
+
     // Initial alpha: Bob Johnson (35), Jane Smith (25), John Doe (30)
     expect(sortApi.getDisplayedRowAtIndex(0)?.data.name).toBe('Bob Johnson');
 
     sortApi.applyTransaction({
-      add: [{ id: 4, name: 'Alice', age: 28, email: 'alice@example.com' }]
+      add: [{ id: 4, name: 'Alice', age: 28, email: 'alice@example.com' }],
     });
-    
+
     // Alice should now be first
     expect(sortApi.getDisplayedRowAtIndex(0)?.data.name).toBe('Alice');
     expect(sortApi.getDisplayedRowCount()).toBe(4);
@@ -109,14 +106,14 @@ describe('GridService', () => {
   it('should handle transaction - update rows and respect filtering', () => {
     const filterApi = service.createApi(testColumnDefs, [...testRowData]);
     filterApi.setFilterModel({
-      age: { filterType: 'number', type: 'greaterThan', filter: 30 }
+      age: { filterType: 'number', type: 'greaterThan', filter: 30 },
     });
-    
+
     expect(filterApi.getDisplayedRowCount()).toBe(1); // Only Bob (35)
 
     // Update Jane (25) to be 40
     filterApi.applyTransaction({
-      update: [{ id: 2, name: 'Jane Smith', age: 40, email: 'jane@example.com' }]
+      update: [{ id: 2, name: 'Jane Smith', age: 40, email: 'jane@example.com' }],
     });
 
     expect(filterApi.getDisplayedRowCount()).toBe(2); // Bob and Jane
@@ -127,9 +124,14 @@ describe('GridService', () => {
     const firstNode = api.getDisplayedRowAtIndex(0);
     if (!firstNode || !firstNode.id) return;
 
-    const removeData: TestData = { id: firstNode.data.id, name: firstNode.data.name, age: firstNode.data.age, email: firstNode.data.email };
+    const removeData: TestData = {
+      id: firstNode.data.id,
+      name: firstNode.data.name,
+      age: firstNode.data.age,
+      email: firstNode.data.email,
+    };
     const result = api.applyTransaction({
-      remove: [removeData]
+      remove: [removeData],
     });
 
     expect(result?.remove.length).toBe(1);
@@ -138,7 +140,7 @@ describe('GridService', () => {
 
   it('should get and set filter model', () => {
     const filterModel: FilterModel = {
-      name: { filterType: 'text', type: 'contains', filter: 'John' }
+      name: { filterType: 'text', type: 'contains', filter: 'John' },
     };
 
     api.setFilterModel(filterModel);
@@ -149,7 +151,7 @@ describe('GridService', () => {
   it('should apply text filter - contains', () => {
     const filterApi = service.createApi(testColumnDefs, [...testRowData]);
     filterApi.setFilterModel({
-      name: { filterType: 'text', type: 'contains', filter: 'John' }
+      name: { filterType: 'text', type: 'contains', filter: 'John' },
     });
 
     const data = filterApi.getRowData();
@@ -160,12 +162,12 @@ describe('GridService', () => {
   it('should apply text filter - starts with', () => {
     const filterApi = service.createApi(testColumnDefs, [...testRowData]);
     filterApi.setFilterModel({
-      name: { filterType: 'text', type: 'startsWith', filter: 'J' }
+      name: { filterType: 'text', type: 'startsWith', filter: 'J' },
     });
 
     const data = filterApi.getRowData();
     // Should match 'John Doe' and 'Jane Smith'
-    data.forEach(row => {
+    data.forEach((row) => {
       expect(row.name.startsWith('J')).toBe(true);
     });
   });
@@ -173,11 +175,11 @@ describe('GridService', () => {
   it('should apply text filter - ends with', () => {
     const filterApi = service.createApi(testColumnDefs, [...testRowData]);
     filterApi.setFilterModel({
-      name: { filterType: 'text', type: 'endsWith', filter: 'e' }
+      name: { filterType: 'text', type: 'endsWith', filter: 'e' },
     });
 
     const data = filterApi.getRowData();
-    data.forEach(row => {
+    data.forEach((row) => {
       expect(row.name.endsWith('e')).toBe(true);
     });
   });
@@ -185,7 +187,7 @@ describe('GridService', () => {
   it('should apply text filter - equals', () => {
     const filterApi = service.createApi(testColumnDefs, [...testRowData]);
     filterApi.setFilterModel({
-      name: { filterType: 'text', type: 'equals', filter: 'John Doe' }
+      name: { filterType: 'text', type: 'equals', filter: 'John Doe' },
     });
 
     const data = filterApi.getRowData();
@@ -196,11 +198,11 @@ describe('GridService', () => {
   it('should apply number filter - greater than', () => {
     const filterApi = service.createApi(testColumnDefs, [...testRowData]);
     filterApi.setFilterModel({
-      age: { filterType: 'number', type: 'greaterThan', filter: 28 }
+      age: { filterType: 'number', type: 'greaterThan', filter: 28 },
     });
 
     const data = filterApi.getRowData();
-    data.forEach(row => {
+    data.forEach((row) => {
       expect(row.age).toBeGreaterThan(28);
     });
   });
@@ -208,11 +210,11 @@ describe('GridService', () => {
   it('should apply number filter - less than', () => {
     const filterApi = service.createApi(testColumnDefs, [...testRowData]);
     filterApi.setFilterModel({
-      age: { filterType: 'number', type: 'lessThan', filter: 32 }
+      age: { filterType: 'number', type: 'lessThan', filter: 32 },
     });
 
     const data = filterApi.getRowData();
-    data.forEach(row => {
+    data.forEach((row) => {
       expect(row.age).toBeLessThan(32);
     });
   });
@@ -220,11 +222,11 @@ describe('GridService', () => {
   it('should apply number filter - in range', () => {
     const filterApi = service.createApi(testColumnDefs, [...testRowData]);
     filterApi.setFilterModel({
-      age: { filterType: 'number', type: 'inRange', filter: 26, filterTo: 34 }
+      age: { filterType: 'number', type: 'inRange', filter: 26, filterTo: 34 },
     });
 
     const data = filterApi.getRowData();
-    data.forEach(row => {
+    data.forEach((row) => {
       expect(row.age).toBeGreaterThanOrEqual(26);
       expect(row.age).toBeLessThanOrEqual(34);
     });
@@ -234,17 +236,17 @@ describe('GridService', () => {
     const dateData: any[] = [
       { id: 1, name: 'Event 1', date: '2024-01-15' },
       { id: 2, name: 'Event 2', date: '2024-06-20' },
-      { id: 3, name: 'Event 3', date: '2024-12-01' }
+      { id: 3, name: 'Event 3', date: '2024-12-01' },
     ];
     const dateColumnDefs: any[] = [
       { colId: 'id', field: 'id', headerName: 'ID' },
       { colId: 'name', field: 'name', headerName: 'Name' },
-      { colId: 'date', field: 'date', headerName: 'Date', filter: 'agDateColumnFilter' }
+      { colId: 'date', field: 'date', headerName: 'Date', filter: 'agDateColumnFilter' },
     ];
 
     const filterApi = service.createApi(dateColumnDefs, dateData);
     filterApi.setFilterModel({
-      date: { filterType: 'date', type: 'greaterThan', filter: '2024-03-01' }
+      date: { filterType: 'date', type: 'greaterThan', filter: '2024-03-01' },
     });
 
     const data = filterApi.getRowData();
@@ -255,7 +257,7 @@ describe('GridService', () => {
   it('should clear filter when model is empty', () => {
     const filterApi = service.createApi(testColumnDefs, [...testRowData]);
     filterApi.setFilterModel({
-      name: { filterType: 'text', type: 'contains', filter: 'John' }
+      name: { filterType: 'text', type: 'contains', filter: 'John' },
     });
     expect(api.isFilterPresent()).toBe(true);
 
@@ -267,12 +269,12 @@ describe('GridService', () => {
     const filterApi = service.createApi(testColumnDefs, [...testRowData]);
     filterApi.setFilterModel({
       name: { filterType: 'text', type: 'startsWith', filter: 'J' },
-      age: { filterType: 'number', type: 'lessThan', filter: 30 }
+      age: { filterType: 'number', type: 'lessThan', filter: 30 },
     });
 
     const data = filterApi.getRowData();
     // Should match 'Jane Smith' (starts with J and age < 30)
-    data.forEach(row => {
+    data.forEach((row) => {
       expect(row.name.startsWith('J')).toBe(true);
       expect(row.age).toBeLessThan(30);
     });
@@ -284,16 +286,16 @@ describe('GridService', () => {
       { id: 1, name: 'John', department: 'Engineering', salary: 80000 },
       { id: 2, name: 'Jane', department: 'Engineering', salary: 90000 },
       { id: 3, name: 'Bob', department: 'Sales', salary: 70000 },
-      { id: 4, name: 'Alice', department: 'Sales', salary: 75000 }
+      { id: 4, name: 'Alice', department: 'Sales', salary: 75000 },
     ];
     const groupColumnDefs: ColDef[] = [
       { colId: 'name', field: 'name', headerName: 'Name' },
       { colId: 'department', field: 'department', headerName: 'Department', rowGroup: true },
-      { colId: 'salary', field: 'salary', headerName: 'Salary' }
+      { colId: 'salary', field: 'salary', headerName: 'Salary' },
     ];
 
     const groupApi = service.createApi(groupColumnDefs, groupData);
-    
+
     // With groups collapsed, should show 2 group rows
     const displayedCount = groupApi.getDisplayedRowCount();
     expect(displayedCount).toBe(2); // 2 groups (Engineering, Sales)
@@ -303,17 +305,17 @@ describe('GridService', () => {
     const groupData: any[] = [
       { id: 1, name: 'John', department: 'Engineering' },
       { id: 2, name: 'Jane', department: 'Engineering' },
-      { id: 3, name: 'Bob', department: 'Sales' }
+      { id: 3, name: 'Bob', department: 'Sales' },
     ];
     const groupColumnDefs: ColDef[] = [
       { colId: 'name', field: 'name', headerName: 'Name' },
-      { colId: 'department', field: 'department', headerName: 'Department', rowGroup: true }
+      { colId: 'department', field: 'department', headerName: 'Department', rowGroup: true },
     ];
 
     const groupApi = service.createApi(groupColumnDefs, groupData);
-    
+
     // Initially groups are collapsed
-    let displayedCount = groupApi.getDisplayedRowCount();
+    const displayedCount = groupApi.getDisplayedRowCount();
     expect(displayedCount).toBe(2); // 2 groups
   });
 
@@ -321,16 +323,16 @@ describe('GridService', () => {
     const groupData: any[] = [
       { id: 1, name: 'John', department: 'Engineering', salary: 80000 },
       { id: 2, name: 'Jane', department: 'Engineering', salary: 90000 },
-      { id: 3, name: 'Bob', department: 'Sales', salary: 70000 }
+      { id: 3, name: 'Bob', department: 'Sales', salary: 70000 },
     ];
     const groupColumnDefs: ColDef[] = [
       { colId: 'name', field: 'name', headerName: 'Name' },
       { colId: 'department', field: 'department', headerName: 'Department', rowGroup: true },
-      { colId: 'salary', field: 'salary', headerName: 'Salary', aggFunc: 'sum' }
+      { colId: 'salary', field: 'salary', headerName: 'Salary', aggFunc: 'sum' },
     ];
 
     const groupApi = service.createApi(groupColumnDefs, groupData);
-    
+
     // Verify grouping works
     const displayedCount = groupApi.getDisplayedRowCount();
     expect(displayedCount).toBeGreaterThanOrEqual(2); // At least 2 groups
@@ -340,16 +342,16 @@ describe('GridService', () => {
     const groupData: any[] = [
       { id: 1, name: 'John', department: 'Engineering', level: 'Senior' },
       { id: 2, name: 'Jane', department: 'Engineering', level: 'Junior' },
-      { id: 3, name: 'Bob', department: 'Sales', level: 'Senior' }
+      { id: 3, name: 'Bob', department: 'Sales', level: 'Senior' },
     ];
     const groupColumnDefs: ColDef[] = [
       { colId: 'name', field: 'name', headerName: 'Name' },
       { colId: 'department', field: 'department', headerName: 'Department', rowGroup: true },
-      { colId: 'level', field: 'level', headerName: 'Level', rowGroup: true }
+      { colId: 'level', field: 'level', headerName: 'Level', rowGroup: true },
     ];
 
     const groupApi = service.createApi(groupColumnDefs, groupData);
-    
+
     // Should have hierarchical groups (Engineering/Senior, Engineering/Junior, Sales/Senior)
     const displayedCount = groupApi.getDisplayedRowCount();
     expect(displayedCount).toBe(2); // Engineering and Sales top level
@@ -368,11 +370,11 @@ describe('GridService', () => {
     if (!firstNode) return;
 
     const originalName = firstNode.data.name;
-    
+
     // Simulate cell edit via transaction
     const newValue = 'Updated Name';
     editApi.applyTransaction({
-      update: [{ ...firstNode.data, name: newValue }]
+      update: [{ ...firstNode.data, name: newValue }],
     });
 
     const updatedNode = editApi.getDisplayedRowAtIndex(0);
@@ -383,9 +385,9 @@ describe('GridService', () => {
   it('should support read-only cells', () => {
     const readOnlyColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID', editable: false },
-      { colId: 'name', field: 'name', headerName: 'Name', editable: true }
+      { colId: 'name', field: 'name', headerName: 'Name', editable: true },
     ];
-    
+
     expect(readOnlyColumnDefs[0].editable).toBe(false);
     expect(readOnlyColumnDefs[1].editable).toBe(true);
   });
@@ -393,23 +395,31 @@ describe('GridService', () => {
   it('should support valueParser on column', () => {
     const parserColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID' },
-      { colId: 'value', field: 'value', headerName: 'Value', 
-        valueParser: (params: any) => Number(params.newValue) }
+      {
+        colId: 'value',
+        field: 'value',
+        headerName: 'Value',
+        valueParser: (params: any) => Number(params.newValue),
+      },
     ];
-    
+
     expect(parserColumnDefs[1].valueParser).toBeDefined();
   });
 
   it('should support valueSetter on column', () => {
     const setterColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID' },
-      { colId: 'name', field: 'name', headerName: 'Name',
+      {
+        colId: 'name',
+        field: 'name',
+        headerName: 'Name',
         valueSetter: (params: any) => {
           params.data.name = params.newValue.toUpperCase();
           return true;
-        }}
+        },
+      },
     ];
-    
+
     expect(setterColumnDefs[1].valueSetter).toBeDefined();
   });
 
@@ -418,13 +428,13 @@ describe('GridService', () => {
     const pinColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID', pinned: 'left' },
       { colId: 'name', field: 'name', headerName: 'Name' },
-      { colId: 'value', field: 'value', headerName: 'Value' }
+      { colId: 'value', field: 'value', headerName: 'Value' },
     ];
-    
+
     const pinApi = service.createApi(pinColumnDefs, [...testRowData]);
     const columns = pinApi.getAllColumns();
-    
-    const pinnedCol = columns.find(c => c.pinned === 'left');
+
+    const pinnedCol = columns.find((c) => c.pinned === 'left');
     expect(pinnedCol).toBeDefined();
     expect(pinnedCol?.colId).toBe('id');
   });
@@ -433,13 +443,13 @@ describe('GridService', () => {
     const pinColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID' },
       { colId: 'name', field: 'name', headerName: 'Name' },
-      { colId: 'value', field: 'value', headerName: 'Value', pinned: 'right' }
+      { colId: 'value', field: 'value', headerName: 'Value', pinned: 'right' },
     ];
-    
+
     const pinApi = service.createApi(pinColumnDefs, [...testRowData]);
     const columns = pinApi.getAllColumns();
-    
-    const pinnedCol = columns.find(c => c.pinned === 'right');
+
+    const pinnedCol = columns.find((c) => c.pinned === 'right');
     expect(pinnedCol).toBeDefined();
     expect(pinnedCol?.colId).toBe('value');
   });
@@ -448,12 +458,12 @@ describe('GridService', () => {
     const pinColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID', pinned: 'left' },
       { colId: 'name', field: 'name', headerName: 'Name' },
-      { colId: 'value', field: 'value', headerName: 'Value', pinned: 'right' }
+      { colId: 'value', field: 'value', headerName: 'Value', pinned: 'right' },
     ];
-    
+
     const pinApi = service.createApi(pinColumnDefs, [...testRowData]);
     const state = pinApi.getState();
-    
+
     expect(state.columnPinning).toBeDefined();
     expect(state.columnPinning?.left).toContain('id');
     expect(state.columnPinning?.right).toContain('value');
@@ -464,15 +474,15 @@ describe('GridService', () => {
     const rowData: any[] = [
       { id: 1, name: 'Row 1' },
       { id: 2, name: 'Row 2', pinned: 'top' },
-      { id: 3, name: 'Row 3' }
+      { id: 3, name: 'Row 3' },
     ];
-    
+
     const pinApi = service.createApi(testColumnDefs.slice(0, 2), rowData);
     const displayedCount = pinApi.getDisplayedRowCount();
-    
+
     // Should have 3 rows total
     expect(displayedCount).toBe(3);
-    
+
     // First row should be the pinned top one
     const firstRow = pinApi.getDisplayedRowAtIndex(0);
     expect(firstRow?.rowPinned).toBe('top');
@@ -482,11 +492,11 @@ describe('GridService', () => {
     const rowData: any[] = [
       { id: 1, name: 'Row 1' },
       { id: 2, name: 'Row 2', pinned: 'bottom' },
-      { id: 3, name: 'Row 3' }
+      { id: 3, name: 'Row 3' },
     ];
-    
+
     const pinApi = service.createApi(testColumnDefs.slice(0, 2), rowData);
-    
+
     // Last row should be the pinned bottom one
     const lastRowIndex = pinApi.getDisplayedRowCount() - 1;
     const lastRow = pinApi.getDisplayedRowAtIndex(lastRowIndex);
@@ -499,19 +509,19 @@ describe('GridService', () => {
       { id: 2, name: 'Top 1', pinned: 'top' },
       { id: 3, name: 'Normal 2' },
       { id: 4, name: 'Bottom 1', pinned: 'bottom' },
-      { id: 5, name: 'Top 2', pinned: 'top' }
+      { id: 5, name: 'Top 2', pinned: 'top' },
     ];
-    
+
     const pinApi = service.createApi(testColumnDefs.slice(0, 2), rowData);
-    
+
     // Pinned top rows should come first
     expect(pinApi.getDisplayedRowAtIndex(0)?.rowPinned).toBe('top');
     expect(pinApi.getDisplayedRowAtIndex(1)?.rowPinned).toBe('top');
-    
+
     // Normal rows in middle
     expect(pinApi.getDisplayedRowAtIndex(2)?.rowPinned).toBe(false);
     expect(pinApi.getDisplayedRowAtIndex(3)?.rowPinned).toBe(false);
-    
+
     // Pinned bottom rows at end
     expect(pinApi.getDisplayedRowAtIndex(4)?.rowPinned).toBe('bottom');
   });
@@ -526,27 +536,27 @@ describe('GridService', () => {
     const selectApi = service.createApi(testColumnDefs, [...testRowData]);
     const firstRow = selectApi.getDisplayedRowAtIndex(0);
     if (!firstRow) return;
-    
+
     firstRow.selected = true;
     const selected = selectApi.getSelectedRows();
-    
+
     expect(selected.length).toBe(1);
     expect(selected[0].data.id).toBe(1);
   });
 
   it('should select multiple rows with Ctrl key', () => {
     const selectApi = service.createApi(testColumnDefs, [...testRowData]);
-    
+
     // Select first row
     const firstRow = selectApi.getDisplayedRowAtIndex(0);
     if (!firstRow) return;
     firstRow.selected = true;
-    
+
     // Ctrl+click to select third row (multi-select)
     const thirdRow = selectApi.getDisplayedRowAtIndex(2);
     if (!thirdRow) return;
     thirdRow.selected = true;
-    
+
     const selected = selectApi.getSelectedRows();
     expect(selected.length).toBe(2);
   });
@@ -554,7 +564,7 @@ describe('GridService', () => {
   it('should select all rows', () => {
     const selectApi = service.createApi(testColumnDefs, [...testRowData]);
     selectApi.selectAll();
-    
+
     const selected = selectApi.getSelectedRows();
     expect(selected.length).toBe(3);
   });
@@ -563,7 +573,7 @@ describe('GridService', () => {
     const selectApi = service.createApi(testColumnDefs, [...testRowData]);
     selectApi.selectAll();
     expect(selectApi.getSelectedRows().length).toBe(3);
-    
+
     selectApi.deselectAll();
     expect(selectApi.getSelectedRows().length).toBe(0);
   });
@@ -572,10 +582,10 @@ describe('GridService', () => {
     const selectApi = service.createApi(testColumnDefs, [...testRowData]);
     const row = selectApi.getDisplayedRowAtIndex(0);
     if (!row) return;
-    
+
     row.selected = true;
     expect(selectApi.getSelectedRows().length).toBe(1);
-    
+
     row.selected = false;
     expect(selectApi.getSelectedRows().length).toBe(0);
   });
@@ -583,7 +593,7 @@ describe('GridService', () => {
   it('should get selected row count', () => {
     const selectApi = service.createApi(testColumnDefs, [...testRowData]);
     selectApi.selectAll();
-    
+
     const selectedCount = selectApi.getSelectedRows().length;
     expect(selectedCount).toBe(3);
   });
@@ -592,9 +602,9 @@ describe('GridService', () => {
     const selectionColumnDefs: ColDef[] = [
       { colId: 'select', headerName: '', checkboxSelection: true, width: 50 },
       { colId: 'id', field: 'id', headerName: 'ID' },
-      { colId: 'name', field: 'name', headerName: 'Name' }
+      { colId: 'name', field: 'name', headerName: 'Name' },
     ];
-    
+
     expect(selectionColumnDefs[0].checkboxSelection).toBe(true);
   });
 
@@ -603,112 +613,112 @@ describe('GridService', () => {
     const aggData: any[] = [
       { id: 1, name: 'Item 1', value: 100 },
       { id: 2, name: 'Item 2', value: 200 },
-      { id: 3, name: 'Item 3', value: 300 }
+      { id: 3, name: 'Item 3', value: 300 },
     ];
     const aggColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID' },
       { colId: 'name', field: 'name', headerName: 'Name' },
-      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: 'sum' }
+      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: 'sum' },
     ];
-    
+
     service.createApi(aggColumnDefs, aggData);
     const agg = service.calculateColumnAggregations(aggData);
-    expect(agg['value']).toBe(600);
+    expect(agg.value).toBe(600);
   });
 
   it('should calculate average aggregation', () => {
     const aggData: any[] = [
       { id: 1, name: 'Item 1', value: 100 },
       { id: 2, name: 'Item 2', value: 200 },
-      { id: 3, name: 'Item 3', value: 300 }
+      { id: 3, name: 'Item 3', value: 300 },
     ];
     const aggColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID' },
-      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: 'avg' }
+      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: 'avg' },
     ];
-    
+
     service.createApi(aggColumnDefs, aggData);
     const agg = service.calculateColumnAggregations(aggData);
-    expect(agg['value']).toBe(200);
+    expect(agg.value).toBe(200);
   });
 
   it('should calculate min/max aggregation', () => {
     const aggData: any[] = [
       { id: 1, name: 'Item 1', value: 100 },
       { id: 2, name: 'Item 2', value: 50 },
-      { id: 3, name: 'Item 3', value: 300 }
+      { id: 3, name: 'Item 3', value: 300 },
     ];
     const aggColumnDefs: ColDef[] = [
-      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: 'min' }
+      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: 'min' },
     ];
-    
+
     service.createApi(aggColumnDefs, aggData);
     const agg = service.calculateColumnAggregations(aggData);
-    expect(agg['value']).toBe(50);
+    expect(agg.value).toBe(50);
   });
 
   it('should calculate max aggregation', () => {
     const aggData: any[] = [
       { id: 1, name: 'Item 1', value: 100 },
       { id: 2, name: 'Item 2', value: 50 },
-      { id: 3, name: 'Item 3', value: 300 }
+      { id: 3, name: 'Item 3', value: 300 },
     ];
     const aggColumnDefs: ColDef[] = [
-      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: 'max' }
+      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: 'max' },
     ];
-    
+
     service.createApi(aggColumnDefs, aggData);
     const agg = service.calculateColumnAggregations(aggData);
-    expect(agg['value']).toBe(300);
+    expect(agg.value).toBe(300);
   });
 
   it('should calculate count aggregation', () => {
     const aggData: any[] = [
       { id: 1, name: 'Item 1' },
       { id: 2, name: 'Item 2' },
-      { id: 3, name: 'Item 3' }
+      { id: 3, name: 'Item 3' },
     ];
     const aggColumnDefs: ColDef[] = [
-      { colId: 'id', field: 'id', headerName: 'ID', aggFunc: 'count' }
+      { colId: 'id', field: 'id', headerName: 'ID', aggFunc: 'count' },
     ];
-    
+
     service.createApi(aggColumnDefs, aggData);
     const agg = service.calculateColumnAggregations(aggData);
-    expect(agg['id']).toBe(3);
+    expect(agg.id).toBe(3);
   });
 
   it('should support custom aggregation function', () => {
     const aggData: any[] = [
       { id: 1, value: 100 },
       { id: 2, value: 200 },
-      { id: 3, value: 300 }
+      { id: 3, value: 300 },
     ];
     const customAggFunc = (params: any) => {
       return params.values.reduce((sum: number, v: number) => sum + v, 0) * 2;
     };
     const aggColumnDefs: ColDef[] = [
-      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: customAggFunc }
+      { colId: 'value', field: 'value', headerName: 'Value', aggFunc: customAggFunc },
     ];
-    
+
     service.createApi(aggColumnDefs, aggData);
     const agg = service.calculateColumnAggregations(aggData);
-    expect(agg['value']).toBe(1200); // (100+200+300) * 2
+    expect(agg.value).toBe(1200); // (100+200+300) * 2
   });
 
   // Excel Export Tests
   it('should export data as CSV', () => {
     const exportData: any[] = [
       { id: 1, name: 'John', email: 'john@example.com' },
-      { id: 2, name: 'Jane', email: 'jane@example.com' }
+      { id: 2, name: 'Jane', email: 'jane@example.com' },
     ];
     const exportColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID' },
       { colId: 'name', field: 'name', headerName: 'Name' },
-      { colId: 'email', field: 'email', headerName: 'Email' }
+      { colId: 'email', field: 'email', headerName: 'Email' },
     ];
-    
+
     const exportApi = service.createApi(exportColumnDefs, exportData);
-    
+
     // Mock downloadFile to avoid browser API issues in tests
     (service as any).downloadFile = vi.fn();
     expect(() => exportApi.exportDataAsCsv()).not.toThrow();
@@ -719,12 +729,12 @@ describe('GridService', () => {
     const exportData: any[] = [{ id: 1, name: 'Test' }];
     const exportColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID' },
-      { colId: 'name', field: 'name', headerName: 'Name' }
+      { colId: 'name', field: 'name', headerName: 'Name' },
     ];
-    
+
     const exportApi = service.createApi(exportColumnDefs, exportData);
     (service as any).downloadFile = vi.fn();
-    
+
     exportApi.exportDataAsCsv({ fileName: 'custom-export.csv' });
     expect((service as any).downloadFile).toHaveBeenCalledWith(
       expect.any(String),
@@ -736,17 +746,17 @@ describe('GridService', () => {
   it('should export only selected columns', () => {
     const exportData: any[] = [
       { id: 1, name: 'John', email: 'john@example.com' },
-      { id: 2, name: 'Jane', email: 'jane@example.com' }
+      { id: 2, name: 'Jane', email: 'jane@example.com' },
     ];
     const exportColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID' },
       { colId: 'name', field: 'name', headerName: 'Name' },
-      { colId: 'email', field: 'email', headerName: 'Email' }
+      { colId: 'email', field: 'email', headerName: 'Email' },
     ];
-    
+
     const exportApi = service.createApi(exportColumnDefs, exportData);
     (service as any).downloadFile = vi.fn();
-    
+
     exportApi.exportDataAsCsv({ columnKeys: ['id', 'name'] });
     const csvContent = (service as any).downloadFile.mock.calls[0][0];
     // Should not contain email column
@@ -757,12 +767,12 @@ describe('GridService', () => {
     const exportData: any[] = [{ id: 1, name: 'Test' }];
     const exportColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID' },
-      { colId: 'name', field: 'name', headerName: 'Name' }
+      { colId: 'name', field: 'name', headerName: 'Name' },
     ];
-    
+
     const exportApi = service.createApi(exportColumnDefs, exportData);
     (service as any).downloadFile = vi.fn();
-    
+
     exportApi.exportDataAsCsv({ skipHeader: true });
     const csvContent = (service as any).downloadFile.mock.calls[0][0];
     // First line should be data, not header
@@ -773,11 +783,11 @@ describe('GridService', () => {
     const exportData: any[] = [{ id: 1, name: 'Test' }];
     const exportColumnDefs: ColDef[] = [
       { colId: 'id', field: 'id', headerName: 'ID' },
-      { colId: 'name', field: 'name', headerName: 'Name' }
+      { colId: 'name', field: 'name', headerName: 'Name' },
     ];
-    
+
     const exportApi = service.createApi(exportColumnDefs, exportData);
-    
+
     // Mock URL methods
     if (typeof URL.createObjectURL === 'undefined') {
       URL.createObjectURL = vi.fn().mockReturnValue('blob:test');
@@ -785,7 +795,7 @@ describe('GridService', () => {
     if (typeof URL.revokeObjectURL === 'undefined') {
       URL.revokeObjectURL = vi.fn();
     }
-    
+
     // We expect it not to throw during the setup phase
     expect(() => exportApi.exportDataAsExcel()).not.toThrow();
   });
@@ -793,7 +803,7 @@ describe('GridService', () => {
   it('should get displayed row at index', () => {
     const sortedApi = service.createApi(testColumnDefs, [
       { id: 10, name: 'First', age: 20, email: 'first@example.com' },
-      { id: 20, name: 'Second', age: 25, email: 'second@example.com' }
+      { id: 20, name: 'Second', age: 25, email: 'second@example.com' },
     ]);
     const row = sortedApi.getDisplayedRowAtIndex(1);
     expect(row).toBeTruthy();
@@ -821,12 +831,12 @@ describe('GridService', () => {
     it('should support custom getRowId in gridOptions', () => {
       const data = [
         { customId: 'A', name: 'John' },
-        { customId: 'B', name: 'Jane' }
+        { customId: 'B', name: 'Jane' },
       ];
       const customApi = service.createApi(testColumnDefs, data, {
-        getRowId: (params) => params.data.customId
+        getRowId: (params) => params.data.customId,
       });
-      
+
       expect(customApi.getDisplayedRowCount()).toBe(2);
       expect(customApi.getRowNode('A')).toBeTruthy();
       expect(customApi.getRowNode('B')).toBeTruthy();
@@ -836,11 +846,11 @@ describe('GridService', () => {
     it('should handle rows with missing fields', () => {
       const data = [
         { id: 1, name: 'John' },
-        { id: 2, age: 30 }
+        { id: 2, age: 30 },
       ];
       const missingApi = service.createApi(testColumnDefs, data);
       expect(missingApi.getDisplayedRowCount()).toBe(2);
-      
+
       // Test sorting on missing field
       missingApi.setSortModel([{ colId: 'age', sort: 'asc' }]);
       // John (undefined age) should be at the end according to compareValues
@@ -851,12 +861,12 @@ describe('GridService', () => {
     it('should handle duplicate IDs (last one wins in map)', () => {
       const data = [
         { id: 'dup', name: 'First' },
-        { id: 'dup', name: 'Second' }
+        { id: 'dup', name: 'Second' },
       ];
       const dupApi = service.createApi(testColumnDefs, data);
-      
+
       expect(dupApi.getDisplayedRowCount()).toBe(2);
-      
+
       const node = dupApi.getRowNode('dup');
       expect(node?.data.name).toBe('Second');
     });
@@ -864,15 +874,18 @@ describe('GridService', () => {
     it('should handle update transaction for non-existent row', () => {
       const api = service.createApi(testColumnDefs, [{ id: 1, name: 'John' }]);
       const result = api.applyTransaction({
-        update: [{ id: 99, name: 'Missing' }]
+        update: [{ id: 99, name: 'Missing' }],
       });
-      
+
       expect(result?.update.length).toBe(0);
       expect(api.getDisplayedRowCount()).toBe(1);
     });
 
     it('should handle sorting on non-existent column', () => {
-      const api = service.createApi(testColumnDefs, [{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }]);
+      const api = service.createApi(testColumnDefs, [
+        { id: 1, name: 'John' },
+        { id: 2, name: 'Jane' },
+      ]);
       // Should not crash
       api.setSortModel([{ colId: 'invalid', sort: 'asc' }]);
       expect(api.getDisplayedRowCount()).toBe(2);
@@ -881,14 +894,14 @@ describe('GridService', () => {
     it('should preserve selection across transactions', () => {
       const api = service.createApi(testColumnDefs, [
         { id: 1, name: 'John' },
-        { id: 2, name: 'Jane' }
+        { id: 2, name: 'Jane' },
       ]);
-      
+
       const node1 = api.getRowNode('1')!;
       node1.selected = true;
-      
+
       api.applyTransaction({ add: [{ id: 3, name: 'Bob' }] });
-      
+
       const sameNode1 = api.getRowNode('1')!;
       expect(sameNode1.selected).toBe(true);
       expect(api.getSelectedNodes().length).toBe(1);
@@ -901,53 +914,58 @@ describe('GridService', () => {
       { field: 'name', headerName: 'Name' },
       { field: 'dept', headerName: 'Dept', rowGroup: true },
       { field: 'location', headerName: 'Location', pivot: true },
-      { field: 'salary', headerName: 'Salary', aggFunc: 'sum' }
+      { field: 'salary', headerName: 'Salary', aggFunc: 'sum' },
     ];
-    
+
     const pivotData: any[] = [
       { id: 1, name: 'John', dept: 'Engineering', location: 'NY', salary: 1000 },
       { id: 2, name: 'Jane', dept: 'Engineering', location: 'SF', salary: 2000 },
       { id: 3, name: 'Bob', dept: 'Sales', location: 'NY', salary: 1500 },
       { id: 4, name: 'Alice', dept: 'Sales', location: 'SF', salary: 2500 },
-      { id: 5, name: 'Charlie', dept: 'Engineering', location: 'NY', salary: 1200 }
+      { id: 5, name: 'Charlie', dept: 'Engineering', location: 'NY', salary: 1200 },
     ];
 
     it('should generate pivot columns correctly', () => {
       const api = service.createApi(pivotColumnDefs, pivotData, { pivotMode: true });
       const columns = api.getAllColumns();
-      const visibleColumns = columns.filter(c => c.visible);
-      
+      const visibleColumns = columns.filter((c) => c.visible);
+
       // Auto Group + 2 pivot columns (NY, SF) = 3
       expect(visibleColumns.length).toBe(3);
-      expect(visibleColumns.find(c => c.colId.includes('NY'))).toBeTruthy();
-      expect(visibleColumns.find(c => c.colId.includes('SF'))).toBeTruthy();
+      expect(visibleColumns.find((c) => c.colId.includes('NY'))).toBeTruthy();
+      expect(visibleColumns.find((c) => c.colId.includes('SF'))).toBeTruthy();
     });
 
     it('should calculate pivoted values correctly', () => {
       const api = service.createApi(pivotColumnDefs, pivotData, { pivotMode: true });
-      
+
       let engNode = null;
       for (let i = 0; i < api.getDisplayedRowCount(); i++) {
-          const node = api.getDisplayedRowAtIndex(i);
-          if (node?.group && node.data.dept === 'Engineering') {
-              engNode = node;
-              break;
-          }
+        const node = api.getDisplayedRowAtIndex(i);
+        if (node?.group && node.data.dept === 'Engineering') {
+          engNode = node;
+          break;
+        }
       }
-      
+
       expect(engNode).toBeTruthy();
-      expect((engNode?.data as any).pivotData['NY'].salary).toBe(2200);
-      expect((engNode?.data as any).pivotData['SF'].salary).toBe(2000);
+      expect((engNode?.data as any).pivotData.NY.salary).toBe(2200);
+      expect((engNode?.data as any).pivotData.SF.salary).toBe(2000);
     });
 
     it('should toggle pivot mode via API', () => {
       const api = service.createApi(pivotColumnDefs, pivotData, { pivotMode: false });
       expect(api.isPivotMode()).toBe(false);
-      
+
       api.setPivotMode(true);
       expect(api.isPivotMode()).toBe(true);
-      expect(api.getAllColumns().filter(c => c.visible).some(c => c.colId.startsWith('pivot_'))).toBe(true);
-      
+      expect(
+        api
+          .getAllColumns()
+          .filter((c) => c.visible)
+          .some((c) => c.colId.startsWith('pivot_'))
+      ).toBe(true);
+
       api.setPivotMode(false);
       expect(api.isPivotMode()).toBe(false);
     });
@@ -956,41 +974,41 @@ describe('GridService', () => {
   describe('Master/Detail', () => {
     const mdColumnDefs: ColDef[] = [
       { field: 'id', headerName: 'ID' },
-      { field: 'name', headerName: 'Name' }
+      { field: 'name', headerName: 'Name' },
     ];
-    
+
     const mdData: any[] = [
       { id: 1, name: 'John' },
-      { id: 2, name: 'Jane' }
+      { id: 2, name: 'Jane' },
     ];
 
     it('should identify master rows correctly', () => {
-      const api = service.createApi(mdColumnDefs, mdData, { 
+      const api = service.createApi(mdColumnDefs, mdData, {
         masterDetail: true,
-        isRowMaster: (data) => data.id === 1
+        isRowMaster: (data) => data.id === 1,
       });
-      
+
       const node1 = api.getRowNode('1');
       const node2 = api.getRowNode('2');
-      
+
       expect(node1?.master).toBe(true);
       expect(node2?.master).toBe(false);
     });
 
     it('should insert detail row when master is expanded', () => {
-      const api = service.createApi(mdColumnDefs, mdData, { 
+      const api = service.createApi(mdColumnDefs, mdData, {
         masterDetail: true,
-        isRowMaster: (data) => data.id === 1
+        isRowMaster: (data) => data.id === 1,
       });
-      
+
       expect(api.getDisplayedRowCount()).toBe(2);
-      
+
       const node1 = api.getRowNode('1')!;
       api.setRowNodeExpanded(node1, true);
-      
+
       // Should now have 3 rows: Master 1, Detail 1, Master 2
       expect(api.getDisplayedRowCount()).toBe(3);
-      
+
       const detailNode = api.getDisplayedRowAtIndex(1);
       expect(detailNode?.detail).toBe(true);
       expect(detailNode?.id).toBe('1-detail');
@@ -998,39 +1016,39 @@ describe('GridService', () => {
     });
 
     it('should remove detail row when master is collapsed', () => {
-      const api = service.createApi(mdColumnDefs, mdData, { 
+      const api = service.createApi(mdColumnDefs, mdData, {
         masterDetail: true,
-        isRowMaster: (data) => data.id === 1
+        isRowMaster: (data) => data.id === 1,
       });
-      
+
       const node1 = api.getRowNode('1')!;
       api.setRowNodeExpanded(node1, true);
       expect(api.getDisplayedRowCount()).toBe(3);
-      
+
       api.setRowNodeExpanded(node1, false);
       expect(api.getDisplayedRowCount()).toBe(2);
     });
 
     it('should calculate correct Y positions for variable heights', () => {
-      const api = service.createApi(mdColumnDefs, mdData, { 
+      const api = service.createApi(mdColumnDefs, mdData, {
         masterDetail: true,
         isRowMaster: (data) => data.id === 1,
         rowHeight: 30,
-        detailRowHeight: 100
+        detailRowHeight: 100,
       });
-      
+
       const node1 = api.getRowNode('1')!;
       api.setRowNodeExpanded(node1, true);
-      
+
       // Row 0: Master (Y=0, H=30)
       // Row 1: Detail (Y=30, H=100)
       // Row 2: Master (Y=130, H=30)
-      
+
       expect(api.getRowY(0)).toBe(0);
       expect(api.getRowY(1)).toBe(30);
       expect(api.getRowY(2)).toBe(130);
       expect(api.getTotalHeight()).toBe(160);
-      
+
       expect(api.getRowAtY(15)).toBe(0);
       expect(api.getRowAtY(50)).toBe(1);
       expect(api.getRowAtY(140)).toBe(2);
@@ -1041,11 +1059,11 @@ describe('GridService', () => {
     it('should export as CSV with default params', () => {
       const exportApi = service.createApi(testColumnDefs, [...testRowData]);
       // Mock downloadFile
-      const originalDownload = (exportApi as any).downloadFile;
+      const _originalDownload = (exportApi as any).downloadFile;
       (exportApi as any).downloadFile = vi.fn();
-      
+
       exportApi.exportDataAsCsv();
-      
+
       expect((exportApi as any).downloadFile).toHaveBeenCalled();
       const callArgs = (exportApi as any).downloadFile.mock.calls[0];
       expect(callArgs[2]).toBe('text/csv;charset=utf-8;');
@@ -1053,16 +1071,16 @@ describe('GridService', () => {
 
     it('should export as CSV with custom params', () => {
       const exportApi = service.createApi(testColumnDefs, [...testRowData]);
-      const originalDownload = (exportApi as any).downloadFile;
+      const _originalDownload = (exportApi as any).downloadFile;
       (exportApi as any).downloadFile = vi.fn();
-      
+
       exportApi.exportDataAsCsv({
         fileName: 'custom.csv',
         delimiter: ';',
         skipHeader: true,
-        columnKeys: ['id', 'name']
+        columnKeys: ['id', 'name'],
       });
-      
+
       expect((exportApi as any).downloadFile).toHaveBeenCalled();
       const callArgs = (exportApi as any).downloadFile.mock.calls[0];
       expect(callArgs[1]).toBe('custom.csv');
@@ -1070,13 +1088,13 @@ describe('GridService', () => {
 
     it('should export as CSV with skipped columns', () => {
       const exportApi = service.createApi(testColumnDefs, [...testRowData]);
-      const originalDownload = (exportApi as any).downloadFile;
+      const _originalDownload = (exportApi as any).downloadFile;
       (exportApi as any).downloadFile = vi.fn();
-      
+
       exportApi.exportDataAsCsv({
-        columnKeys: ['email']
+        columnKeys: ['email'],
       });
-      
+
       expect((exportApi as any).downloadFile).toHaveBeenCalled();
     });
 
@@ -1084,14 +1102,14 @@ describe('GridService', () => {
       const specialData = [
         { id: 1, name: 'John, Jr.', age: 30, email: 'john@example.com' },
         { id: 2, name: 'Jane "The Boss"', age: 25, email: 'jane@example.com' },
-        { id: 3, name: 'Bob\nJohnson', age: 35, email: 'bob@example.com' }
+        { id: 3, name: 'Bob\nJohnson', age: 35, email: 'bob@example.com' },
       ];
       const exportApi = service.createApi(testColumnDefs, specialData);
-      const originalDownload = (exportApi as any).downloadFile;
+      const _originalDownload = (exportApi as any).downloadFile;
       (exportApi as any).downloadFile = vi.fn();
-      
+
       exportApi.exportDataAsCsv();
-      
+
       expect((exportApi as any).downloadFile).toHaveBeenCalled();
       const csvContent = (exportApi as any).downloadFile.mock.calls[0][0];
       expect(csvContent).toContain('"John, Jr."');
@@ -1106,12 +1124,14 @@ describe('GridService', () => {
 
     it('should export as Excel with custom params', () => {
       const exportApi = service.createApi(testColumnDefs, [...testRowData]);
-      expect(() => exportApi.exportDataAsExcel({
-        fileName: 'custom.xlsx',
-        sheetName: 'Data',
-        skipHeader: true,
-        columnKeys: ['id', 'name']
-      })).not.toThrow();
+      expect(() =>
+        exportApi.exportDataAsExcel({
+          fileName: 'custom.xlsx',
+          sheetName: 'Data',
+          skipHeader: true,
+          columnKeys: ['id', 'name'],
+        })
+      ).not.toThrow();
     });
   });
 
@@ -1120,9 +1140,9 @@ describe('GridService', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       const columns = api.getAllColumns();
       expect(columns[0].colId).toBe('id');
-      
+
       api.moveColumn(columns[0], 2);
-      
+
       const movedColumns = api.getAllColumns();
       expect(movedColumns[2].colId).toBe('id');
     });
@@ -1130,45 +1150,45 @@ describe('GridService', () => {
     it('should set column width', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       const column = api.getColumn('name');
-      
+
       api.setColumnWidth(column!, 200);
-      
+
       expect(column?.width).toBe(200);
     });
 
     it('should set column pinned', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       const column = api.getColumn('id');
-      
+
       api.setColumnPinned(column!, 'left');
-      
+
       expect(column?.pinned).toBe('left');
     });
 
     it('should set column visible', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       const column = api.getColumn('name');
-      
+
       api.setColumnVisible(column!, false);
-      
+
       expect(column?.visible).toBe(false);
     });
 
     it('should set column sort', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       const column = api.getColumn('age');
-      
+
       api.setColumnSort(column!, 'asc', false);
-      
+
       expect(column?.sort).toBe('asc');
     });
 
     it('should auto-size columns', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       const columns = api.getAllColumns();
-      
-      api.autoSizeColumns(columns.map(c => c.colId));
-      
+
+      api.autoSizeColumns(columns.map((c) => c.colId));
+
       // Columns should have been resized
       expect(columns[0].width).toBeGreaterThan(0);
     });
@@ -1176,7 +1196,7 @@ describe('GridService', () => {
     it('should get column state', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       const state = api.getColumnState();
-      
+
       expect(state).toBeDefined();
       expect(state.length).toBeGreaterThan(0);
     });
@@ -1184,20 +1204,20 @@ describe('GridService', () => {
     it('should apply column state', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       const state = api.getColumnState();
-      
+
       // Modify state
       state[0].width = 300;
-      
+
       api.applyColumnState({ state, applyOrder: true });
-      
+
       expect(state[0].width).toBe(300);
     });
 
     it('should reset column state', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
-      
+
       api.resetColumnState();
-      
+
       // Should not throw
     });
   });
@@ -1208,13 +1228,13 @@ describe('GridService', () => {
       // Mock navigator.clipboard
       const originalClipboard = navigator.clipboard;
       Object.assign(navigator, {
-        clipboard: { writeText: vi.fn().mockResolvedValue(undefined) }
+        clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
       });
-      
+
       api.copyToClipboard();
-      
+
       expect(navigator.clipboard.writeText).toHaveBeenCalled();
-      
+
       // Restore
       Object.assign(navigator, { clipboard: originalClipboard });
     });
@@ -1224,13 +1244,13 @@ describe('GridService', () => {
       // Mock navigator.clipboard
       const originalClipboard = navigator.clipboard;
       Object.assign(navigator, {
-        clipboard: { readText: vi.fn().mockResolvedValue('test\tpaste') }
+        clipboard: { readText: vi.fn().mockResolvedValue('test\tpaste') },
       });
-      
+
       api.pasteFromClipboard();
-      
+
       expect(navigator.clipboard.readText).toHaveBeenCalled();
-      
+
       // Restore
       Object.assign(navigator, { clipboard: originalClipboard });
     });
@@ -1260,7 +1280,7 @@ describe('GridService', () => {
       api.flashCells({
         rowNodes: [api.getDisplayedRowAtIndex(0)!],
         columns: ['name'],
-        flashTime: 500
+        flashTime: 500,
       });
       // Should not throw
     });
@@ -1278,7 +1298,7 @@ describe('GridService', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       api.refreshCells({
         rowNodes: [api.getDisplayedRowAtIndex(0)!],
-        columns: ['name']
+        columns: ['name'],
       });
       // Should not throw
     });
@@ -1399,7 +1419,7 @@ describe('GridService', () => {
 
     it('should get tool panel', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
-      const panel = api.getToolPanel('columns');
+      const _panel = api.getToolPanel('columns');
       // May be null if not initialized
     });
 
@@ -1433,13 +1453,18 @@ describe('GridService', () => {
   describe('Focus Management', () => {
     it('should get focused cell', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
-      const cell = api.getFocusedCell();
+      const _cell = api.getFocusedCell();
       // May be null
     });
 
     it('should set focused cell', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
-      api.setFocusedCell({ rowIndex: 0, colKey: 'name', rowPinned: null, forceBrowserFocus: false });
+      api.setFocusedCell({
+        rowIndex: 0,
+        colKey: 'name',
+        rowPinned: null,
+        forceBrowserFocus: false,
+      });
       // Should not throw
     });
   });
@@ -1572,19 +1597,19 @@ describe('GridService', () => {
   describe('Grid State', () => {
     it('should get grid panel', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
-      const panel = api.getGridPanel();
+      const _panel = api.getGridPanel();
       // May be null
     });
 
     it('should get row container element', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
-      const element = api.getRowContainerElement();
+      const _element = api.getRowContainerElement();
       // May be null
     });
 
     it('should get body element', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
-      const element = api.getBodyElement();
+      const _element = api.getBodyElement();
       // May be null
     });
 
@@ -1636,13 +1661,13 @@ describe('GridService', () => {
 
     it('should get row style', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
-      const style = api.getRowStyle(0);
+      const _style = api.getRowStyle(0);
       // May be null
     });
 
     it('should get row class', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
-      const cls = api.getRowClass(0);
+      const _cls = api.getRowClass(0);
       // May be null
     });
 
@@ -1674,7 +1699,7 @@ describe('GridService', () => {
 
     it('should get column group', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
-      const group = api.getColumnGroup();
+      const _group = api.getColumnGroup();
       // May be null
     });
   });
@@ -1724,7 +1749,7 @@ describe('GridService', () => {
       it('should return grid state object', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const state = service.getState();
-        
+
         expect(state).toBeDefined();
         expect(state.columnOrder).toBeDefined();
         expect(state.filter).toBeDefined();
@@ -1734,7 +1759,7 @@ describe('GridService', () => {
       it('should include column order, width, and visibility', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const state = service.getState();
-        
+
         expect(state.columnOrder).toHaveLength(4);
         expect(state.columnOrder?.[0]).toHaveProperty('colId');
         expect(state.columnOrder?.[0]).toHaveProperty('width');
@@ -1744,14 +1769,14 @@ describe('GridService', () => {
       it('should include filter model', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const state = service.getState();
-        
+
         expect(state.filter).toEqual({});
       });
 
       it('should include sort model', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const state = service.getState();
-        
+
         expect(state.sort).toEqual({ sortModel: [] });
       });
     });
@@ -1762,28 +1787,28 @@ describe('GridService', () => {
         const state: GridState = {
           columnOrder: [
             { colId: 'id', width: 150, hide: false, pinned: false },
-            { colId: 'name', width: 200, hide: true, pinned: 'left' }
-          ]
+            { colId: 'name', width: 200, hide: true, pinned: 'left' },
+          ],
         };
-        
+
         expect(() => service.setState(state)).not.toThrow();
       });
 
       it('should restore filter state', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const state: GridState = {
-          filter: { id: { filterType: 'number', type: 'greaterThan', filter: 1 } }
+          filter: { id: { filterType: 'number', type: 'greaterThan', filter: 1 } },
         };
-        
+
         expect(() => service.setState(state)).not.toThrow();
       });
 
       it('should restore sort state', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const state: GridState = {
-          sort: [{ colId: 'name', sort: 'asc' }]
+          sort: [{ colId: 'name', sort: 'asc' }],
         };
-        
+
         expect(() => service.setState(state)).not.toThrow();
       });
 
@@ -1791,9 +1816,9 @@ describe('GridService', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const stateChangeSpy = vi.fn();
         service.gridStateChanged$.subscribe(stateChangeSpy);
-        
+
         service.setState({ columnOrder: [] });
-        
+
         expect(stateChangeSpy).toHaveBeenCalledWith({ type: 'state-restored' });
       });
     });
@@ -1802,7 +1827,7 @@ describe('GridService', () => {
       it('should save state to localStorage', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         service.saveState('test-key');
-        
+
         const saved = localStorage.getItem('test-key');
         expect(saved).not.toBeNull();
         expect(() => JSON.parse(saved!)).not.toThrow();
@@ -1811,7 +1836,7 @@ describe('GridService', () => {
       it('should use default key if not provided', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         service.saveState();
-        
+
         const saved = localStorage.getItem('argent-grid-state');
         expect(saved).not.toBeNull();
       });
@@ -1820,15 +1845,15 @@ describe('GridService', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const stateChangeSpy = vi.fn();
         service.gridStateChanged$.subscribe(stateChangeSpy);
-        
+
         service.saveState('test-key');
-        
+
         expect(stateChangeSpy).toHaveBeenCalledWith({ type: 'state-saved', key: 'test-key' });
       });
 
       it('should handle errors gracefully without throwing', () => {
         service.createApi(testColumnDefs, [...testRowData]);
-        
+
         // Just verify the method doesn't throw even if localStorage fails
         // (We can't easily mock localStorage in jsdom environment)
         expect(() => service.saveState('test-key')).not.toThrow();
@@ -1839,19 +1864,19 @@ describe('GridService', () => {
       it('should restore state from localStorage', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const state: GridState = {
-          columnOrder: [{ colId: 'id', width: 150, hide: false, pinned: false }]
+          columnOrder: [{ colId: 'id', width: 150, hide: false, pinned: false }],
         };
         localStorage.setItem('test-key', JSON.stringify(state));
-        
+
         const result = service.restoreState('test-key');
-        
+
         expect(result).toBe(true);
       });
 
       it('should return false if no state exists', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const result = service.restoreState('non-existent-key');
-        
+
         expect(result).toBe(false);
       });
 
@@ -1859,9 +1884,9 @@ describe('GridService', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const state: GridState = { columnOrder: [] };
         localStorage.setItem('argent-grid-state', JSON.stringify(state));
-        
+
         const result = service.restoreState();
-        
+
         expect(result).toBe(true);
       });
 
@@ -1869,25 +1894,25 @@ describe('GridService', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const state: GridState = { columnOrder: [] };
         localStorage.setItem('test-key', JSON.stringify(state));
-        
+
         const stateChangeSpy = vi.fn();
         service.gridStateChanged$.subscribe(stateChangeSpy);
-        
+
         service.restoreState('test-key');
-        
+
         expect(stateChangeSpy).toHaveBeenCalledWith({ type: 'state-restored', key: 'test-key' });
       });
 
       it('should handle invalid JSON gracefully', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        
+
         localStorage.setItem('test-key', 'invalid-json');
         const result = service.restoreState('test-key');
-        
+
         expect(result).toBe(false);
         expect(consoleSpy).toHaveBeenCalled();
-        
+
         consoleSpy.mockRestore();
       });
     });
@@ -1896,18 +1921,18 @@ describe('GridService', () => {
       it('should remove state from localStorage', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         localStorage.setItem('test-key', JSON.stringify({ columnOrder: [] }));
-        
+
         service.clearState('test-key');
-        
+
         expect(localStorage.getItem('test-key')).toBeNull();
       });
 
       it('should use default key if not provided', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         localStorage.setItem('argent-grid-state', JSON.stringify({ columnOrder: [] }));
-        
+
         service.clearState();
-        
+
         expect(localStorage.getItem('argent-grid-state')).toBeNull();
       });
 
@@ -1915,9 +1940,9 @@ describe('GridService', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         const stateChangeSpy = vi.fn();
         service.gridStateChanged$.subscribe(stateChangeSpy);
-        
+
         service.clearState('test-key');
-        
+
         expect(stateChangeSpy).toHaveBeenCalledWith({ type: 'state-cleared', key: 'test-key' });
       });
     });
@@ -1926,20 +1951,20 @@ describe('GridService', () => {
       it('should return true if state exists', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         localStorage.setItem('test-key', JSON.stringify({ columnOrder: [] }));
-        
+
         expect(service.hasState('test-key')).toBe(true);
       });
 
       it('should return false if state does not exist', () => {
         service.createApi(testColumnDefs, [...testRowData]);
-        
+
         expect(service.hasState('non-existent-key')).toBe(false);
       });
 
       it('should use default key if not provided', () => {
         service.createApi(testColumnDefs, [...testRowData]);
         localStorage.setItem('argent-grid-state', JSON.stringify({ columnOrder: [] }));
-        
+
         expect(service.hasState()).toBe(true);
       });
     });

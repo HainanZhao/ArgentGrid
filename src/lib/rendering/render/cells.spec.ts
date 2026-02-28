@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
-import { getValueByPath, getFormattedValue, stripHtmlTags } from './cells';
-import { GridApi, ColDef, IRowNode } from '../../types/ag-grid-types';
+import { describe, expect, it, vi } from 'vitest';
+import { ColDef, GridApi, IRowNode } from '../../types/ag-grid-types';
+import { getFormattedValue, getValueByPath, stripHtmlTags } from './cells';
 
 describe('cells.ts', () => {
   describe('stripHtmlTags', () => {
@@ -10,7 +10,8 @@ describe('cells.ts', () => {
     });
 
     it('should handle complex HTML', () => {
-      const html = '<span style="color: green; padding: 4px 8px; background: green20; border-radius: 4px;">active</span>';
+      const html =
+        '<span style="color: green; padding: 4px 8px; background: green20; border-radius: 4px;">active</span>';
       expect(stripHtmlTags(html)).toBe('active');
     });
 
@@ -68,7 +69,7 @@ describe('cells.ts', () => {
 
     it('should use valueFormatter if provided', () => {
       const colDef = {
-        valueFormatter: vi.fn((params) => `$${params.value}`)
+        valueFormatter: vi.fn((params) => `$${params.value}`),
       } as ColDef;
 
       const result = getFormattedValue(100, colDef, { salary: 100 }, mockRowNode, mockApi);
@@ -78,17 +79,23 @@ describe('cells.ts', () => {
 
     it('should use cellRenderer and strip HTML tags', () => {
       const colDef = {
-        cellRenderer: vi.fn((params) => `<span style="color: green">${params.value}</span>`)
+        cellRenderer: vi.fn((params) => `<span style="color: green">${params.value}</span>`),
       } as ColDef;
 
-      const result = getFormattedValue('active', colDef, { status: 'active' }, mockRowNode, mockApi);
+      const result = getFormattedValue(
+        'active',
+        colDef,
+        { status: 'active' },
+        mockRowNode,
+        mockApi
+      );
       expect(result).toBe('active'); // HTML stripped
       expect(colDef.cellRenderer).toHaveBeenCalled();
     });
 
     it('should handle cellRenderer returning plain text', () => {
       const colDef = {
-        cellRenderer: vi.fn((params) => params.value.toUpperCase())
+        cellRenderer: vi.fn((params) => params.value.toUpperCase()),
       } as ColDef;
 
       const result = getFormattedValue('hello', colDef, { text: 'hello' }, mockRowNode, mockApi);
@@ -102,7 +109,9 @@ describe('cells.ts', () => {
 
     it('should handle cellRenderer errors gracefully', () => {
       const colDef = {
-        cellRenderer: vi.fn(() => { throw new Error('Renderer error'); })
+        cellRenderer: vi.fn(() => {
+          throw new Error('Renderer error');
+        }),
       } as ColDef;
 
       const result = getFormattedValue('test', colDef, null as any, mockRowNode, mockApi);
@@ -111,7 +120,9 @@ describe('cells.ts', () => {
 
     it('should handle valueFormatter errors gracefully', () => {
       const colDef = {
-        valueFormatter: vi.fn(() => { throw new Error('Formatter error'); })
+        valueFormatter: vi.fn(() => {
+          throw new Error('Formatter error');
+        }),
       } as ColDef;
 
       const result = getFormattedValue('test', colDef, null as any, mockRowNode, mockApi);

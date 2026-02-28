@@ -1,6 +1,6 @@
 /**
  * Color Scheme Parts
- * 
+ *
  * Predefined color schemes that can be mixed with any theme
  */
 
@@ -30,11 +30,11 @@ const LIGHT_SCHEME_PARAMS: ThemeParameters = {
 
 /**
  * Light color scheme part
- * 
+ *
  * @example
  * ```typescript
  * import { themeQuartz, colorSchemeLight } from 'argent-grid';
- * 
+ *
  * const myTheme = themeQuartz.withPart(colorSchemeLight);
  * ```
  */
@@ -69,11 +69,11 @@ const DARK_SCHEME_PARAMS: ThemeParameters = {
 
 /**
  * Dark color scheme part
- * 
+ *
  * @example
  * ```typescript
  * import { themeQuartz, colorSchemeDark } from 'argent-grid';
- * 
+ *
  * const myTheme = themeQuartz.withPart(colorSchemeDark);
  * ```
  */
@@ -90,7 +90,7 @@ export const colorSchemeDark: ColorSchemePart = {
 
 /**
  * Auto color scheme (follows system preference)
- * 
+ *
  * Note: This requires JavaScript to detect system preference
  * and apply the appropriate scheme
  */
@@ -98,7 +98,7 @@ export const colorSchemeAuto = {
   name: 'color-scheme-auto',
   type: 'color-scheme' as const,
   scheme: 'auto' as const,
-  
+
   /**
    * Get the appropriate scheme based on system preference
    */

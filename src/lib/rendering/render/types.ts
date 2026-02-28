@@ -4,7 +4,7 @@
  * Shared type definitions used across the rendering modules.
  */
 
-import { Column, IRowNode, ColDef, GridApi } from '../../types/ag-grid-types';
+import { ColDef, Column, IRowNode } from '../../types/ag-grid-types';
 
 // ============================================================================
 // CORE RENDERING TYPES

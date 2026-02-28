@@ -1,7 +1,7 @@
+import { BrowserModule } from '@angular/platform-browser';
 import type { Meta, StoryObj } from '@storybook/angular';
 import { moduleMetadata } from '@storybook/angular';
 import { ArgentGridComponent, ArgentGridModule, themeQuartz } from '../public-api';
-import { BrowserModule } from '@angular/platform-browser';
 
 interface Employee {
   id: number;
@@ -119,7 +119,6 @@ export const SparklineLine: Story = {
   },
 };
 
-
 export const CustomCellRenderer: Story = {
   args: {
     columnDefs: [
@@ -169,10 +168,10 @@ export const StatusBadge: Story = {
         cellRenderer: (params: any) => {
           const status = params.value;
           const colors: Record<string, { bg: string; text: string }> = {
-            'Active': { bg: '#dcfce7', text: '#16a34a' },
+            Active: { bg: '#dcfce7', text: '#16a34a' },
             'On Leave': { bg: '#fef3c7', text: '#d97706' },
-            'Remote': { bg: '#dbeafe', text: '#2563eb' },
-            'Travel': { bg: '#f3e8ff', text: '#9333ea' },
+            Remote: { bg: '#dbeafe', text: '#2563eb' },
+            Travel: { bg: '#f3e8ff', text: '#9333ea' },
           };
           const { bg, text } = colors[status] || { bg: '#f3f4f6', text: '#6b7280' };
           return `<span style="padding: 4px 12px; background: ${bg}; color: ${text}; border-radius: 9999px; font-size: 12px; font-weight: 500;">${status}</span>`;
@@ -204,7 +203,7 @@ export const CurrencyFormatter: Story = {
         field: 'salary',
         headerName: 'Salary',
         width: 130,
-        valueFormatter: (params: any) => params.value ? `$${params.value.toLocaleString()}` : '',
+        valueFormatter: (params: any) => (params.value ? `$${params.value.toLocaleString()}` : ''),
       },
     ],
     rowData: generateData(50),

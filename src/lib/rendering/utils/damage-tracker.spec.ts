@@ -4,12 +4,8 @@
  * Tests for DamageTracker class and related utilities.
  */
 
-import {
-  DamageTracker,
-  getDirtyBounds,
-  mergeRectangles,
-} from './damage-tracker';
 import { DirtyRegions, Rectangle } from '../render/types';
+import { DamageTracker, getDirtyBounds, mergeRectangles } from './damage-tracker';
 
 describe('DamageTracker', () => {
   let tracker: DamageTracker;
@@ -221,7 +217,12 @@ describe('DamageTracker', () => {
         [3, 4],
       ]);
       const cells = tracker.getDirtyCells();
-      expect(cells).toEqual(expect.arrayContaining([[1, 2], [3, 4]]));
+      expect(cells).toEqual(
+        expect.arrayContaining([
+          [1, 2],
+          [3, 4],
+        ])
+      );
     });
   });
 

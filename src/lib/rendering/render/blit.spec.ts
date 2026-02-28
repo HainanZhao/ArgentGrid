@@ -5,18 +5,17 @@
  */
 
 import {
-  shouldBlit,
-  calculateBlit,
-  blitLastFrame,
-  createBufferPair,
-  swapBuffers,
-  displayBuffer,
-  resizeBufferPair,
   BlitState,
-  MIN_BLIT_DELTA,
+  blitLastFrame,
+  calculateBlit,
+  createBufferPair,
+  displayBuffer,
   MAX_BLIT_DELTA_RATIO,
+  MIN_BLIT_DELTA,
+  resizeBufferPair,
+  shouldBlit,
+  swapBuffers,
 } from './blit';
-import { Rectangle, BufferPair } from './types';
 
 // Mock canvas and context
 const mockContext = {
@@ -114,7 +113,7 @@ describe('Blitting Optimization', () => {
     it('should calculate vertical scroll blit (down)', () => {
       const result = calculateBlit(
         { x: 0, y: 100 }, // Current
-        { x: 0, y: 0 },   // Last
+        { x: 0, y: 0 }, // Last
         viewportSize,
         pinnedWidths
       );
@@ -136,7 +135,7 @@ describe('Blitting Optimization', () => {
 
     it('should calculate vertical scroll blit (up)', () => {
       const result = calculateBlit(
-        { x: 0, y: 0 },   // Current
+        { x: 0, y: 0 }, // Current
         { x: 0, y: 100 }, // Last
         viewportSize,
         pinnedWidths
@@ -154,7 +153,7 @@ describe('Blitting Optimization', () => {
     it('should calculate horizontal scroll blit (right)', () => {
       const result = calculateBlit(
         { x: 100, y: 0 }, // Current
-        { x: 0, y: 0 },   // Last
+        { x: 0, y: 0 }, // Last
         viewportSize,
         pinnedWidths
       );
@@ -171,7 +170,7 @@ describe('Blitting Optimization', () => {
 
     it('should calculate horizontal scroll blit (left)', () => {
       const result = calculateBlit(
-        { x: 0, y: 0 },   // Current
+        { x: 0, y: 0 }, // Current
         { x: 100, y: 0 }, // Last
         viewportSize,
         pinnedWidths
@@ -185,12 +184,7 @@ describe('Blitting Optimization', () => {
     });
 
     it('should return full redraw for diagonal scroll', () => {
-      const result = calculateBlit(
-        { x: 50, y: 50 },
-        { x: 0, y: 0 },
-        viewportSize,
-        pinnedWidths
-      );
+      const result = calculateBlit({ x: 50, y: 50 }, { x: 0, y: 0 }, viewportSize, pinnedWidths);
 
       expect(result.canBlit).toBe(false);
       expect(result.dirtyRegions[0].width).toBe(800);
@@ -198,12 +192,7 @@ describe('Blitting Optimization', () => {
     });
 
     it('should account for pinned widths', () => {
-      const result = calculateBlit(
-        { x: 100, y: 0 },
-        { x: 0, y: 0 },
-        viewportSize,
-        pinnedWidths
-      );
+      const result = calculateBlit({ x: 100, y: 0 }, { x: 0, y: 0 }, viewportSize, pinnedWidths);
 
       // Center region is between pinned columns
       expect(result.sourceRect.x).toBe(100); // left pinned width
@@ -293,7 +282,7 @@ describe('Blitting Optimization', () => {
 
     it('should swap contexts too', () => {
       const buffers = createBufferPair(800, 600);
-      const originalFrontCtx = buffers.frontCtx;
+      const _originalFrontCtx = buffers.frontCtx;
 
       swapBuffers(buffers);
 
@@ -377,8 +366,8 @@ describe('Blitting Optimization', () => {
 
         const lastCanvas = state.getLastCanvas();
         expect(lastCanvas).not.toBeNull();
-        expect(lastCanvas!.width).toBe(800);
-        expect(lastCanvas!.height).toBe(600);
+        expect(lastCanvas?.width).toBe(800);
+        expect(lastCanvas?.height).toBe(600);
       });
 
       it('should report hasLastFrame correctly', () => {

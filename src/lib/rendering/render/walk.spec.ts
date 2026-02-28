@@ -4,22 +4,21 @@
  * Tests for walkColumns, walkRows, walkCells, and related utilities.
  */
 
+import { Column } from '../../types/ag-grid-types';
 import {
-  walkColumns,
-  getPositionedColumns,
-  getPinnedWidths,
-  walkRows,
-  getVisibleRowRange,
-  getRowY,
-  walkCells,
+  calculateVisibleRange,
   getColumnAtX,
   getColumnIndex,
-  getTotalColumnWidth,
+  getPinnedWidths,
+  getPositionedColumns,
   getRowAtY,
+  getRowY,
+  getTotalColumnWidth,
+  getVisibleRowRange,
   isRowVisible,
-  calculateVisibleRange,
+  walkColumns,
+  walkRows,
 } from './walk';
-import { Column } from '../../types/ag-grid-types';
 
 // Helper to create mock columns
 function createMockColumn(overrides: Partial<Column> = {}): Column {
@@ -66,11 +65,11 @@ describe('Walker Functions', () => {
   describe('getVisibleRowRange', () => {
     it('should calculate visible row range with buffer', () => {
       const result = getVisibleRowRange(
-        100,  // scrollTop
-        400,  // viewportHeight
-        32,   // rowHeight
+        100, // scrollTop
+        400, // viewportHeight
+        32, // rowHeight
         1000, // totalRowCount
-        5     // buffer
+        5 // buffer
       );
 
       // Starting row: floor(100/32) = 3, minus buffer = -2 -> clamped to 0
@@ -82,11 +81,11 @@ describe('Walker Functions', () => {
 
     it('should clamp start row to 0', () => {
       const result = getVisibleRowRange(
-        0,    // scrollTop
-        400,  // viewportHeight
-        32,   // rowHeight
+        0, // scrollTop
+        400, // viewportHeight
+        32, // rowHeight
         1000, // totalRowCount
-        5     // buffer
+        5 // buffer
       );
 
       expect(result.startRow).toBe(0);
@@ -94,11 +93,11 @@ describe('Walker Functions', () => {
 
     it('should clamp end row to total row count', () => {
       const result = getVisibleRowRange(
-        0,    // scrollTop
-        400,  // viewportHeight
-        32,   // rowHeight
-        10,   // totalRowCount (small)
-        5     // buffer
+        0, // scrollTop
+        400, // viewportHeight
+        32, // rowHeight
+        10, // totalRowCount (small)
+        5 // buffer
       );
 
       expect(result.endRow).toBeLessThanOrEqual(10);
@@ -116,7 +115,7 @@ describe('Walker Functions', () => {
       const visited: string[] = [];
       const xPositions: number[] = [];
 
-      walkColumns(columns, 0, 400, 50, 75, (col, x, width, isPinned, pinSide) => {
+      walkColumns(columns, 0, 400, 50, 75, (col, x, _width, _isPinned, _pinSide) => {
         visited.push(col.colId);
         xPositions.push(x);
       });
@@ -141,7 +140,7 @@ describe('Walker Functions', () => {
 
       // Scroll so center1 and part of center2 are hidden
       const visited: string[] = [];
-      walkColumns(columns, 150, 400, 50, 75, (col, x, width, isPinned) => {
+      walkColumns(columns, 150, 400, 50, 75, (col, _x, _width, _isPinned) => {
         visited.push(col.colId);
       });
 
@@ -156,7 +155,7 @@ describe('Walker Functions', () => {
       const visited: { row: number; y: number }[] = [];
       const getRowNode = (index: number) => ({ data: { id: index } }) as any;
 
-      walkRows(0, 5, 0, 32, getRowNode, (rowIndex, y, height, rowNode) => {
+      walkRows(0, 5, 0, 32, getRowNode, (rowIndex, y, _height, _rowNode) => {
         visited.push({ row: rowIndex, y });
       });
 
@@ -170,7 +169,7 @@ describe('Walker Functions', () => {
       const visited: { row: number; y: number }[] = [];
       const getRowNode = (index: number) => ({ data: { id: index } }) as any;
 
-      walkRows(10, 15, 320, 32, getRowNode, (rowIndex, y, height, rowNode) => {
+      walkRows(10, 15, 320, 32, getRowNode, (rowIndex, y, _height, _rowNode) => {
         visited.push({ row: rowIndex, y });
       });
 
@@ -255,9 +254,7 @@ describe('Walker Functions', () => {
     });
 
     it('should return null for position outside columns', () => {
-      const columns: Column[] = [
-        createMockColumn({ colId: 'col1', width: 100 }),
-      ];
+      const columns: Column[] = [createMockColumn({ colId: 'col1', width: 100 })];
 
       const result = getColumnAtX(columns, 200, 0, 400);
       expect(result.column).toBeNull();
@@ -311,13 +308,13 @@ describe('Walker Functions', () => {
 
       const range = calculateVisibleRange(
         columns,
-        0,    // scrollTop
-        0,    // scrollLeft
-        400,  // viewportWidth
-        400,  // viewportHeight
-        32,   // rowHeight
-        100,  // totalRowCount
-        5     // buffer
+        0, // scrollTop
+        0, // scrollLeft
+        400, // viewportWidth
+        400, // viewportHeight
+        32, // rowHeight
+        100, // totalRowCount
+        5 // buffer
       );
 
       expect(range.startRow).toBe(0);

@@ -1,6 +1,6 @@
-import { Component, ViewChild, AfterViewInit, OnDestroy, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ArgentGridComponent, ArgentGridModule, GridApi, ColDef, themeQuartz } from '../public-api';
+import { AfterViewInit, Component, Input, OnDestroy, ViewChild } from '@angular/core';
+import { ArgentGridComponent, ArgentGridModule, ColDef, GridApi, themeQuartz } from '../public-api';
 
 interface Employee {
   id: number;
@@ -60,7 +60,8 @@ interface Employee {
       />
     </div>
   `,
-  styles: [`
+  styles: [
+    `
     .benchmark-container {
       display: flex;
       flex-direction: column;
@@ -117,7 +118,8 @@ interface Employee {
     .result-item.total .value {
       color: #059669;
     }
-  `]
+  `,
+  ],
 })
 export class BenchmarkWrapperComponent implements AfterViewInit, OnDestroy {
   @ViewChild('grid') gridComponent!: ArgentGridComponent;
@@ -160,9 +162,25 @@ export class BenchmarkWrapperComponent implements AfterViewInit, OnDestroy {
   }
 
   generateData(count: number): Employee[] {
-    const departments = ['Engineering', 'Sales', 'Marketing', 'HR', 'Finance', 'Operations', 'Support'];
+    const departments = [
+      'Engineering',
+      'Sales',
+      'Marketing',
+      'HR',
+      'Finance',
+      'Operations',
+      'Support',
+    ];
     const roles = ['Software Engineer', 'Manager', 'Director', 'VP', 'Intern', 'Analyst', 'Lead'];
-    const locations = ['New York', 'San Francisco', 'London', 'Singapore', 'Remote', 'Berlin', 'Tokyo'];
+    const locations = [
+      'New York',
+      'San Francisco',
+      'London',
+      'Singapore',
+      'Remote',
+      'Berlin',
+      'Tokyo',
+    ];
 
     return Array.from({ length: count }, (_, i) => ({
       id: i + 1,
@@ -194,7 +212,7 @@ export class BenchmarkWrapperComponent implements AfterViewInit, OnDestroy {
       selectionUpdateTime: 0,
       groupingUpdateTime: 0,
       scrollFrameAverage: 0,
-      totalTime: 0
+      totalTime: 0,
     };
 
     const startTime = performance.now();
@@ -212,7 +230,7 @@ export class BenchmarkWrapperComponent implements AfterViewInit, OnDestroy {
       // 3. Grouping Toggle Time
       const groupStart = performance.now();
       const colDefs = this.gridApi.getColumnDefs() as ColDef<Employee>[];
-      const deptCol = colDefs.find(c => c.field === 'department');
+      const deptCol = colDefs.find((c) => c.field === 'department');
       const wasGrouped = (deptCol as ColDef<Employee>)?.rowGroup;
 
       const newColDefs = colDefs.map((col: ColDef<Employee>) => {
@@ -260,7 +278,9 @@ export class BenchmarkWrapperComponent implements AfterViewInit, OnDestroy {
         scrollCount++;
         requestAnimationFrame(runScroll);
       } else {
-        results.scrollFrameAverage = Number((frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length).toFixed(2));
+        results.scrollFrameAverage = Number(
+          (frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length).toFixed(2)
+        );
         this.finishBenchmark(results, startTime);
       }
     };

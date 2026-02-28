@@ -1,10 +1,10 @@
 /**
  * Icon Set Parts
- * 
+ *
  * Predefined icon sets that can be mixed with any theme
  */
 
-import type { IconSetPart, IconDefinition } from '../types';
+import type { IconDefinition, IconSetPart } from '../types';
 
 // ============================================================================
 // QUARTZ ICON SET
@@ -65,11 +65,11 @@ const QUARTZ_ICONS: Record<string, IconDefinition> = {
 
 /**
  * Quartz icon set part
- * 
+ *
  * @example
  * ```typescript
  * import { themeQuartz, iconSetQuartz } from 'argent-grid';
- * 
+ *
  * const myTheme = themeQuartz.withPart(iconSetQuartz);
  * ```
  */
@@ -138,11 +138,11 @@ const MATERIAL_ICONS: Record<string, IconDefinition> = {
 
 /**
  * Material Design icon set part
- * 
+ *
  * @example
  * ```typescript
  * import { themeQuartz, iconSetMaterial } from 'argent-grid';
- * 
+ *
  * const myTheme = themeQuartz.withPart(iconSetMaterial);
  * ```
  */
@@ -211,11 +211,11 @@ const MINIMAL_ICONS: Record<string, IconDefinition> = {
 
 /**
  * Minimal line icon set part
- * 
+ *
  * @example
  * ```typescript
  * import { themeQuartz, iconSetMinimal } from 'argent-grid';
- * 
+ *
  * const myTheme = themeQuartz.withPart(iconSetMinimal);
  * ```
  */
@@ -248,10 +248,7 @@ export function getIconSet(name: string): IconSetPart | undefined {
 /**
  * Get icon SVG from icon set
  */
-export function getIconSvg(
-  iconSet: IconSetPart,
-  iconName: string
-): string | undefined {
+export function getIconSvg(iconSet: IconSetPart, iconName: string): string | undefined {
   const icon = iconSet.icons[iconName];
   if (!icon) return undefined;
 

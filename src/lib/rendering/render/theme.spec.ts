@@ -5,17 +5,17 @@
  */
 
 import {
-  DEFAULT_THEME,
+  createTheme,
   DARK_THEME,
-  THEME_PRESETS,
-  mergeTheme,
+  DEFAULT_THEME,
+  getCellBackgroundColor,
   getFontFromTheme,
   getRowTheme,
-  getCellBackgroundColor,
   getThemePreset,
-  createTheme,
+  mergeTheme,
+  THEME_PRESETS,
 } from './theme';
-import { GridTheme, PartialTheme } from './types';
+import { GridTheme } from './types';
 
 describe('Theme System', () => {
   describe('DEFAULT_THEME', () => {
@@ -86,11 +86,7 @@ describe('Theme System', () => {
     });
 
     it('should apply multiple overrides in order', () => {
-      const result = mergeTheme(
-        DEFAULT_THEME,
-        { bgCell: '#ff0000' },
-        { bgCell: '#00ff00' }
-      );
+      const result = mergeTheme(DEFAULT_THEME, { bgCell: '#ff0000' }, { bgCell: '#00ff00' });
 
       expect(result.bgCell).toBe('#00ff00');
     });

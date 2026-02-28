@@ -29,7 +29,8 @@ export const Benchmark10K: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Benchmark with ~10,000 rows. Click "Run Benchmark" to test selection, grouping, and scroll performance.',
+        story:
+          'Benchmark with ~10,000 rows. Click "Run Benchmark" to test selection, grouping, and scroll performance.',
       },
     },
   },
@@ -65,7 +66,8 @@ export const Benchmark100K: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Benchmark with ~100,000 rows. High-performance stress test. Expect longer initial render but smooth scrolling.',
+        story:
+          'Benchmark with ~100,000 rows. High-performance stress test. Expect longer initial render but smooth scrolling.',
       },
     },
   },

@@ -1,7 +1,7 @@
 /**
  * ArgentGrid - AG Grid Compatible Type Definitions
  * A free, high-performance alternative to AG Grid Enterprise
- * 
+ *
  * This file provides 1:1 TypeScript definitions compatible with AG Grid API
  * to ensure users can switch to ArgentGrid by simply changing their import.
  */
@@ -147,7 +147,9 @@ export interface GridOptions<TData = any> {
   // === CALLBACKS ===
   processCellForClipboard?: (params: ProcessCellForClipboardParams<TData>) => any;
   processCellFromClipboard?: (params: ProcessCellFromClipboardParams<TData>) => any;
-  getContextMenuItems?: (params: GetContextMenuItemsParams<TData>) => (DefaultMenuItem | MenuItemDef)[];
+  getContextMenuItems?: (
+    params: GetContextMenuItemsParams<TData>
+  ) => (DefaultMenuItem | MenuItemDef)[];
   getMainMenuItems?: (params: GetMainMenuItemsParams<TData>) => (DefaultMenuItem | MenuItemDef)[];
 }
 
@@ -174,7 +176,9 @@ export interface ColDef<TData = any, TValue = any> {
   suppressKeyboardEvent?: (params: SuppressKeyboardEventParams<TData>) => boolean;
   suppressPaste?: boolean | ((params: SuppressPasteParams<TData>) => boolean);
   suppressFillHandle?: boolean;
-  contextMenuItems?: (DefaultMenuItem | MenuItemDef)[] | ((params: any) => (DefaultMenuItem | MenuItemDef)[]);
+  contextMenuItems?:
+    | (DefaultMenuItem | MenuItemDef)[]
+    | ((params: any) => (DefaultMenuItem | MenuItemDef)[]);
   context?: any;
 
   // === SELECTION ===
@@ -255,7 +259,9 @@ export interface ColDef<TData = any, TValue = any> {
   enablePivot?: boolean;
 
   // === RENDERING AND STYLING ===
-  cellStyle?: { [key: string]: any } | ((params: CellStyleParams<TData, TValue>) => { [key: string]: any });
+  cellStyle?:
+    | { [key: string]: any }
+    | ((params: CellStyleParams<TData, TValue>) => { [key: string]: any });
   cellClass?: string | string[] | ((params: CellClassParams<TData, TValue>) => string | string[]);
   cellClassRules?: { [key: string]: (params: CellClassParams<TData, TValue>) => boolean };
   cellRenderer?: any;
@@ -583,7 +589,7 @@ export interface CellRange {
   startRow: number;
   endRow: number;
   startColumn: string; // colId
-  endColumn: string;   // colId
+  endColumn: string; // colId
   columns: Column[];
 }
 
@@ -660,9 +666,7 @@ export interface RowSelectionOptions {
   enableSelectionWithoutKeys?: boolean;
 }
 
-export interface CellSelectionOptions {
-  // Cell selection configuration
-}
+export type CellSelectionOptions = {};
 
 export interface SelectionColumnDef {
   headerCheckbox?: boolean;
@@ -879,7 +883,34 @@ export type DomLayoutType = 'normal' | 'autoHeight' | 'print';
 export type SortDirection = 'asc' | 'desc' | null;
 export type RowGroupingDisplayType = 'singleColumn' | 'multipleColumns' | 'groupRows' | 'custom';
 export type ColumnMenuTab = 'filterMenu' | 'mainMenu' | 'columnsMenu' | 'chartMenu';
-export type DefaultMenuItem = 'pinMenu' | 'valueMenu' | 'columnMenu' | 'expandable' | 'separator' | 'copy' | 'copyWithHeaders' | 'copyWithGroupHeaders' | 'cut' | 'paste' | 'export' | 'chartRange' | 'pivot' | 'resetColumns' | 'deselectAll' | 'selectAll' | 'selectAllOtherColumns' | 'autoSizeAll' | 'autoSizeThisColumn' | 'resetColumns' | 'expandAll' | 'collapseAll' | 'rowGroupingGroup' | 'rowGroupingUnGroup' | 'pivotMenu' | 'aggFuncMenu' | 'sideBar';
+export type DefaultMenuItem =
+  | 'pinMenu'
+  | 'valueMenu'
+  | 'columnMenu'
+  | 'expandable'
+  | 'separator'
+  | 'copy'
+  | 'copyWithHeaders'
+  | 'copyWithGroupHeaders'
+  | 'cut'
+  | 'paste'
+  | 'export'
+  | 'chartRange'
+  | 'pivot'
+  | 'resetColumns'
+  | 'deselectAll'
+  | 'selectAll'
+  | 'selectAllOtherColumns'
+  | 'autoSizeAll'
+  | 'autoSizeThisColumn'
+  | 'resetColumns'
+  | 'expandAll'
+  | 'collapseAll'
+  | 'rowGroupingGroup'
+  | 'rowGroupingUnGroup'
+  | 'pivotMenu'
+  | 'aggFuncMenu'
+  | 'sideBar';
 
 export interface MenuItemDef {
   name: string;
@@ -895,14 +926,28 @@ export interface MenuItemDef {
 // FUNCTION TYPE DEFINITIONS
 // ============================================================================
 
-export type ValueGetterFunc<TData = any, TValue = any> = (params: ValueGetterParams<TData>) => TValue;
-export type ValueFormatterFunc<TData = any, TValue = any> = (params: ValueFormatterParams<TData, TValue>) => string;
-export type ValueSetterFunc<TData = any, TValue = any> = (params: ValueSetterParams<TData, TValue>) => boolean;
-export type ValueParserFunc<TData = any, TValue = any> = (params: ValueParserParams<TData, TValue>) => TValue;
+export type ValueGetterFunc<TData = any, TValue = any> = (
+  params: ValueGetterParams<TData>
+) => TValue;
+export type ValueFormatterFunc<TData = any, TValue = any> = (
+  params: ValueFormatterParams<TData, TValue>
+) => string;
+export type ValueSetterFunc<TData = any, TValue = any> = (
+  params: ValueSetterParams<TData, TValue>
+) => boolean;
+export type ValueParserFunc<TData = any, TValue = any> = (
+  params: ValueParserParams<TData, TValue>
+) => TValue;
 export type KeyCreatorFunc<TValue = any> = (params: KeyCreatorParams<TValue>) => string;
 export type EqualsFunc<TValue = any> = (params: EqualsParams<TValue>) => boolean;
 export type HeaderValueGetterFunc<TData = any> = (params: HeaderValueGetterParams<TData>) => string;
-export type SortComparatorFn<TValue = any> = (valueA: TValue, valueB: TValue, nodeA: IRowNode, nodeB: IRowNode, isDescending: boolean) => number;
+export type SortComparatorFn<TValue = any> = (
+  valueA: TValue,
+  valueB: TValue,
+  nodeA: IRowNode,
+  nodeB: IRowNode,
+  isDescending: boolean
+) => number;
 export type GetRowIdFunc<TData = any> = (params: GetRowIdParams<TData>) => string;
 export type IAggFunc<TData = any> = (params: IAggFuncParams<TData>) => any;
 

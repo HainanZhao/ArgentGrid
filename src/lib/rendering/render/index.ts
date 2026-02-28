@@ -4,107 +4,99 @@
  * Exports all rendering-related modules.
  */
 
-// Types (base definitions)
-export {
-  Rectangle,
-  Point,
-  Size,
-  ScrollPosition,
-  PositionedColumn,
-  ColumnWalkCallback,
-  RowWalkCallback,
-  CellWalkCallback,
-  CellDrawContext,
-  ColumnPrepResult,
-  BlitResult,
-  BufferPair,
-  DamageType,
-  DirtyRegions,
-  GridTheme,
-  PartialTheme,
-  RenderState,
-  VisibleRange,
-  HitTestResult,
-  GridMouseEvent,
-} from './types';
-
-// Theme (re-export the DEFAULT_THEME and utilities)
-export {
-  DEFAULT_THEME,
-  DARK_THEME,
-  THEME_PRESETS,
-  mergeTheme,
-  getFontFromTheme,
-  getRowTheme,
-  getCellBackgroundColor,
-  getThemePreset,
-  createTheme,
-} from './theme';
-
-// Walker functions
-export {
-  walkColumns,
-  getPositionedColumns,
-  getPinnedWidths,
-  walkRows,
-  getVisibleRowRange,
-  getRowY,
-  walkCells,
-  getColumnAtX,
-  getColumnIndex,
-  getTotalColumnWidth,
-  getRowAtY,
-  isRowVisible,
-  calculateVisibleRange,
-} from './walk';
-
+// Live data optimizations
+export { LiveDataOptimizations } from '../live-data-optimizations';
 // Blitting optimization
 export {
-  MIN_BLIT_DELTA,
-  MAX_BLIT_DELTA_RATIO,
-  shouldBlit,
-  calculateBlit,
-  blitLastFrame,
-  createBufferPair,
-  swapBuffers,
-  displayBuffer,
-  resizeBufferPair,
   BlitState,
+  blitLastFrame,
+  calculateBlit,
+  createBufferPair,
+  displayBuffer,
+  MAX_BLIT_DELTA_RATIO,
+  MIN_BLIT_DELTA,
+  resizeBufferPair,
+  shouldBlit,
+  swapBuffers,
 } from './blit';
-
 // Cell rendering (explicit exports to avoid conflicts)
 export {
-  prepColumn,
-  prepColumns,
+  calculateColumnWidth,
   drawCell,
   drawCellBackground,
   drawCellContent,
   drawGroupIndicators,
-  truncateText,
-  measureText,
-  calculateColumnWidth,
   getFormattedValue,
   getValueByPath,
+  measureText,
+  prepColumn,
+  prepColumns,
   renderRow,
+  truncateText,
 } from './cells';
-
 // Grid lines
 export {
-  drawCrispLine,
-  drawHorizontalLine,
-  drawVerticalLine,
-  drawRowLines,
-  drawColumnLines,
-  getColumnBorderPositions,
-  drawGridLines,
   drawBorder,
   drawCellSelectionBorder,
-  drawRangeSelectionBorder,
+  drawColumnLines,
+  drawCrispLine,
+  drawGridLines,
+  drawHorizontalLine,
   drawPinnedRegionBorders,
   drawPinnedRegionShadows,
+  drawRangeSelectionBorder,
+  drawRowLines,
+  drawVerticalLine,
+  getColumnBorderPositions,
 } from './lines';
-
-// Live data optimizations
+// Theme (re-export the DEFAULT_THEME and utilities)
 export {
-  LiveDataOptimizations,
-} from '../live-data-optimizations';
+  createTheme,
+  DARK_THEME,
+  DEFAULT_THEME,
+  getCellBackgroundColor,
+  getFontFromTheme,
+  getRowTheme,
+  getThemePreset,
+  mergeTheme,
+  THEME_PRESETS,
+} from './theme';
+// Types (base definitions)
+export {
+  BlitResult,
+  BufferPair,
+  CellDrawContext,
+  CellWalkCallback,
+  ColumnPrepResult,
+  ColumnWalkCallback,
+  DamageType,
+  DirtyRegions,
+  GridMouseEvent,
+  GridTheme,
+  HitTestResult,
+  PartialTheme,
+  Point,
+  PositionedColumn,
+  Rectangle,
+  RenderState,
+  RowWalkCallback,
+  ScrollPosition,
+  Size,
+  VisibleRange,
+} from './types';
+// Walker functions
+export {
+  calculateVisibleRange,
+  getColumnAtX,
+  getColumnIndex,
+  getPinnedWidths,
+  getPositionedColumns,
+  getRowAtY,
+  getRowY,
+  getTotalColumnWidth,
+  getVisibleRowRange,
+  isRowVisible,
+  walkCells,
+  walkColumns,
+  walkRows,
+} from './walk';

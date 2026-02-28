@@ -1,7 +1,7 @@
+import { BrowserModule } from '@angular/platform-browser';
 import type { Meta, StoryObj } from '@storybook/angular';
 import { moduleMetadata } from '@storybook/angular';
 import { ArgentGridComponent, ArgentGridModule, themeQuartz } from '../public-api';
-import { BrowserModule } from '@angular/platform-browser';
 
 interface Employee {
   id: number;
@@ -84,7 +84,8 @@ export const SideBar: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Side bar with Columns and Filters panels. Click the sidebar toggle button in the grid toolbar to show/hide.',
+        story:
+          'Side bar with Columns and Filters panels. Click the sidebar toggle button in the grid toolbar to show/hide.',
       },
     },
   },
@@ -137,7 +138,8 @@ export const RangeSelection: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Enable range selection to select multiple cells by clicking and dragging. Use Ctrl+C to copy selected range.',
+        story:
+          'Enable range selection to select multiple cells by clicking and dragging. Use Ctrl+C to copy selected range.',
       },
     },
   },
@@ -148,7 +150,14 @@ export const FullFeatures: Story = {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80, filter: true, sortable: true },
       { field: 'name', headerName: 'Name', width: 200, filter: true, sortable: true },
-      { field: 'department', headerName: 'Department', width: 180, filter: 'set', sortable: true, rowGroup: true },
+      {
+        field: 'department',
+        headerName: 'Department',
+        width: 180,
+        filter: 'set',
+        sortable: true,
+        rowGroup: true,
+      },
       { field: 'role', headerName: 'Role', width: 250, filter: true },
       { field: 'salary', headerName: 'Salary', width: 120, filter: 'number', sortable: true },
       { field: 'location', headerName: 'Location', width: 150, filter: 'set' },
@@ -171,7 +180,8 @@ export const FullFeatures: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Full-featured grid with sorting, filtering, floating filters, range selection, side bar, and row grouping.',
+        story:
+          'Full-featured grid with sorting, filtering, floating filters, range selection, side bar, and row grouping.',
       },
     },
   },

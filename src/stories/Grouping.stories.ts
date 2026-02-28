@@ -1,7 +1,7 @@
+import { BrowserModule } from '@angular/platform-browser';
 import type { Meta, StoryObj } from '@storybook/angular';
 import { moduleMetadata } from '@storybook/angular';
 import { ArgentGridComponent, ArgentGridModule, themeQuartz } from '../public-api';
-import { BrowserModule } from '@angular/platform-browser';
 
 interface Employee {
   id: number;
@@ -77,7 +77,8 @@ export const RowGrouping: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Row grouping by Department column. Drag column headers to group by multiple columns.',
+        story:
+          'Row grouping by Department column. Drag column headers to group by multiple columns.',
       },
     },
   },

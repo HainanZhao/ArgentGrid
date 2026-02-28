@@ -1,4 +1,11 @@
-import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  EventEmitter,
+  Input,
+  OnInit,
+  Output,
+} from '@angular/core';
 
 @Component({
   selector: 'argent-set-filter',
@@ -74,7 +81,8 @@ import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectionStrategy
       </div>
     </div>
   `,
-  styles: [`
+  styles: [
+    `
     .set-filter {
       display: flex;
       flex-direction: column;
@@ -204,7 +212,8 @@ import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectionStrategy
     .set-filter-reset:hover {
       background: #e5e5e5;
     }
-  `]
+  `,
+  ],
 })
 export class SetFilterComponent<T = any> implements OnInit {
   @Input() values: T[] = [];
@@ -220,9 +229,7 @@ export class SetFilterComponent<T = any> implements OnInit {
       return this.allValues;
     }
     const search = this.searchText.toLowerCase();
-    return this.allValues.filter(item => 
-      item.displayValue.toLowerCase().includes(search)
-    );
+    return this.allValues.filter((item) => item.displayValue.toLowerCase().includes(search));
   }
 
   ngOnInit(): void {
@@ -236,7 +243,7 @@ export class SetFilterComponent<T = any> implements OnInit {
   private initializeValues(): void {
     // Count occurrences of each value
     const valueCounts = new Map<T, number>();
-    this.values.forEach(value => {
+    this.values.forEach((value) => {
       valueCounts.set(value, (valueCounts.get(value) || 0) + 1);
     });
 
@@ -245,7 +252,7 @@ export class SetFilterComponent<T = any> implements OnInit {
       value,
       displayValue: this.valueFormatter ? this.valueFormatter(value) : String(value),
       count,
-      selected: true // All selected by default
+      selected: true, // All selected by default
     }));
 
     this.selectedValues = this.values.filter((v, i, arr) => arr.indexOf(v) === i);
@@ -257,7 +264,7 @@ export class SetFilterComponent<T = any> implements OnInit {
 
   onValueToggled(value: T, event: Event): void {
     const checkbox = event.target as HTMLInputElement;
-    const item = this.allValues.find(v => v.value === value);
+    const item = this.allValues.find((v) => v.value === value);
     if (item) {
       item.selected = checkbox.checked;
     }
@@ -266,19 +273,21 @@ export class SetFilterComponent<T = any> implements OnInit {
   }
 
   selectAll(): void {
-    this.allValues.forEach(item => item.selected = true);
+    this.allValues.forEach((item) => {
+      item.selected = true;
+    });
     this.updateSelectedValues();
   }
 
   clearAll(): void {
-    this.allValues.forEach(item => item.selected = false);
+    this.allValues.forEach((item) => {
+      item.selected = false;
+    });
     this.updateSelectedValues();
   }
 
   private updateSelectedValues(): void {
-    this.selectedValues = this.allValues
-      .filter(item => item.selected)
-      .map(item => item.value);
+    this.selectedValues = this.allValues.filter((item) => item.selected).map((item) => item.value);
   }
 
   applyFilter(): void {

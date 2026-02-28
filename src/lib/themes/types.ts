@@ -1,6 +1,6 @@
 /**
  * Theme System Type Definitions
- * 
+ *
  * Compatible with AG Grid's Theming API structure
  */
 
@@ -10,7 +10,7 @@
 
 /**
  * Theme configuration parameters
- * 
+ *
  * All parameters are optional and can be overridden via withParams()
  */
 export interface ThemeParameters {
@@ -23,7 +23,7 @@ export interface ThemeParameters {
   foregroundColor?: string;
   /** Secondary text color (muted text) */
   secondaryForegroundColor?: string;
-  
+
   // === Typography ===
   /** Font family stack */
   fontFamily?: string;
@@ -33,7 +33,7 @@ export interface ThemeParameters {
   fontWeight?: number | 'normal' | 'bold' | 'lighter' | 'bolder';
   /** Header font weight */
   headerFontWeight?: number | 'normal' | 'bold' | 'lighter' | 'bolder';
-  
+
   // === Spacing ===
   /** Base spacing unit in pixels */
   spacing?: number;
@@ -43,7 +43,7 @@ export interface ThemeParameters {
   headerHeight?: number;
   /** Cell padding in pixels */
   cellPadding?: number;
-  
+
   // === Borders ===
   /** Border color */
   borderColor?: string;
@@ -51,7 +51,7 @@ export interface ThemeParameters {
   borderWidth?: number;
   /** Border radius in pixels */
   borderRadius?: number;
-  
+
   // === Specific Colors ===
   /** Header background color */
   headerBackgroundColor?: string;
@@ -65,19 +65,19 @@ export interface ThemeParameters {
   rowSelectedBackgroundColor?: string;
   /** Cell background on hover */
   cellHoverBackgroundColor?: string;
-  
+
   // === Group Row ===
   /** Group row background color */
   groupRowBackgroundColor?: string;
   /** Group row indent width in pixels */
   groupRowIndentWidth?: number;
-  
+
   // === Icons ===
   /** Icon color */
   iconColor?: string;
   /** Icon size in pixels */
   iconSize?: number;
-  
+
   // === Focus ===
   /** Focus border color */
   focusBorderColor?: string;
@@ -98,7 +98,7 @@ export type PartialThemeParameters = Partial<ThemeParameters>;
  * Theme part type
  * Parts are modular theme components that can be mixed and matched
  */
-export type ThemePartType = 
+export type ThemePartType =
   | 'color-scheme'
   | 'icon-set'
   | 'checkbox-style'
@@ -153,22 +153,22 @@ export interface ThemeBuilder {
   readonly parameters: ThemeParameters;
   /** Theme parts */
   readonly parts: ThemePart[];
-  
+
   /**
    * Create a new theme with overridden parameters
    */
   withParams(params: PartialThemeParameters): ThemeBuilder;
-  
+
   /**
    * Add a theme part to the theme
    */
   withPart(part: ThemePart): ThemeBuilder;
-  
+
   /**
    * Get the final theme object
    */
   build(): GridThemeObject;
-  
+
   /**
    * Convert theme to CSS custom properties
    */

@@ -46,7 +46,9 @@ function generateData(count: number): Employee[] {
     role: roles[Math.floor(Math.random() * roles.length)],
     salary: Math.floor(Math.random() * 150000) + 50000,
     location: locations[Math.floor(Math.random() * locations.length)],
-    startDate: new Date(Date.now() - Math.random() * 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    startDate: new Date(Date.now() - Math.random() * 5 * 365 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0],
     performance: Math.floor(Math.random() * 40) + 60,
   }));
 }
