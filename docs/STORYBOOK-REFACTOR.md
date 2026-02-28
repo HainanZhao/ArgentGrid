@@ -24,22 +24,22 @@ The demo app was growing complex with multiple use cases mixed together. Storybo
 ```json
 {
   "devDependencies": {
-    "@storybook/angular": "^7.6.0",
-    "@storybook/addon-essentials": "^7.6.0",
-    "@storybook/addon-actions": "^7.6.0",
-    "@storybook/addon-controls": "^7.6.0",
-    "storybook": "^7.6.0"
+    "storybook": "^8.6.17",
+    "@storybook/angular": "^8.6.17",
+    "@storybook/addon-essentials": "^8.6.17",
+    "@storybook/addon-actions": "^8.6.17",
+    "@storybook/addon-controls": "^8.6.17"
   }
 }
 ```
 
 ### Stories Created
 
-#### 1. Basic.stories.ts
+#### 1. ArgentGrid.stories.ts
 - **Default** - 100 rows, basic grid
 - **Large Dataset** - 100K rows, performance demo
 
-#### 2. LiveUpdates.stories.ts
+#### 2. Advanced.stories.ts
 - **Stock Ticker** - 10 updates/sec, real-time prices
 - **Log Stream** - 100 logs/sec, high-frequency data
 
@@ -47,7 +47,6 @@ The demo app was growing complex with multiple use cases mixed together. Storybo
 - **Light Theme** - Default Quartz
 - **Dark Theme** - Dark color scheme
 - **Custom Theme** - Custom accent colors
-- **Material Icons** - Material Design icons
 - **Compact Mode** - Dense data display
 
 ---
@@ -57,8 +56,6 @@ The demo app was growing complex with multiple use cases mixed together. Storybo
 ### Local Development
 
 ```bash
-cd demo-app
-
 # Start Storybook dev server
 npm run storybook
 
@@ -85,11 +82,11 @@ npm run test:e2e
 
 ## 🌐 GitHub Pages Deployment
 
-**Workflow:** `.github/workflows/storybook.yml`
+**Workflow:** `.github/workflows/pages.yml`
 
 **Auto-deploys on:**
 - Push to `main` branch
-- Changes in `demo-app/**` or `src/lib/**`
+- Changes in `src/**` or root config files
 
 **URL:** https://hainanzhao.github.io/ArgentGrid/
 
@@ -99,12 +96,12 @@ npm run test:e2e
 
 ```
 src/stories/
-├── Basic.stories.ts          # Basic usage examples
-├── LiveUpdates.stories.ts    # High-frequency data demos
+├── ArgentGrid.stories.ts     # Basic usage examples
+├── Advanced.stories.ts       # High-frequency data demos
 └── Theming.stories.ts        # Theme customization
 
 e2e/
-└── storybook.spec.ts         # E2E tests for stories
+└── argentgrid.spec.ts        # E2E tests for stories
 
 .storybook/
 ├── main.ts                   # Storybook config
@@ -115,14 +112,12 @@ e2e/
 
 ## 🧪 E2E Tests
 
-**File:** `e2e/storybook.spec.ts`
+**File:** `e2e/argentgrid.spec.ts`
 
 **Tests:**
 - ✅ Storybook homepage loads
 - ✅ Basic stories render
 - ✅ Large Dataset story scrolls smoothly
-- ✅ Stock Ticker updates in real-time
-- ✅ Log Stream handles 100 logs/sec
 - ✅ All theme stories render correctly
 
 **Run Tests:**
@@ -140,7 +135,7 @@ npm run test:e2e
 // src/stories/YourFeature.stories.ts
 import type { Meta, StoryObj } from '@storybook/angular';
 import { moduleMetadata } from '@storybook/angular';
-import { ArgentGridComponent, ArgentGridModule } from 'argent-grid';
+import { ArgentGridComponent, ArgentGridModule } from '../public-api';
 
 const meta: Meta<ArgentGridComponent> = {
   title: 'ArgentGrid/YourFeature',
@@ -167,9 +162,9 @@ export const Default: Story = {
 ### 2. Add E2E Test
 
 ```typescript
-// e2e/storybook.spec.ts
+// e2e/argentgrid.spec.ts
 test('should render YourFeature story', async ({ page }) => {
-  await page.goto('/?path=/story/argentgrid-yourfeature--default');
+  await page.goto('/iframe.html?id=argentgrid-yourfeature--default');
   await expect(page.locator('argent-grid')).toBeVisible();
 });
 ```
