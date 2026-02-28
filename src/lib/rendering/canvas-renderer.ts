@@ -130,6 +130,34 @@ export class CanvasRenderer<TData = any> {
     return this.theme;
   }
 
+  /**
+   * Render a single frame (public for testing)
+   */
+  renderFrame(): void {
+    this.doRender();
+  }
+
+  /**
+   * Get row index at Y coordinate (public for testing)
+   */
+  getRowAtY(y: number): number {
+    return getRowAtY(y, this.rowHeight, this.scrollTop);
+  }
+
+  /**
+   * Get column at X coordinate (public for testing)
+   */
+  getColumnAtX(x: number): Column | null {
+    const canvasX = x;
+    const result = getColumnAtX(
+      canvasX,
+      this.getVisibleColumns(),
+      this.columnPreps,
+      this.scrollLeft
+    );
+    return result?.column || null;
+  }
+
   private setupEventListeners(): void {
     const container = this.canvas.parentElement;
     if (container) {

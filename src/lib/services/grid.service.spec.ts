@@ -1650,7 +1650,7 @@ describe('GridService', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       const node = api.getDisplayedRowAtIndex(0);
       const id = api.getRowId(node!);
-      expect(id).toBe('0');
+      expect(id).toBe('1'); // First row has id: 1 in test data
     });
 
     it('should check if row is master', () => {

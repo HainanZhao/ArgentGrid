@@ -177,7 +177,9 @@ export class GridService<TData = any> {
   }
   
   private createGridApi(): GridApi<TData> {
-    return {
+    const api: any = {};
+    
+    Object.assign(api, {
       // Column API
       getColumnDefs: () => this.columnDefs,
       setColumnDefs: (colDefs) => {
@@ -264,13 +266,36 @@ export class GridService<TData = any> {
       paginationGoToPreviousPage: () => {},
       
       // Export API
-      exportDataAsCsv: (params) => this.exportAsCsv(params),
+      exportDataAsCsv: (params) => this.exportAsCsv(params, api),
       exportDataAsExcel: (params) => this.exportAsExcel(params),
+      downloadFile: (content, fileName, mimeType) => this.downloadFile(content, fileName, mimeType),
       
       // Clipboard API
-      copyToClipboard: () => {},
-      cutToClipboard: () => {},
-      pasteFromClipboard: () => {},
+      copyToClipboard: () => {
+        try {
+          const selectedData = api.getSelectedRows().map(node => node.data);
+          const csv = selectedData.map(row => 
+            Object.values(row as any).join(',')
+          ).join('\n');
+          if (typeof navigator !== 'undefined' && (navigator as any).clipboard) {
+            (navigator as any).clipboard.writeText(csv);
+          }
+        } catch (e) {
+          // Ignore clipboard errors
+        }
+      },
+      cutToClipboard: () => {
+        api.copyToClipboard();
+      },
+      pasteFromClipboard: () => {
+        try {
+          if (typeof navigator !== 'undefined' && (navigator as any).clipboard) {
+            (navigator as any).clipboard.readText();
+          }
+        } catch (e) {
+          // Ignore clipboard errors
+        }
+      },
       
       // Grid State API
       getState: () => this.getGridState(),
@@ -361,8 +386,308 @@ export class GridService<TData = any> {
           this.cellRanges = [];
           this.gridStateChanged$.next({ type: 'rangeSelectionChanged' });
         }
+      },
+
+      // Column Operations
+      moveColumn: (column, toIndex) => {
+        // Basic implementation - reorder columns array
+        const cols = Array.from(this.columns.values());
+        const idx = cols.findIndex(c => c.colId === column.colId);
+        if (idx !== -1) {
+          cols.splice(idx, 1);
+          cols.splice(toIndex, 0, column);
+          this.columns.clear();
+          cols.forEach(c => this.columns.set(c.colId, c));
+        }
+      },
+      setColumnWidth: (column, width) => {
+        if (column) {
+          column.width = width;
+        }
+      },
+      setColumnPinned: (column, pinned) => {
+        if (column) {
+          column.pinned = pinned === true ? 'left' : pinned;
+        }
+      },
+      setColumnVisible: (column, visible) => {
+        if (column) {
+          column.visible = visible;
+        }
+      },
+      setColumnSort: (column, sort, multiSort) => {
+        if (column) {
+          column.sort = sort;
+          column.sortIndex = multiSort ? 0 : undefined;
+        }
+      },
+      autoSizeColumns: (colKeys) => {
+        // Basic implementation - set reasonable widths
+        colKeys.forEach(key => {
+          const col = typeof key === 'string' ? this.columns.get(key) : key;
+          if (col) {
+            col.width = 150;
+          }
+        });
+      },
+      getColumnState: () => {
+        return Array.from(this.columns.values()).map(col => ({
+          colId: col.colId,
+          width: col.width,
+          hide: !col.visible,
+          pinned: col.pinned,
+          sort: col.sort,
+          sortIndex: col.sortIndex
+        }));
+      },
+      applyColumnState: (state) => {
+        if (Array.isArray(state)) {
+          state.forEach(colState => {
+            const col = this.columns.get(colState.colId);
+            if (col) {
+              col.width = colState.width;
+              col.visible = !colState.hide;
+              col.pinned = colState.pinned;
+              col.sort = colState.sort;
+              col.sortIndex = colState.sortIndex;
+            }
+          });
+        }
+      },
+      resetColumnState: () => {
+        // Reset to initial state
+        if (this.columnDefs) {
+          this.initializeColumns();
+        }
+      },
+
+      // Cell Editing
+      startEditingCell: (params) => {
+        // Basic implementation
+      },
+      stopEditing: () => {
+        // Basic implementation
+      },
+      getEditingCells: () => {
+        return [];
+      },
+      flashCells: (params) => {
+        // Basic implementation
+      },
+
+      // Row Operations
+      resetRowHeights: () => {
+        this.updateRowHeightCache();
+      },
+      getRowHeightForRow: (rowIndex) => {
+        const node = this.displayedRowNodes[rowIndex];
+        return node?.rowHeight || this.gridOptions?.rowHeight || 32;
+      },
+
+      // Scroll Operations
+      setScrollPosition: (params) => {
+        // Basic implementation
+      },
+      getScrollPosition: () => {
+        return { top: 0, left: 0 };
+      },
+      sizeColumnsToFit: (width) => {
+        const cols = Array.from(this.columns.values()).filter(c => c.visible);
+        if (cols.length > 0) {
+          const colWidth = Math.floor(width / cols.length);
+          cols.forEach(col => col.width = colWidth);
+        }
+      },
+
+      // Pivot Mode
+      getPivotColumns: () => {
+        return [];
+      },
+      getValueColumns: () => {
+        return [];
+      },
+      getRowGroupColumns: () => {
+        return this.getGroupColumns();
+      },
+      getGroupDisplayType: () => {
+        return this.gridOptions?.groupDisplayType || 'singleColumn';
+      },
+
+      // Tool Panels
+      setSideBarVisible: (visible) => {
+        // Basic implementation
+      },
+      openToolPanel: (panelId) => {
+        // Basic implementation
+      },
+      closeToolPanel: () => {
+        // Basic implementation
+      },
+      enableFilterToolPanel: () => {
+        // Basic implementation
+      },
+      enableColumnsToolPanel: () => {
+        // Basic implementation
+      },
+      getToolPanel: (panelId) => {
+        return null;
+      },
+      isToolPanelShowing: () => {
+        return false;
+      },
+
+      // Context Menu
+      getContextMenuItems: () => {
+        return [];
+      },
+      getMainMenuItems: () => {
+        return [];
+      },
+      getHeaderContextMenuItems: () => {
+        return [];
+      },
+
+      // Event Handling
+      addEventListener: (eventType, listener) => {
+        // Basic implementation
+      },
+      removeEventListener: (eventType, listener) => {
+        // Basic implementation
+      },
+      dispatchEvent: (event) => {
+        // Basic implementation
+      },
+      getEventPath: () => {
+        return [];
+      },
+
+      // Rendering
+      getRenderedNodes: () => {
+        return [...this.displayedRowNodes];
+      },
+      getFirstRenderedRow: () => {
+        return 0;
+      },
+      getLastRenderedRow: () => {
+        return this.displayedRowNodes.length - 1;
+      },
+      getVerticalPixelRange: () => {
+        return { start: 0, end: this.getTotalHeight() };
+      },
+      getHorizontalPixelRange: () => {
+        const cols = Array.from(this.columns.values()).filter(c => c.visible);
+        const width = cols.reduce((sum, col) => sum + col.width, 0);
+        return { start: 0, end: width };
+      },
+      getPinnedWidth: () => {
+        const leftPinned = Array.from(this.columns.values()).filter(c => c.pinned === 'left');
+        return leftPinned.reduce((sum, col) => sum + col.width, 0);
+      },
+      getRightPinnedWidth: () => {
+        const rightPinned = Array.from(this.columns.values()).filter(c => c.pinned === 'right');
+        return rightPinned.reduce((sum, col) => sum + col.width, 0);
+      },
+      getHScrollPosition: () => {
+        return 0;
+      },
+      getVScrollPosition: () => {
+        return 0;
+      },
+
+      // Localization
+      getLocaleText: () => {
+        return '';
+      },
+      setLocaleText: (locale, texts) => {
+        // Basic implementation
+      },
+
+      // Charts
+      getChartModels: () => {
+        return [];
+      },
+      getChartToolbarItems: () => {
+        return [];
+      },
+      hidePopup: () => {
+        // Basic implementation
+      },
+      getSparklineOptions: () => {
+        return [];
+      },
+
+      // Grid State
+      getGridPanel: () => {
+        return null;
+      },
+      getRowContainerElement: () => {
+        return null;
+      },
+      getBodyElement: () => {
+        return null;
+      },
+      getHeaderElements: () => {
+        return [];
+      },
+      getCenterElements: () => {
+        return [];
+      },
+      getLeftElements: () => {
+        return [];
+      },
+      getRightElements: () => {
+        return [];
+      },
+
+      // Disabled State
+      setDisabled: (disabled) => {
+        // Basic implementation
+      },
+      isDisabled: () => {
+        return false;
+      },
+
+      // Row Information
+      getRowPosition: (rowIndex) => {
+        return this.getRowY(rowIndex);
+      },
+      getRowStyle: (rowIndex) => {
+        return null;
+      },
+      getRowClass: (rowIndex) => {
+        return null;
+      },
+      getRowId: (node) => {
+        return node.id;
+      },
+      isRowMaster: (node) => {
+        return !!node.master;
+      },
+      getColumnGroups: () => {
+        return [];
+      },
+      getColumnGroup: () => {
+        return null;
+      },
+
+      // Aggregation
+      refreshAggregatedCols: () => {
+        // Basic implementation
+      },
+
+      // ForEach Operations
+      forEachNode: (callback) => {
+        this.rowNodes.forEach(node => callback(node));
+      },
+      forEachNodeAfterFilter: (callback) => {
+        this.displayedRowNodes.forEach(node => callback(node));
+      },
+      forEachNodeAfterFilterAndSort: (callback) => {
+        this.displayedRowNodes.forEach(node => callback(node));
       }
-    };
+    });
+    
+    return api;
   }
   
   private applyTransaction(transaction: RowDataTransaction<TData>): RowDataTransactionResult | null {
@@ -1159,7 +1484,7 @@ export class GridService<TData = any> {
     }
   }
   
-  private exportAsCsv(params?: CsvExportParams): void {
+  private exportAsCsv(params?: CsvExportParams, api?: any): void {
     const fileName = params?.fileName || 'export.csv';
     const delimiter = params?.delimiter || ',';
     const skipHeader = params?.skipHeader || false;
@@ -1207,7 +1532,11 @@ export class GridService<TData = any> {
     csvContent += rows.map(row => row.join(delimiter)).join('\n');
 
     // Download CSV
-    this.downloadFile(csvContent, fileName, 'text/csv;charset=utf-8;');
+    if (api) {
+      api.downloadFile(csvContent, fileName, 'text/csv;charset=utf-8;');
+    } else {
+      this.downloadFile(csvContent, fileName, 'text/csv;charset=utf-8;');
+    }
   }
 
   private exportAsExcel(params?: ExcelExportParams): void {

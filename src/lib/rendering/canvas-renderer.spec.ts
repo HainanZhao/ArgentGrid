@@ -27,16 +27,6 @@ const mockCanvasContext = {
   }))
 };
 
-const mockCanvas = {
-  getContext: vi.fn(() => mockCanvasContext as any),
-  width: 800,
-  height: 600,
-  style: {},
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-  getBoundingClientRect: vi.fn(() => ({ width: 800, height: 600 }))
-} as unknown as HTMLCanvasElement;
-
 // Mock GridApi
 const createMockGridApi = (): GridApi => {
   return {
@@ -124,7 +114,7 @@ const createMockGridApi = (): GridApi => {
     getPivotColumns: vi.fn(() => []),
     getValueColumns: vi.fn(() => []),
     isPivotMode: vi.fn(() => false),
-    get PivotMode: vi.fn(() => false),
+    getPivotMode: vi.fn(() => false),
     setPivotMode: vi.fn(),
     getGroupDisplayType: vi.fn(() => 'singleColumn'),
     getGroupRowRenderer: vi.fn(),
@@ -169,8 +159,7 @@ const createMockGridApi = (): GridApi => {
     getBottomElements: vi.fn(() => []),
     getTopElements: vi.fn(() => []),
     getFooterElements: vi.fn(() => []),
-    getRootElements: vi.fn(() => []),
-    getGridId: vi.fn(() => 'test-grid')
+    getRootElements: vi.fn(() => [])
   } as any;
 };
 
@@ -178,6 +167,7 @@ describe('CanvasRenderer', () => {
   let renderer: CanvasRenderer;
   let mockApi: GridApi;
   let mockContainer: HTMLDivElement;
+  let mockCanvas: HTMLCanvasElement;
 
   beforeAll(() => {
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => mockCanvasContext as any);
@@ -187,12 +177,17 @@ describe('CanvasRenderer', () => {
   });
 
   beforeEach(() => {
+    // Create a real canvas element for proper DOM behavior
+    mockCanvas = document.createElement('canvas');
+    mockCanvas.width = 800;
+    mockCanvas.height = 600;
+    
     mockApi = createMockGridApi();
     mockContainer = document.createElement('div');
-    mockContainer.appendChild(mockCanvas as any);
+    mockContainer.appendChild(mockCanvas);
     vi.spyOn(mockCanvas, 'parentElement', 'get').mockReturnValue(mockContainer);
     
-    renderer = new CanvasRenderer(mockCanvas as any, mockApi, 32);
+    renderer = new CanvasRenderer(mockCanvas, mockApi, 32);
   });
 
   it('should create', () => {
