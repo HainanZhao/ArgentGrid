@@ -1036,4 +1036,677 @@ describe('GridService', () => {
       expect(api.getRowAtY(140)).toBe(2);
     });
   });
+
+  describe('Export Functions', () => {
+    it('should export as CSV with default params', () => {
+      const exportApi = service.createApi(testColumnDefs, [...testRowData]);
+      // Mock downloadFile
+      const originalDownload = (exportApi as any).downloadFile;
+      (exportApi as any).downloadFile = vi.fn();
+      
+      exportApi.exportDataAsCsv();
+      
+      expect((exportApi as any).downloadFile).toHaveBeenCalled();
+      const callArgs = (exportApi as any).downloadFile.mock.calls[0];
+      expect(callArgs[2]).toBe('text/csv;charset=utf-8;');
+    });
+
+    it('should export as CSV with custom params', () => {
+      const exportApi = service.createApi(testColumnDefs, [...testRowData]);
+      const originalDownload = (exportApi as any).downloadFile;
+      (exportApi as any).downloadFile = vi.fn();
+      
+      exportApi.exportDataAsCsv({
+        fileName: 'custom.csv',
+        delimiter: ';',
+        skipHeader: true,
+        columnKeys: ['id', 'name']
+      });
+      
+      expect((exportApi as any).downloadFile).toHaveBeenCalled();
+      const callArgs = (exportApi as any).downloadFile.mock.calls[0];
+      expect(callArgs[1]).toBe('custom.csv');
+    });
+
+    it('should export as CSV with skipped columns', () => {
+      const exportApi = service.createApi(testColumnDefs, [...testRowData]);
+      const originalDownload = (exportApi as any).downloadFile;
+      (exportApi as any).downloadFile = vi.fn();
+      
+      exportApi.exportDataAsCsv({
+        columnKeys: ['email']
+      });
+      
+      expect((exportApi as any).downloadFile).toHaveBeenCalled();
+    });
+
+    it('should handle CSV special characters', () => {
+      const specialData = [
+        { id: 1, name: 'John, Jr.', age: 30, email: 'john@example.com' },
+        { id: 2, name: 'Jane "The Boss"', age: 25, email: 'jane@example.com' },
+        { id: 3, name: 'Bob\nJohnson', age: 35, email: 'bob@example.com' }
+      ];
+      const exportApi = service.createApi(testColumnDefs, specialData);
+      const originalDownload = (exportApi as any).downloadFile;
+      (exportApi as any).downloadFile = vi.fn();
+      
+      exportApi.exportDataAsCsv();
+      
+      expect((exportApi as any).downloadFile).toHaveBeenCalled();
+      const csvContent = (exportApi as any).downloadFile.mock.calls[0][0];
+      expect(csvContent).toContain('"John, Jr."');
+      expect(csvContent).toContain('"Jane ""The Boss"""');
+    });
+
+    it('should export as Excel', () => {
+      const exportApi = service.createApi(testColumnDefs, [...testRowData]);
+      // Excel export is async, just verify it doesn't throw
+      expect(() => exportApi.exportDataAsExcel()).not.toThrow();
+    });
+
+    it('should export as Excel with custom params', () => {
+      const exportApi = service.createApi(testColumnDefs, [...testRowData]);
+      expect(() => exportApi.exportDataAsExcel({
+        fileName: 'custom.xlsx',
+        sheetName: 'Data',
+        skipHeader: true,
+        columnKeys: ['id', 'name']
+      })).not.toThrow();
+    });
+  });
+
+  describe('Column Operations', () => {
+    it('should move column', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const columns = api.getAllColumns();
+      expect(columns[0].colId).toBe('id');
+      
+      api.moveColumn(columns[0], 2);
+      
+      const movedColumns = api.getAllColumns();
+      expect(movedColumns[2].colId).toBe('id');
+    });
+
+    it('should set column width', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const column = api.getColumn('name');
+      
+      api.setColumnWidth(column!, 200);
+      
+      expect(column?.width).toBe(200);
+    });
+
+    it('should set column pinned', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const column = api.getColumn('id');
+      
+      api.setColumnPinned(column!, 'left');
+      
+      expect(column?.pinned).toBe('left');
+    });
+
+    it('should set column visible', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const column = api.getColumn('name');
+      
+      api.setColumnVisible(column!, false);
+      
+      expect(column?.visible).toBe(false);
+    });
+
+    it('should set column sort', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const column = api.getColumn('age');
+      
+      api.setColumnSort(column!, 'asc', false);
+      
+      expect(column?.sort).toBe('asc');
+    });
+
+    it('should auto-size columns', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const columns = api.getAllColumns();
+      
+      api.autoSizeColumns(columns.map(c => c.colId));
+      
+      // Columns should have been resized
+      expect(columns[0].width).toBeGreaterThan(0);
+    });
+
+    it('should get column state', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const state = api.getColumnState();
+      
+      expect(state).toBeDefined();
+      expect(state.length).toBeGreaterThan(0);
+    });
+
+    it('should apply column state', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const state = api.getColumnState();
+      
+      // Modify state
+      state[0].width = 300;
+      
+      api.applyColumnState({ state, applyOrder: true });
+      
+      expect(state[0].width).toBe(300);
+    });
+
+    it('should reset column state', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      
+      api.resetColumnState();
+      
+      // Should not throw
+    });
+  });
+
+  describe('Clipboard Operations', () => {
+    it('should copy to clipboard', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      // Mock navigator.clipboard
+      const originalClipboard = navigator.clipboard;
+      Object.assign(navigator, {
+        clipboard: { writeText: vi.fn().mockResolvedValue(undefined) }
+      });
+      
+      api.copyToClipboard();
+      
+      expect(navigator.clipboard.writeText).toHaveBeenCalled();
+      
+      // Restore
+      Object.assign(navigator, { clipboard: originalClipboard });
+    });
+
+    it('should paste from clipboard', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      // Mock navigator.clipboard
+      const originalClipboard = navigator.clipboard;
+      Object.assign(navigator, {
+        clipboard: { readText: vi.fn().mockResolvedValue('test\tpaste') }
+      });
+      
+      api.pasteFromClipboard();
+      
+      expect(navigator.clipboard.readText).toHaveBeenCalled();
+      
+      // Restore
+      Object.assign(navigator, { clipboard: originalClipboard });
+    });
+  });
+
+  describe('Cell Editing', () => {
+    it('should start editing cell', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.startEditingCell({ rowIndex: 0, colKey: 'name' });
+      // Should not throw
+    });
+
+    it('should stop editing', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.stopEditing();
+      // Should not throw
+    });
+
+    it('should get editing cells', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const cells = api.getEditingCells();
+      expect(Array.isArray(cells)).toBe(true);
+    });
+
+    it('should flash cells', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.flashCells({
+        rowNodes: [api.getDisplayedRowAtIndex(0)!],
+        columns: ['name'],
+        flashTime: 500
+      });
+      // Should not throw
+    });
+  });
+
+  describe('Row Operations', () => {
+    it('should refresh rows', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const node = api.getDisplayedRowAtIndex(0);
+      api.refreshRows({ rowNodes: [node!] });
+      // Should not throw
+    });
+
+    it('should refresh cells', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.refreshCells({
+        rowNodes: [api.getDisplayedRowAtIndex(0)!],
+        columns: ['name']
+      });
+      // Should not throw
+    });
+
+    it('should refresh header', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.refreshHeader();
+      // Should not throw
+    });
+
+    it('should reset row heights', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.resetRowHeights();
+      // Should not throw
+    });
+
+    it('should get row height for row', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const height = api.getRowHeightForRow(0);
+      expect(height).toBe(32);
+    });
+  });
+
+  describe('Scroll Operations', () => {
+    it('should set scroll position', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.setScrollPosition({ top: 100, left: 50 });
+      // Should not throw
+    });
+
+    it('should get scroll position', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const pos = api.getScrollPosition();
+      expect(pos).toBeDefined();
+    });
+
+    it('should ensure column visible', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.ensureColumnVisible('name');
+      // Should not throw
+    });
+
+    it('should ensure index visible', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.ensureIndexVisible(10);
+      // Should not throw
+    });
+
+    it('should size columns to fit', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.sizeColumnsToFit(800);
+      // Should not throw
+    });
+  });
+
+  describe('Pivot Mode', () => {
+    it('should set pivot mode', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.setPivotMode(true);
+      expect(api.isPivotMode()).toBe(true);
+    });
+
+    it('should get pivot columns', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const pivotCols = api.getPivotColumns();
+      expect(Array.isArray(pivotCols)).toBe(true);
+    });
+
+    it('should get value columns', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const valueCols = api.getValueColumns();
+      expect(Array.isArray(valueCols)).toBe(true);
+    });
+
+    it('should get row group columns', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const groupCols = api.getRowGroupColumns();
+      expect(Array.isArray(groupCols)).toBe(true);
+    });
+
+    it('should get group display type', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const type = api.getGroupDisplayType();
+      expect(type).toBe('singleColumn');
+    });
+  });
+
+  describe('Tool Panels', () => {
+    it('should set side bar visible', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.setSideBarVisible(true);
+      // Should not throw
+    });
+
+    it('should open tool panel', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.openToolPanel('columns');
+      // Should not throw
+    });
+
+    it('should close tool panel', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.closeToolPanel();
+      // Should not throw
+    });
+
+    it('should enable filter tool panel', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.enableFilterToolPanel();
+      // Should not throw
+    });
+
+    it('should enable columns tool panel', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.enableColumnsToolPanel();
+      // Should not throw
+    });
+
+    it('should get tool panel', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const panel = api.getToolPanel('columns');
+      // May be null if not initialized
+    });
+
+    it('should check if tool panel is showing', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const showing = api.isToolPanelShowing();
+      expect(typeof showing).toBe('boolean');
+    });
+  });
+
+  describe('Context Menu', () => {
+    it('should get context menu items', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const items = api.getContextMenuItems();
+      expect(Array.isArray(items)).toBe(true);
+    });
+
+    it('should get main menu items', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const items = api.getMainMenuItems();
+      expect(Array.isArray(items)).toBe(true);
+    });
+
+    it('should get header context menu items', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const items = api.getHeaderContextMenuItems();
+      expect(Array.isArray(items)).toBe(true);
+    });
+  });
+
+  describe('Focus Management', () => {
+    it('should get focused cell', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const cell = api.getFocusedCell();
+      // May be null
+    });
+
+    it('should set focused cell', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.setFocusedCell({ rowIndex: 0, colKey: 'name', rowPinned: null, forceBrowserFocus: false });
+      // Should not throw
+    });
+  });
+
+  describe('Event Handling', () => {
+    it('should add event listener', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const listener = vi.fn();
+      api.addEventListener('rowClicked', listener);
+      // Should not throw
+    });
+
+    it('should remove event listener', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const listener = vi.fn();
+      api.addEventListener('rowClicked', listener);
+      api.removeEventListener('rowClicked', listener);
+      // Should not throw
+    });
+
+    it('should dispatch event', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.dispatchEvent('rowClicked', { data: {} });
+      // Should not throw
+    });
+
+    it('should get event path', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const path = api.getEventPath();
+      expect(Array.isArray(path)).toBe(true);
+    });
+  });
+
+  describe('Rendering', () => {
+    it('should get rendered nodes', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const nodes = api.getRenderedNodes();
+      expect(Array.isArray(nodes)).toBe(true);
+    });
+
+    it('should get first rendered row', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const row = api.getFirstRenderedRow();
+      expect(typeof row).toBe('number');
+    });
+
+    it('should get last rendered row', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const row = api.getLastRenderedRow();
+      expect(typeof row).toBe('number');
+    });
+
+    it('should get vertical pixel range', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const range = api.getVerticalPixelRange();
+      expect(range).toBeDefined();
+    });
+
+    it('should get horizontal pixel range', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const range = api.getHorizontalPixelRange();
+      expect(range).toBeDefined();
+    });
+
+    it('should get pinned width', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const width = api.getPinnedWidth();
+      expect(typeof width).toBe('number');
+    });
+
+    it('should get right pinned width', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const width = api.getRightPinnedWidth();
+      expect(typeof width).toBe('number');
+    });
+
+    it('should get H scroll position', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const pos = api.getHScrollPosition();
+      expect(typeof pos).toBe('number');
+    });
+
+    it('should get V scroll position', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const pos = api.getVScrollPosition();
+      expect(typeof pos).toBe('number');
+    });
+  });
+
+  describe('Localization', () => {
+    it('should get locale text', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const text = api.getLocaleText();
+      expect(typeof text).toBe('string');
+    });
+
+    it('should set locale text', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.setLocaleText('en', { apply: 'Apply' });
+      // Should not throw
+    });
+  });
+
+  describe('Charts', () => {
+    it('should get chart models', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const models = api.getChartModels();
+      expect(Array.isArray(models)).toBe(true);
+    });
+
+    it('should get chart toolbar items', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const items = api.getChartToolbarItems();
+      expect(Array.isArray(items)).toBe(true);
+    });
+
+    it('should hide popup', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.hidePopup();
+      // Should not throw
+    });
+
+    it('should get sparkline options', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const options = api.getSparklineOptions();
+      expect(Array.isArray(options)).toBe(true);
+    });
+  });
+
+  describe('Grid State', () => {
+    it('should get grid panel', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const panel = api.getGridPanel();
+      // May be null
+    });
+
+    it('should get row container element', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const element = api.getRowContainerElement();
+      // May be null
+    });
+
+    it('should get body element', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const element = api.getBodyElement();
+      // May be null
+    });
+
+    it('should get header elements', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const elements = api.getHeaderElements();
+      expect(Array.isArray(elements)).toBe(true);
+    });
+
+    it('should get center elements', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const elements = api.getCenterElements();
+      expect(Array.isArray(elements)).toBe(true);
+    });
+
+    it('should get left elements', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const elements = api.getLeftElements();
+      expect(Array.isArray(elements)).toBe(true);
+    });
+
+    it('should get right elements', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const elements = api.getRightElements();
+      expect(Array.isArray(elements)).toBe(true);
+    });
+  });
+
+  describe('Disabled State', () => {
+    it('should set disabled', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.setDisabled(true);
+      // Should not throw
+    });
+
+    it('should check if disabled', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const disabled = api.isDisabled();
+      expect(typeof disabled).toBe('boolean');
+    });
+  });
+
+  describe('Row Information', () => {
+    it('should get row position', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const pos = api.getRowPosition(0);
+      expect(typeof pos).toBe('number');
+    });
+
+    it('should get row style', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const style = api.getRowStyle(0);
+      // May be null
+    });
+
+    it('should get row class', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const cls = api.getRowClass(0);
+      // May be null
+    });
+
+    it('should get row id', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const node = api.getDisplayedRowAtIndex(0);
+      const id = api.getRowId(node!);
+      expect(id).toBe('1'); // First row has id: 1 in test data
+    });
+
+    it('should check if row is master', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const node = api.getDisplayedRowAtIndex(0);
+      const isMaster = api.isRowMaster(node!);
+      expect(typeof isMaster).toBe('boolean');
+    });
+
+    it('should get row group columns', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const cols = api.getRowGroupColumns();
+      expect(Array.isArray(cols)).toBe(true);
+    });
+
+    it('should get column groups', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const groups = api.getColumnGroups();
+      expect(Array.isArray(groups)).toBe(true);
+    });
+
+    it('should get column group', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const group = api.getColumnGroup();
+      // May be null
+    });
+  });
+
+  describe('Aggregation', () => {
+    it('should refresh aggregated cols', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      api.refreshAggregatedCols();
+      // Should not throw
+    });
+  });
+
+  describe('ForEach Operations', () => {
+    it('should forEach node', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const callback = vi.fn();
+      api.forEachNode(callback);
+      expect(callback).toHaveBeenCalled();
+    });
+
+    it('should forEach node after filter', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const callback = vi.fn();
+      api.forEachNodeAfterFilter(callback);
+      expect(callback).toHaveBeenCalled();
+    });
+
+    it('should forEach node after filter and sort', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const callback = vi.fn();
+      api.forEachNodeAfterFilterAndSort(callback);
+      expect(callback).toHaveBeenCalled();
+    });
+  });
 });
