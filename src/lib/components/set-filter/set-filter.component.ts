@@ -1,10 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectionStrategy } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'argent-set-filter',
   standalone: true,
-  imports: [FormsModule],
+  imports: [],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="set-filter">
@@ -12,8 +11,8 @@ import { FormsModule } from '@angular/forms';
       <div class="set-filter-search">
         <input
           type="text"
-          [(ngModel)]="searchText"
-          (ngModelChange)="onSearchChanged()"
+          [value]="searchText"
+          (input)="onSearchInput($event)"
           placeholder="Search..."
           class="set-filter-input"
         />
@@ -228,6 +227,10 @@ export class SetFilterComponent<T = any> implements OnInit {
 
   ngOnInit(): void {
     this.initializeValues();
+  }
+
+  onSearchInput(event: Event): void {
+    this.searchText = (event.target as HTMLInputElement).value;
   }
 
   private initializeValues(): void {

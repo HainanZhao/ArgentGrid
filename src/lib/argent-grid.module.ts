@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { ArgentGridComponent } from './components/argent-grid.component';
 import { AgGridCompatibilityDirective } from './directives/ag-grid-compatibility.directive';
+import { SetFilterComponent } from './components/set-filter/set-filter.component';
+import { ClickOutsideDirective } from './directives/click-outside.directive';
 
 @NgModule({
   declarations: [
@@ -11,11 +13,15 @@ import { AgGridCompatibilityDirective } from './directives/ag-grid-compatibility
   ],
   imports: [
     CommonModule,
-    DragDropModule
+    DragDropModule,
+    SetFilterComponent,
+    ClickOutsideDirective
   ],
   exports: [
     ArgentGridComponent,
-    AgGridCompatibilityDirective
+    AgGridCompatibilityDirective,
+    SetFilterComponent,
+    ClickOutsideDirective
   ]
 })
 export class ArgentGridModule {}

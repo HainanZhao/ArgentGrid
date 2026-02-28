@@ -14,6 +14,10 @@ export { CanvasRenderer } from './lib/rendering/canvas-renderer';
 
 // Directives
 export { AgGridCompatibilityDirective } from './lib/directives/ag-grid-compatibility.directive';
+export { ClickOutsideDirective } from './lib/directives/click-outside.directive';
+
+// Components
+export { SetFilterComponent } from './lib/components/set-filter/set-filter.component';
 
 // Services
 export { GridService } from './lib/services/grid.service';
