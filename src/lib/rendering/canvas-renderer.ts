@@ -148,12 +148,12 @@ export class CanvasRenderer<TData = any> {
    * Get column at X coordinate (public for testing)
    */
   getColumnAtX(x: number): Column | null {
-    const canvasX = x;
+    const columns = this.getVisibleColumns();
     const result = getColumnAtX(
-      canvasX,
-      this.getVisibleColumns(),
-      this.columnPreps,
-      this.scrollLeft
+      columns,
+      x,
+      this.scrollLeft,
+      this.viewportWidth
     );
     return result?.column || null;
   }
@@ -983,7 +983,7 @@ export class CanvasRenderer<TData = any> {
    * Get row at y position
    */
   getRowAtPosition(y: number): number {
-    const scrollTop = this.scrollPosition?.top || 0;
+    const scrollTop = this.scrollTop || 0;
     const rowY = y + scrollTop;
     return Math.floor(rowY / this.rowHeight);
   }

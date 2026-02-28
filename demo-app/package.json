@@ -8,7 +8,8 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "build:gh-pages": "ng build --base-href /ArgentGrid/ --configuration production"
+    "build:gh-pages": "ng build --base-href /ArgentGrid/ --configuration production",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@angular/animations": "^18.0.0",
