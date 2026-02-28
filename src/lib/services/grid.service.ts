@@ -836,7 +836,10 @@ export class GridService<TData = any> {
     this.totalHeight = currentTotal;
   }
 
-  private getRowY(index: number): number {
+  /**
+   * Get the Y position for a row index
+   */
+  getRowY(index: number): number {
     if (index < 0 || index >= this.cumulativeRowHeights.length) return 0;
     return this.cumulativeRowHeights[index];
   }

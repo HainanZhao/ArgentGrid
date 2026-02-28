@@ -962,6 +962,32 @@ export class CanvasRenderer<TData = any> {
     this.scheduleRender();
   }
 
+  /**
+   * Get column at x position
+   */
+  getColumnAtPosition(x: number): number {
+    const columns = this.gridApi.getAllColumns();
+    let currentX = 0;
+    for (let i = 0; i < columns.length; i++) {
+      const col = columns[i];
+      const width = col.width || 150;
+      if (x >= currentX && x < currentX + width) {
+        return i;
+      }
+      currentX += width;
+    }
+    return -1;
+  }
+
+  /**
+   * Get row at y position
+   */
+  getRowAtPosition(y: number): number {
+    const scrollTop = this.scrollPosition?.top || 0;
+    const rowY = y + scrollTop;
+    return Math.floor(rowY / this.rowHeight);
+  }
+
   destroy(): void {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);

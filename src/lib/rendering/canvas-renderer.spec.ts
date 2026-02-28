@@ -250,10 +250,14 @@ describe('CanvasRenderer', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
-  it('should handle mouse events', () => {
-    const event = new MouseEvent('mousedown', { bubbles: true, clientX: 100, clientY: 100 });
-    mockCanvas.dispatchEvent(event);
-    expect(event).toBeTruthy();
+  it('should get column at position', () => {
+    const column = renderer.getColumnAtPosition(100);
+    expect(typeof column).toBe('number');
+  });
+
+  it('should get row at position', () => {
+    const row = renderer.getRowAtPosition(100);
+    expect(typeof row).toBe('number');
   });
 
   it('should handle viewport changes', () => {

@@ -349,6 +349,7 @@ export interface GridApi<TData = any> {
   setRowData(rowData: TData[]): void;
   applyTransaction(transaction: RowDataTransaction<TData>): RowDataTransactionResult | null;
   getDisplayedRowCount(): number;
+  getRowY(index: number): number;
   getAggregations(): { [field: string]: any };
   getRowNode(id: string): IRowNode<TData> | null;
 
