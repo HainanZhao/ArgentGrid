@@ -34,22 +34,20 @@ const meta: Meta<ArgentGridComponent<Employee>> = {
 export default meta;
 type Story = StoryObj<ArgentGridComponent<Employee>>;
 
-function generateData(count: number): Employee[] {
+function generateStaticData(count: number): Employee[] {
   const departments = ['Engineering', 'Sales', 'Marketing', 'HR', 'Finance'];
-  const roles = ['Software Engineer', 'Manager', 'Director', 'VP', 'Intern'];
+  const roles = ['Engineer', 'Manager', 'Director', 'VP', 'Intern'];
   const locations = ['New York', 'San Francisco', 'London', 'Singapore', 'Remote'];
 
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
     name: `Employee ${i + 1}`,
-    department: departments[Math.floor(Math.random() * departments.length)],
-    role: roles[Math.floor(Math.random() * roles.length)],
-    salary: Math.floor(Math.random() * 150000) + 50000,
-    location: locations[Math.floor(Math.random() * locations.length)],
-    startDate: new Date(Date.now() - Math.random() * 5 * 365 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split('T')[0],
-    performance: Math.floor(Math.random() * 40) + 60,
+    department: departments[i % departments.length],
+    role: roles[i % roles.length],
+    salary: 50000 + i * 1000,
+    location: locations[i % locations.length],
+    startDate: '2020-01-01',
+    performance: 80,
   }));
 }
 
@@ -65,7 +63,7 @@ export const Default: Story = {
       { field: 'startDate', headerName: 'Start Date', width: 130 },
       { field: 'performance', headerName: 'Performance', width: 120 },
     ],
-    rowData: generateData(100),
+    rowData: generateStaticData(100),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
@@ -88,7 +86,7 @@ export const LargeDataset: Story = {
       { field: 'role', headerName: 'Role', width: 250 },
       { field: 'salary', headerName: 'Salary', width: 120 },
     ],
-    rowData: generateData(100000),
+    rowData: generateStaticData(100000),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
@@ -106,36 +104,36 @@ export const LargeDataset: Story = {
 export const WithSorting: Story = {
   args: {
     columnDefs: [
-      { 
-        field: 'id', 
-        headerName: 'ID ↕️', 
-        width: 80, 
+      {
+        field: 'id',
+        headerName: 'ID ↕️',
+        width: 80,
         sortable: true,
-        headerComponentParams: { sortIcon: '↕️' }
+        headerComponentParams: { sortIcon: '↕️' },
       },
-      { 
-        field: 'name', 
-        headerName: 'Name ↕️', 
-        width: 200, 
+      {
+        field: 'name',
+        headerName: 'Name ↕️',
+        width: 200,
         sortable: true,
-        headerComponentParams: { sortIcon: '↕️' }
+        headerComponentParams: { sortIcon: '↕️' },
       },
-      { 
-        field: 'department', 
-        headerName: 'Department ↕️', 
-        width: 180, 
+      {
+        field: 'department',
+        headerName: 'Department ↕️',
+        width: 180,
         sortable: true,
-        headerComponentParams: { sortIcon: '↕️' }
+        headerComponentParams: { sortIcon: '↕️' },
       },
-      { 
-        field: 'salary', 
-        headerName: 'Salary ↕️', 
-        width: 120, 
+      {
+        field: 'salary',
+        headerName: 'Salary ↕️',
+        width: 120,
         sortable: true,
-        headerComponentParams: { sortIcon: '↕️' }
+        headerComponentParams: { sortIcon: '↕️' },
       },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '400px',
     width: '100%',
     theme: themeQuartz,
@@ -153,18 +151,18 @@ export const WithSorting: Story = {
 export const WithSelection: Story = {
   args: {
     columnDefs: [
-      { 
-        field: 'id', 
-        headerName: 'ID ☑️', 
-        width: 80, 
+      {
+        field: 'id',
+        headerName: 'ID ☑️',
+        width: 80,
         checkboxSelection: true,
-        headerComponentParams: { selectionIcon: '☑️' }
+        headerComponentParams: { selectionIcon: '☑️' },
       },
       { field: 'name', headerName: 'Name', width: 200 },
       { field: 'department', headerName: 'Department', width: 180 },
       { field: 'role', headerName: 'Role', width: 250 },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     rowSelection: 'multiple',
     height: '400px',
     width: '100%',
@@ -183,36 +181,40 @@ export const WithSelection: Story = {
 export const WithFiltering: Story = {
   args: {
     columnDefs: [
-      { 
-        field: 'id', 
-        headerName: 'ID 🔢', 
-        width: 80, 
-        filter: 'number', floatingFilter: true,
-        headerComponentParams: { filterIcon: '🔢' }
+      {
+        field: 'id',
+        headerName: 'ID 🔢',
+        width: 80,
+        filter: 'number',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '🔢' },
       },
-      { 
-        field: 'name', 
-        headerName: 'Name 🔤', 
-        width: 200, 
-        filter: 'text', floatingFilter: true,
-        headerComponentParams: { filterIcon: '🔤' }
+      {
+        field: 'name',
+        headerName: 'Name 🔤',
+        width: 200,
+        filter: 'text',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '🔤' },
       },
-      { 
-        field: 'department', 
-        headerName: 'Department ☑️', 
-        width: 180, 
-        filter: 'set', floatingFilter: true,
-        headerComponentParams: { filterIcon: '☑️' }
+      {
+        field: 'department',
+        headerName: 'Department ☑️',
+        width: 180,
+        filter: 'set',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '☑️' },
       },
-      { 
-        field: 'role', 
-        headerName: 'Role 🔤', 
-        width: 250, 
-        filter: 'text', floatingFilter: true,
-        headerComponentParams: { filterIcon: '🔤' }
+      {
+        field: 'role',
+        headerName: 'Role 🔤',
+        width: 250,
+        filter: 'text',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '🔤' },
       },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
@@ -255,7 +257,7 @@ export const WithCustomTheme: Story = {
       { field: 'department', headerName: 'Department', width: 180 },
       { field: 'salary', headerName: 'Salary', width: 120 },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '400px',
     width: '100%',
     theme: themeQuartz.withParams({

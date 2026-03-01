@@ -606,7 +606,7 @@ describe('GridService', () => {
 
     const selectionApi = service.createApi(selectionColumnDefs, [...testRowData]);
     const columns = selectionApi.getAllColumns();
-    
+
     // Should have 3 columns: Dedicated Selection + ID + Name
     expect(columns.length).toBe(3);
     expect(columns[0].colId).toBe('ag-Grid-SelectionColumn');
@@ -618,22 +618,24 @@ describe('GridService', () => {
     it('should be created if checkboxSelection is true in any column', () => {
       const defs: ColDef[] = [{ field: 'id', checkboxSelection: true }];
       const api = service.createApi(defs, []);
-      expect(api.getAllColumns().some(c => c.colId === 'ag-Grid-SelectionColumn')).toBe(true);
+      expect(api.getAllColumns().some((c) => c.colId === 'ag-Grid-SelectionColumn')).toBe(true);
     });
 
     it('should be created if checkboxSelection is true in a nested column', () => {
-      const defs: any[] = [{
-        headerName: 'Group',
-        children: [{ field: 'id', checkboxSelection: true }]
-      }];
+      const defs: any[] = [
+        {
+          headerName: 'Group',
+          children: [{ field: 'id', checkboxSelection: true }],
+        },
+      ];
       const api = service.createApi(defs, []);
-      expect(api.getAllColumns().some(c => c.colId === 'ag-Grid-SelectionColumn')).toBe(true);
+      expect(api.getAllColumns().some((c) => c.colId === 'ag-Grid-SelectionColumn')).toBe(true);
     });
 
     it('should not be created if no checkboxSelection is present', () => {
       const defs: ColDef[] = [{ field: 'id' }];
       const api = service.createApi(defs, []);
-      expect(api.getAllColumns().some(c => c.colId === 'ag-Grid-SelectionColumn')).toBe(false);
+      expect(api.getAllColumns().some((c) => c.colId === 'ag-Grid-SelectionColumn')).toBe(false);
     });
   });
 

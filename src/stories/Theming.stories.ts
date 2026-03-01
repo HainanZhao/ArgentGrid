@@ -29,18 +29,18 @@ const meta: Meta<ArgentGridComponent<Employee>> = {
 export default meta;
 type Story = StoryObj<ArgentGridComponent<Employee>>;
 
-function generateData(count: number): Employee[] {
+function generateStaticData(count: number): Employee[] {
   const departments = ['Engineering', 'Sales', 'Marketing', 'HR', 'Finance'];
-  const roles = ['Software Engineer', 'Manager', 'Director', 'VP', 'Intern'];
+  const roles = ['Engineer', 'Manager', 'Director', 'VP', 'Intern'];
   const locations = ['New York', 'San Francisco', 'London', 'Singapore', 'Remote'];
 
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
     name: `Employee ${i + 1}`,
-    department: departments[Math.floor(Math.random() * departments.length)],
-    role: roles[Math.floor(Math.random() * roles.length)],
-    salary: Math.floor(Math.random() * 150000) + 50000,
-    location: locations[Math.floor(Math.random() * locations.length)],
+    department: departments[i % departments.length],
+    role: roles[i % roles.length],
+    salary: 50000 + i * 1000,
+    location: locations[i % locations.length],
   }));
 }
 
@@ -56,7 +56,7 @@ const columnDefs = [
 export const LightMode: Story = {
   args: {
     columnDefs,
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '400px',
     width: '100%',
     theme: themeQuartz,
@@ -73,7 +73,7 @@ export const LightMode: Story = {
 export const DarkMode: Story = {
   args: {
     columnDefs,
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '400px',
     width: '100%',
     theme: themeQuartz.withPart(colorSchemeDark),
@@ -90,7 +90,7 @@ export const DarkMode: Story = {
 export const CompactMode: Story = {
   args: {
     columnDefs,
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '400px',
     width: '100%',
     theme: themeQuartz.withParams({ rowHeight: 32, fontSize: 12, spacing: 4 }),
@@ -107,7 +107,7 @@ export const CompactMode: Story = {
 export const CompactDarkMode: Story = {
   args: {
     columnDefs,
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '400px',
     width: '100%',
     theme: themeQuartz

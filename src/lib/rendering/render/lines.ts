@@ -27,7 +27,7 @@ export function drawCrispLine(
   const snapY1 = Math.floor(y1) + 0.5;
   const snapX2 = Math.floor(x2) + 0.5;
   const snapY2 = Math.floor(y2) + 0.5;
-  
+
   ctx.moveTo(snapX1, snapY1);
   ctx.lineTo(snapX2, snapY2);
   ctx.stroke();
@@ -121,7 +121,9 @@ export function drawColumnLines(
   );
 
   // Calculate Y range for drawing
-  const drawY1 = Math.floor(api ? api.getRowY(startRow) - scrollTop : startRow * rowHeight - scrollTop);
+  const drawY1 = Math.floor(
+    api ? api.getRowY(startRow) - scrollTop : startRow * rowHeight - scrollTop
+  );
   const drawY2 = Math.floor(api ? api.getRowY(endRow) - scrollTop : endRow * rowHeight - scrollTop);
 
   ctx.beginPath();

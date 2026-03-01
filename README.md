@@ -180,6 +180,24 @@ This will execute the **Feature Guard Rails** suite which verifies:
 - Column Pinning & Scroll Sync
 - Column Re-ordering (Drag & Drop)
 
+### Visual Regression Testing
+
+Since ArgentGrid renders its core data area using HTML5 Canvas, we use **Visual Regression Testing** to ensure consistent rendering and catch pixel-level regressions.
+
+**Run Visual Tests:**
+```bash
+npx playwright test e2e/visual.spec.ts
+```
+
+**Updating Snapshots:**
+If you have made intentional UI changes (e.g., changed selection colors, refined border logic, or adjusted header padding) and the visual tests fail, you must update the baseline snapshots:
+
+```bash
+npx playwright test e2e/visual.spec.ts --update-snapshots
+```
+
+*Note: Ensure your local environment is clean and Storybook is correctly built before updating snapshots. Baseline snapshots are committed to the repository to serve as the source of truth for CI.*
+
 ### Performance Benchmarking
 
 ArgentGrid includes a benchmarking suite to measure rendering efficiency and scroll performance under heavy load (100,000+ rows).

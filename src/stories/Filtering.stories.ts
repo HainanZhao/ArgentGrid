@@ -29,74 +29,54 @@ const meta: Meta<ArgentGridComponent<Employee>> = {
 export default meta;
 type Story = StoryObj<ArgentGridComponent<Employee>>;
 
-function generateData(count: number): Employee[] {
-  const departments = [
-    'Engineering',
-    'Sales',
-    'Marketing',
-    'HR',
-    'Finance',
-    'Operations',
-    'Support',
-  ];
-  const roles = ['Software Engineer', 'Manager', 'Director', 'VP', 'Intern', 'Analyst'];
-  const locations = ['New York', 'San Francisco', 'London', 'Singapore', 'Remote', 'Berlin'];
+function generateStaticData(count: number): Employee[] {
+  const departments = ['Engineering', 'Sales', 'Marketing'];
+  const roles = ['Engineer', 'Manager', 'Analyst'];
+  const locations = ['New York', 'London', 'Berlin'];
 
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
     name: `Employee ${i + 1}`,
-    department: departments[Math.floor(Math.random() * departments.length)],
-    role: roles[Math.floor(Math.random() * roles.length)],
-    salary: Math.floor(Math.random() * 150000) + 50000,
-    location: locations[Math.floor(Math.random() * locations.length)],
-    startDate: new Date(Date.now() - Math.random() * 5 * 365 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split('T')[0],
+    department: departments[i % departments.length],
+    role: roles[i % roles.length],
+    salary: 50000 + i * 1000,
+    location: locations[i % locations.length],
+    startDate: '2020-01-01',
   }));
 }
-
-// Common column definitions with filter indicators
-const filterIndicatorRenderer = (params: any) => {
-  const filterType = params.colDef.filter || 'text';
-  const icons: Record<string, string> = {
-    text: '🔤',
-    number: '🔢',
-    date: '📅',
-    set: '☑️',
-    boolean: '✓',
-  };
-  return `<span style="float: right; opacity: 0.5;">${icons[filterType] || '🔍'}</span>`;
-};
 
 export const TextFilter: Story = {
   args: {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
-      { 
-        field: 'name', 
-        headerName: 'Name 🔤', 
-        width: 200, 
-        filter: 'text', floatingFilter: true,
-        headerComponentParams: { filterIcon: '🔤' }
+      {
+        field: 'name',
+        headerName: 'Name 🔤',
+        width: 200,
+        filter: 'text',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '🔤' },
       },
-      { 
-        field: 'department', 
-        headerName: 'Department 🔤', 
-        width: 180, 
-        filter: 'text', floatingFilter: true,
-        headerComponentParams: { filterIcon: '🔤' }
+      {
+        field: 'department',
+        headerName: 'Department 🔤',
+        width: 180,
+        filter: 'text',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '🔤' },
       },
-      { 
-        field: 'role', 
-        headerName: 'Role 🔤', 
-        width: 250, 
-        filter: 'text', floatingFilter: true,
-        headerComponentParams: { filterIcon: '🔤' }
+      {
+        field: 'role',
+        headerName: 'Role 🔤',
+        width: 250,
+        filter: 'text',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '🔤' },
       },
       { field: 'salary', headerName: 'Salary', width: 120 },
       { field: 'location', headerName: 'Location', width: 150 },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
@@ -114,25 +94,27 @@ export const TextFilter: Story = {
 export const NumberFilter: Story = {
   args: {
     columnDefs: [
-      { 
-        field: 'id', 
-        headerName: 'ID 🔢', 
-        width: 80, 
-        filter: 'number', floatingFilter: true,
-        headerComponentParams: { filterIcon: '🔢' }
+      {
+        field: 'id',
+        headerName: 'ID 🔢',
+        width: 80,
+        filter: 'number',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '🔢' },
       },
       { field: 'name', headerName: 'Name', width: 200 },
       { field: 'department', headerName: 'Department', width: 180 },
-      { 
-        field: 'salary', 
-        headerName: 'Salary 🔢', 
-        width: 120, 
-        filter: 'number', floatingFilter: true,
-        headerComponentParams: { filterIcon: '🔢' }
+      {
+        field: 'salary',
+        headerName: 'Salary 🔢',
+        width: 120,
+        filter: 'number',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '🔢' },
       },
       { field: 'location', headerName: 'Location', width: 150 },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
@@ -152,24 +134,26 @@ export const SetFilter: Story = {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
       { field: 'name', headerName: 'Name', width: 200 },
-      { 
-        field: 'department', 
-        headerName: 'Department ☑️', 
-        width: 180, 
-        filter: 'set', floatingFilter: true,
-        headerComponentParams: { filterIcon: '☑️' }
+      {
+        field: 'department',
+        headerName: 'Department ☑️',
+        width: 180,
+        filter: 'set',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '☑️' },
       },
       { field: 'role', headerName: 'Role', width: 250 },
       { field: 'salary', headerName: 'Salary', width: 120 },
-      { 
-        field: 'location', 
-        headerName: 'Location ☑️', 
-        width: 150, 
-        filter: 'set', floatingFilter: true,
-        headerComponentParams: { filterIcon: '☑️' }
+      {
+        field: 'location',
+        headerName: 'Location ☑️',
+        width: 150,
+        filter: 'set',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '☑️' },
       },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
@@ -193,7 +177,7 @@ export const HiddenFloatingFilters: Story = {
       { field: 'role', headerName: 'Role', width: 250, filter: 'text' },
       { field: 'salary', headerName: 'Salary', width: 120, filter: 'number' },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
@@ -211,43 +195,48 @@ export const HiddenFloatingFilters: Story = {
 export const AllFilterTypes: Story = {
   args: {
     columnDefs: [
-      { 
-        field: 'id', 
-        headerName: 'ID 🔢', 
-        width: 80, 
-        filter: 'number', floatingFilter: true,
-        headerComponentParams: { filterIcon: '🔢' }
+      {
+        field: 'id',
+        headerName: 'ID 🔢',
+        width: 80,
+        filter: 'number',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '🔢' },
       },
-      { 
-        field: 'name', 
-        headerName: 'Name 🔤', 
-        width: 200, 
-        filter: 'text', floatingFilter: true,
-        headerComponentParams: { filterIcon: '🔤' }
+      {
+        field: 'name',
+        headerName: 'Name 🔤',
+        width: 200,
+        filter: 'text',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '🔤' },
       },
-      { 
-        field: 'department', 
-        headerName: 'Department ☑️', 
-        width: 180, 
-        filter: 'set', floatingFilter: true,
-        headerComponentParams: { filterIcon: '☑️' }
+      {
+        field: 'department',
+        headerName: 'Department ☑️',
+        width: 180,
+        filter: 'set',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '☑️' },
       },
-      { 
-        field: 'startDate', 
-        headerName: 'Start Date 📅', 
-        width: 150, 
-        filter: 'date', floatingFilter: true,
-        headerComponentParams: { filterIcon: '📅' }
+      {
+        field: 'startDate',
+        headerName: 'Start Date 📅',
+        width: 150,
+        filter: 'date',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '📅' },
       },
-      { 
-        field: 'salary', 
-        headerName: 'Salary 🔢', 
-        width: 120, 
-        filter: 'number', floatingFilter: true,
-        headerComponentParams: { filterIcon: '🔢' }
+      {
+        field: 'salary',
+        headerName: 'Salary 🔢',
+        width: 120,
+        filter: 'number',
+        floatingFilter: true,
+        headerComponentParams: { filterIcon: '🔢' },
       },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '500px',
     width: '100%',
     theme: themeQuartz,

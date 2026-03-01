@@ -47,15 +47,15 @@ export class LiveDataHandler<TData = any> {
     }
 
     const currentCount = this.gridApi.getDisplayedRowCount();
-    
+
     // Apply transaction
     this.gridApi.applyTransaction({ add: this.updateBuffer });
-    
+
     // Mark new rows as dirty
     for (let i = 0; i < this.updateBuffer.length; i++) {
       this.dirtyRows.add(currentCount + i);
     }
-    
+
     this.updateBuffer = [];
     onFlush();
   }

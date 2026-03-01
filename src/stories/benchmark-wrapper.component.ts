@@ -147,7 +147,7 @@ export class BenchmarkWrapperComponent implements AfterViewInit, OnDestroy {
       filter: true,
       sortable: true,
       resizable: true,
-    }
+    },
   };
 
   private gridApi?: GridApi<Employee>;

@@ -30,9 +30,7 @@
         "noParameterProperties": "off"
       },
       "correctness": {
-        "noUnusedVariables": "warn",
-        "noUnusedImports": "warn",
-        "noUnusedPrivateClassMembers": "off"
+        "noUnusedFunctionParameters": "off"
       }
     }
   },

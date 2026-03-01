@@ -30,6 +30,7 @@ coverage/
 playwright-report/
 test-results/
 e2e/screenshots/
+!e2e/visual.spec.ts-snapshots/
 
 # Package lock (optional - uncomment if needed)
 # package-lock.json

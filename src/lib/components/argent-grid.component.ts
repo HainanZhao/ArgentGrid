@@ -340,7 +340,7 @@ export class ArgentGridComponent<TData = any>
       }
       if (event.type === 'selectionChanged') {
         this.updateSelectionState();
-        
+
         // Mark all rows as potentially dirty for selection change to ensure canvas redraws
         // In a more optimized version, we'd only mark specific rows.
         if (this.canvasRenderer) {
@@ -533,7 +533,7 @@ export class ArgentGridComponent<TData = any>
     // Prevent menu from going off-screen
     if (x < 0) x = 0;
     if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
-    
+
     // Check if menu would overflow bottom
     const estimatedHeight = this.headerMenuItems.length * 30 + 20;
     if (y + estimatedHeight > window.innerHeight) {
@@ -547,7 +547,6 @@ export class ArgentGridComponent<TData = any>
 
   private getHeaderMenuItems(col: Column): MenuItemDef[] {
     const items: MenuItemDef[] = [];
-    const colId = col.colId;
 
     // 1. Sort items
     items.push({
@@ -572,7 +571,7 @@ export class ArgentGridComponent<TData = any>
     const colDef = this.getColumnDefForColumn(col);
     if (colDef && colDef.filter !== false) {
       const filterType = colDef.filter || 'text';
-      
+
       if (filterType === 'set') {
         items.push({
           name: 'Filter...',
@@ -580,7 +579,7 @@ export class ArgentGridComponent<TData = any>
           action: () => {
             this.openSetFilter(null, col, { ...this.headerMenuPosition });
             this.closeHeaderMenu();
-          }
+          },
         });
       } else {
         items.push({
@@ -589,7 +588,7 @@ export class ArgentGridComponent<TData = any>
           action: () => {
             this.openFilterPopup(null, col, { ...this.headerMenuPosition });
             this.closeHeaderMenu();
-          }
+          },
         });
       }
     }
@@ -774,7 +773,11 @@ export class ArgentGridComponent<TData = any>
     return colDef.filter === 'set';
   }
 
-  openSetFilter(event: MouseEvent | null, col: Column | ColDef<TData>, position?: { x: number, y: number }): void {
+  openSetFilter(
+    event: MouseEvent | null,
+    col: Column | ColDef<TData>,
+    position?: { x: number; y: number }
+  ): void {
     if (event) {
       event.stopPropagation();
       event.preventDefault();
@@ -862,17 +865,17 @@ export class ArgentGridComponent<TData = any>
 
   private applyPopupFilter(): void {
     if (!this.activeFilterPopupColumn || !this.gridApi) return;
-    
+
     const col = this.activeFilterPopupColumn;
     const field = col.field;
     if (!field) return;
 
     const currentModel = this.gridApi.getFilterModel();
-    
+
     if (this.activeFilterOperator === 'blank' || this.activeFilterOperator === 'notBlank') {
       currentModel[col.colId] = {
         filterType: this.activeFilterPopupType,
-        type: this.activeFilterOperator
+        type: this.activeFilterOperator,
       };
     } else {
       const value = this.filterValue1;
@@ -882,13 +885,13 @@ export class ArgentGridComponent<TData = any>
         const filterModel: any = {
           filterType: this.activeFilterPopupType,
           type: this.activeFilterOperator,
-          filter: value
+          filter: value,
         };
-        
+
         if (this.activeFilterOperator === 'inRange') {
           filterModel.filterTo = this.filterValue2;
         }
-        
+
         currentModel[col.colId] = filterModel;
       }
     }
@@ -898,14 +901,19 @@ export class ArgentGridComponent<TData = any>
     this._cdr.detectChanges();
   }
 
-  openFilterPopup(event: MouseEvent | null, col: Column, position?: { x: number, y: number }): void {
+  openFilterPopup(
+    event: MouseEvent | null,
+    col: Column,
+    position?: { x: number; y: number }
+  ): void {
     this.activeFilterPopupColumn = col;
     const colDef = this.getColumnDefForColumn(col);
     this.activeFilterPopupType = colDef?.filter === 'number' ? 'number' : 'text';
-    
+
     // Initialize operator and values from current model or default
     const model = this.gridApi?.getFilterModel()[col.colId] as any;
-    this.activeFilterOperator = model?.type || (this.activeFilterPopupType === 'number' ? 'equals' : 'contains');
+    this.activeFilterOperator =
+      model?.type || (this.activeFilterPopupType === 'number' ? 'equals' : 'contains');
     this.filterValue1 = model?.filter || '';
     this.filterValue2 = model?.filterTo || '';
 
@@ -1249,18 +1257,21 @@ export class ArgentGridComponent<TData = any>
     if (this.gridOptions?.defaultColDef?.floatingFilter) return true;
 
     if (!this.columnDefs) return false;
-    return this.columnDefs.some((col) => {
+    const hasAny = this.columnDefs.some((col) => {
       if ('children' in col) {
-        return col.children.some((child) => 'floatingFilter' in child && child.floatingFilter);
+        return col.children.some((child) => (child as any).floatingFilter);
       }
-      return col.floatingFilter;
+      return (col as any).floatingFilter;
     });
+    return hasAny;
   }
 
   isFloatingFilterEnabled(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
     const colDef = this.getColumnDefForColumn(col as any);
     if (!colDef || 'children' in colDef) return false;
-    if (!colDef.filter) return false;
+
+    const filter = colDef.filter;
+    if (!filter) return false;
 
     if (colDef.floatingFilter === true) return true;
     if (colDef.floatingFilter === false) return false;
@@ -1578,7 +1589,8 @@ export class ArgentGridComponent<TData = any>
     if (!rowNode) return;
 
     const selectionMode = this.gridApi.getGridOption('rowSelection') || 'single';
-    const isMultiSelect = (selectionMode as any) === 'multiple' || (selectionMode as any) === 'multiRow';
+    const isMultiSelect =
+      (selectionMode as any) === 'multiple' || (selectionMode as any) === 'multiRow';
 
     if (isMultiSelect && (event.ctrlKey || event.metaKey)) {
       rowNode.setSelected(!rowNode.selected);

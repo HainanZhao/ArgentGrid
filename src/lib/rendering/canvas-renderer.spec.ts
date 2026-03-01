@@ -335,7 +335,9 @@ describe('CanvasRenderer', () => {
       selected: false,
       rowIndex: 0,
       displayedRowIndex: 0,
-      setSelected: vi.fn(function(this: any, val) { this.selected = val; }),
+      setSelected: vi.fn(function (this: any, val) {
+        this.selected = val;
+      }),
       group: false,
       master: false,
       level: 0,

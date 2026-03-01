@@ -28,18 +28,18 @@ const meta: Meta<ArgentGridComponent<Employee>> = {
 export default meta;
 type Story = StoryObj<ArgentGridComponent<Employee>>;
 
-function generateData(count: number): Employee[] {
+function generateStaticData(count: number): Employee[] {
   const departments = ['Engineering', 'Sales', 'Marketing', 'HR', 'Finance'];
-  const roles = ['Software Engineer', 'Manager', 'Director', 'VP', 'Intern'];
+  const roles = ['Engineer', 'Manager', 'Director', 'VP', 'Intern'];
   const locations = ['New York', 'San Francisco', 'London', 'Singapore', 'Remote'];
 
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
     name: `Employee ${i + 1}`,
-    department: departments[Math.floor(Math.random() * departments.length)],
-    role: roles[Math.floor(Math.random() * roles.length)],
-    salary: Math.floor(Math.random() * 150000) + 50000,
-    location: locations[Math.floor(Math.random() * locations.length)],
+    department: departments[i % departments.length],
+    role: roles[i % roles.length],
+    salary: 50000 + i * 1000,
+    location: locations[i % locations.length],
   }));
 }
 
@@ -48,18 +48,18 @@ export const RowGrouping: Story = {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
       { field: 'name', headerName: 'Name', width: 200 },
-      { 
-        field: 'department', 
-        headerName: 'Department 📁', 
-        width: 180, 
+      {
+        field: 'department',
+        headerName: 'Department 📁',
+        width: 180,
         rowGroup: true,
-        headerComponentParams: { groupIcon: '📁' }
+        headerComponentParams: { groupIcon: '📁' },
       },
       { field: 'role', headerName: 'Role', width: 250 },
       { field: 'salary', headerName: 'Salary', width: 120 },
       { field: 'location', headerName: 'Location', width: 150 },
     ],
-    rowData: generateData(100),
+    rowData: generateStaticData(100),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
@@ -87,24 +87,24 @@ export const MultiLevelGrouping: Story = {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
       { field: 'name', headerName: 'Name', width: 200 },
-      { 
-        field: 'department', 
-        headerName: 'Department 📁', 
-        width: 150, 
+      {
+        field: 'department',
+        headerName: 'Department 📁',
+        width: 150,
         rowGroup: true,
-        headerComponentParams: { groupIcon: '📁' }
+        headerComponentParams: { groupIcon: '📁' },
       },
-      { 
-        field: 'location', 
-        headerName: 'Location 📁', 
-        width: 150, 
+      {
+        field: 'location',
+        headerName: 'Location 📁',
+        width: 150,
         rowGroup: true,
-        headerComponentParams: { groupIcon: '📁' }
+        headerComponentParams: { groupIcon: '📁' },
       },
       { field: 'role', headerName: 'Role', width: 250 },
       { field: 'salary', headerName: 'Salary', width: 120 },
     ],
-    rowData: generateData(100),
+    rowData: generateStaticData(100),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
@@ -132,23 +132,23 @@ export const GroupingWithAggregation: Story = {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
       { field: 'name', headerName: 'Name', width: 200 },
-      { 
-        field: 'department', 
-        headerName: 'Department 📁', 
-        width: 180, 
+      {
+        field: 'department',
+        headerName: 'Department 📁',
+        width: 180,
         rowGroup: true,
-        headerComponentParams: { groupIcon: '📁' }
+        headerComponentParams: { groupIcon: '📁' },
       },
       { field: 'role', headerName: 'Role', width: 250 },
-      { 
-        field: 'salary', 
-        headerName: 'Salary 💰', 
+      {
+        field: 'salary',
+        headerName: 'Salary 💰',
         width: 120,
-        aggFunc: 'sum' // Show sum in group rows
+        aggFunc: 'sum', // Show sum in group rows
       },
       { field: 'location', headerName: 'Location', width: 150 },
     ],
-    rowData: generateData(100),
+    rowData: generateStaticData(100),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
@@ -176,24 +176,24 @@ export const DragAndDropGrouping: Story = {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
       { field: 'name', headerName: 'Name', width: 200 },
-      { 
-        field: 'department', 
-        headerName: 'Department 📁 (drag me!)', 
+      {
+        field: 'department',
+        headerName: 'Department 📁 (drag me!)',
         width: 180,
         rowGroup: false, // Not pre-grouped - user can drag
-        headerComponentParams: { draggable: true }
+        headerComponentParams: { draggable: true },
       },
-      { 
-        field: 'location', 
-        headerName: 'Location 📁 (drag me!)', 
+      {
+        field: 'location',
+        headerName: 'Location 📁 (drag me!)',
         width: 150,
         rowGroup: false,
-        headerComponentParams: { draggable: true }
+        headerComponentParams: { draggable: true },
       },
       { field: 'role', headerName: 'Role', width: 250 },
       { field: 'salary', headerName: 'Salary', width: 120 },
     ],
-    rowData: generateData(100),
+    rowData: generateStaticData(100),
     height: '500px',
     width: '100%',
     theme: themeQuartz,

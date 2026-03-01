@@ -1263,7 +1263,7 @@ export class GridService<TData = any> {
               });
               this.selectedRows.clear();
             }
-            
+
             node.selected = selected;
             if (selected) {
               this.selectedRows.add(node.id!);
@@ -1528,7 +1528,7 @@ export class GridService<TData = any> {
               });
               this.selectedRows.clear();
             }
-            
+
             node.selected = selected;
             if (selected) {
               this.selectedRows.add(node.id!);

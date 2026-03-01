@@ -31,22 +31,22 @@ const meta: Meta<ArgentGridComponent<Employee>> = {
 export default meta;
 type Story = StoryObj<ArgentGridComponent<Employee>>;
 
-function generateData(count: number): Employee[] {
+function generateStaticData(count: number): Employee[] {
   const departments = ['Engineering', 'Sales', 'Marketing', 'HR', 'Finance'];
-  const roles = ['Software Engineer', 'Manager', 'Director', 'VP', 'Intern'];
+  const roles = ['Engineer', 'Manager', 'Director', 'VP', 'Intern'];
   const locations = ['New York', 'San Francisco', 'London', 'Singapore', 'Remote'];
   const statuses = ['Active', 'On Leave', 'Remote', 'Travel'];
 
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
     name: `Employee ${i + 1}`,
-    department: departments[Math.floor(Math.random() * departments.length)],
-    role: roles[Math.floor(Math.random() * roles.length)],
-    salary: Math.floor(Math.random() * 150000) + 50000,
-    salaryTrend: Array.from({ length: 10 }, () => Math.floor(Math.random() * 100)),
-    location: locations[Math.floor(Math.random() * locations.length)],
-    performance: Math.floor(Math.random() * 40) + 60,
-    status: statuses[Math.floor(Math.random() * statuses.length)],
+    department: departments[i % departments.length],
+    role: roles[i % roles.length],
+    salary: 50000 + i * 1000,
+    salaryTrend: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((v) => (v + i * 5) % 100),
+    location: locations[i % locations.length],
+    performance: 60 + (i % 40),
+    status: statuses[i % statuses.length],
   }));
 }
 
@@ -71,7 +71,7 @@ export const SparklineArea: Story = {
         },
       },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '400px',
     width: '100%',
     theme: themeQuartz,
@@ -105,7 +105,7 @@ export const SparklineLine: Story = {
         },
       },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '400px',
     width: '100%',
     theme: themeQuartz,
@@ -141,7 +141,7 @@ export const CustomCellRenderer: Story = {
         },
       },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '400px',
     width: '100%',
     theme: themeQuartz,
@@ -179,7 +179,7 @@ export const StatusBadge: Story = {
       },
       { field: 'salary', headerName: 'Salary', width: 120 },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '400px',
     width: '100%',
     theme: themeQuartz,
@@ -206,7 +206,7 @@ export const CurrencyFormatter: Story = {
         valueFormatter: (params: any) => (params.value ? `$${params.value.toLocaleString()}` : ''),
       },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '400px',
     width: '100%',
     theme: themeQuartz,

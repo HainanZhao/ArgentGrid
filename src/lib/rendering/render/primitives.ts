@@ -35,7 +35,7 @@ export function drawCheckbox(
     const checkX = x + padding;
     const checkY = y + size / 2;
     const checkWidth = size - padding * 2;
-    
+
     // Draw checkmark
     ctx.moveTo(checkX, checkY);
     ctx.lineTo(checkX + checkWidth / 3, checkY + checkWidth / 3);
@@ -153,12 +153,7 @@ export function drawSparkline(
       const valHeight = ((data[i] - min) / range) * drawHeight;
       const py = drawY + drawHeight - valHeight;
 
-      ctx.fillRect(
-        Math.floor(px),
-        Math.floor(py),
-        Math.floor(barWidth),
-        Math.ceil(valHeight)
-      );
+      ctx.fillRect(Math.floor(px), Math.floor(py), Math.floor(barWidth), Math.ceil(valHeight));
     }
   }
 

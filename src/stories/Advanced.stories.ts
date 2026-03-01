@@ -29,19 +29,19 @@ const meta: Meta<ArgentGridComponent<Employee>> = {
 export default meta;
 type Story = StoryObj<ArgentGridComponent<Employee>>;
 
-function generateData(count: number): Employee[] {
+function generateStaticData(count: number): Employee[] {
   const departments = ['Engineering', 'Sales', 'Marketing', 'HR', 'Finance'];
-  const roles = ['Software Engineer', 'Manager', 'Director', 'VP', 'Intern'];
+  const roles = ['Engineer', 'Manager', 'Director', 'VP', 'Intern'];
   const locations = ['New York', 'San Francisco', 'London', 'Singapore', 'Remote'];
 
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
     name: `Employee ${i + 1}`,
-    department: departments[Math.floor(Math.random() * departments.length)],
-    role: roles[Math.floor(Math.random() * roles.length)],
-    salary: Math.floor(Math.random() * 150000) + 50000,
-    location: locations[Math.floor(Math.random() * locations.length)],
-    performance: Math.floor(Math.random() * 40) + 60,
+    department: departments[i % departments.length],
+    role: roles[i % roles.length],
+    salary: 50000 + i * 1000,
+    location: locations[i % locations.length],
+    performance: 80,
   }));
 }
 
@@ -56,7 +56,7 @@ export const SideBar: Story = {
       { field: 'location', headerName: 'Location', width: 150, filter: 'set' },
       { field: 'performance', headerName: 'Performance', width: 120, filter: 'number' },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
@@ -100,7 +100,7 @@ export const SideBarDefault: Story = {
       { field: 'role', headerName: 'Role', width: 250, filter: true },
       { field: 'salary', headerName: 'Salary', width: 120, filter: 'number' },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
@@ -127,7 +127,7 @@ export const RangeSelection: Story = {
       { field: 'salary', headerName: 'Salary', width: 120 },
       { field: 'location', headerName: 'Location', width: 150 },
     ],
-    rowData: generateData(50),
+    rowData: generateStaticData(50),
     height: '400px',
     width: '100%',
     theme: themeQuartz,
@@ -162,7 +162,7 @@ export const FullFeatures: Story = {
       { field: 'salary', headerName: 'Salary', width: 120, filter: 'number', sortable: true },
       { field: 'location', headerName: 'Location', width: 150, filter: 'set' },
     ],
-    rowData: generateData(100),
+    rowData: generateStaticData(100),
     height: '500px',
     width: '100%',
     theme: themeQuartz,

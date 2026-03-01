@@ -4,7 +4,7 @@
  * Utilities for detecting which grid element is under a given coordinate.
  */
 
-import { Column, GridApi } from '../../types/ag-grid-types';
+import { Column } from '../../types/ag-grid-types';
 import { getColumnAtX, getRowAtY } from './walk';
 
 /**
@@ -32,17 +32,12 @@ export function performHitTest(
   const rowIndex = getRowAtY(canvasY, rowHeight, scrollTop);
 
   // Use walker utility for column detection
-  const result = getColumnAtX(
-    columns,
-    canvasX,
-    scrollLeft,
-    viewportWidth
-  );
+  const result = getColumnAtX(columns, canvasX, scrollLeft, viewportWidth);
 
-  return { 
-    rowIndex, 
+  return {
+    rowIndex,
     columnIndex: result.index,
-    column: result.column
+    column: result.column,
   };
 }
 

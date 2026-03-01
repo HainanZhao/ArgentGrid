@@ -1,4 +1,4 @@
-import { ColDef, Column, GridApi, IRowNode, SparklineOptions } from '../types/ag-grid-types';
+import { Column, GridApi, IRowNode } from '../types/ag-grid-types';
 
 // Import new rendering modules from the index
 import {
@@ -348,7 +348,6 @@ export class CanvasRenderer<TData = any> {
       }
     }
 
-
     // Reset blit state on resize
     this.blitState.reset();
     this.scheduleRender();
@@ -431,7 +430,7 @@ export class CanvasRenderer<TData = any> {
 
     // Calculate visible row range
     const totalRows = this.gridApi.getDisplayedRowCount();
-    
+
     if (totalRows === 0) {
       this.damageTracker.clear();
       this.lastRenderDuration = performance.now() - startTime;
@@ -685,7 +684,7 @@ export class CanvasRenderer<TData = any> {
     if (!prep) return;
 
     const cellValue = column.field ? getValueByPath(rowNode.data, column.field) : undefined;
-    
+
     let textX = x + this.theme.cellPadding;
 
     const isSelectionColumn = column.colId === 'ag-Grid-SelectionColumn';
@@ -695,11 +694,11 @@ export class CanvasRenderer<TData = any> {
       const checkboxSize = 14;
       const checkboxY = Math.floor(y + (this.rowHeight - checkboxSize) / 2);
       const checkboxX = Math.floor(x + (width - checkboxSize) / 2);
-        
+
       drawCheckbox(this.ctx, checkboxX, checkboxY, checkboxSize, rowNode.selected, this.theme);
       return; // Dedicated column only shows checkbox
     }
-    
+
     // Check for sparkline
     if (prep.colDef?.sparklineOptions) {
       drawSparkline(this.ctx, cellValue, x, y, width, this.rowHeight, prep.colDef.sparklineOptions);
@@ -812,10 +811,6 @@ export class CanvasRenderer<TData = any> {
 
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
-
-    const clickedColumn = columnIndex !== -1 ? columns[columnIndex] : null;
-    const isCheckboxColumn = clickedColumn && clickedColumn.colId === 'ag-Grid-SelectionColumn';
-    
     // Selection logic moved to handleClick to prevent double-toggling with onRowClick/DOM events
   }
 
@@ -908,7 +903,7 @@ export class CanvasRenderer<TData = any> {
 
         const indent = rowNode.level * this.theme.groupIndentWidth;
         let textX = colX + this.theme.cellPadding;
-        
+
         // Account for dedicated selection column if clicked directly on it
         if (clickedCol.colId === 'ag-Grid-SelectionColumn') {
           textX += clickedCol.width;
