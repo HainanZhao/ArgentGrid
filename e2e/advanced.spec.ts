@@ -35,12 +35,16 @@ test.describe('Filtering Stories', () => {
     await expect(grid).toBeVisible({ timeout: 10000 });
   });
 
-  test('should load Floating Filters story', async ({ page }) => {
-    await page.goto('/iframe.html?id=features-filtering--floating-filters');
+  test('should load All Filter Types story (with floating filters)', async ({ page }) => {
+    await page.goto('/iframe.html?id=features-filtering--all-filter-types');
     await page.waitForSelector('argent-grid', { timeout: 15000 });
 
     const grid = page.locator('argent-grid').first();
     await expect(grid).toBeVisible({ timeout: 10000 });
+    
+    // Verify filter inputs are visible (floating filters)
+    const filterInputs = grid.locator('input[placeholder*="Filter"]');
+    await expect(filterInputs.first()).toBeVisible({ timeout: 5000 });
   });
 
   test('should load Set Filter story', async ({ page }) => {
