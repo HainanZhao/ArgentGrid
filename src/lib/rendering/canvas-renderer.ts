@@ -841,6 +841,13 @@ export class CanvasRenderer<TData = any> {
     if (!prep) return;
 
     const cellValue = column.field ? getValueByPath(rowNode.data, column.field) : undefined;
+    
+    // Check for checkbox selection column
+    if (prep.colDef?.checkboxSelection) {
+      this.drawCheckbox(x, y, width, this.rowHeight, rowNode.selected);
+      return;
+    }
+    
     // Check for sparkline
     if (prep.colDef?.sparklineOptions) {
       this.drawSparkline(cellValue, x, y, width, this.rowHeight, prep.colDef.sparklineOptions);
@@ -997,6 +1004,33 @@ export class CanvasRenderer<TData = any> {
     this.ctx.stroke();
   }
 
+  private drawCheckbox(x: number, y: number, width: number, height: number, checked: boolean): void {
+    const checkboxSize = Math.min(18, height - 8); // Fit within cell with padding
+    const checkboxX = Math.floor(x + (width - checkboxSize) / 2);
+    const checkboxY = Math.floor(y + (height - checkboxSize) / 2);
+
+    // Draw checkbox border
+    this.ctx.strokeStyle = this.theme.textCell;
+    this.ctx.lineWidth = 1.5;
+    this.ctx.strokeRect(checkboxX, checkboxY, checkboxSize, checkboxSize);
+
+    // Draw checkmark if checked
+    if (checked) {
+      this.ctx.fillStyle = this.theme.textCell;
+      this.ctx.beginPath();
+      const padding = 4;
+      const checkX = checkboxX + padding;
+      const checkY = checkboxY + checkboxSize / 2;
+      const checkWidth = checkboxSize - padding * 2;
+      
+      // Draw checkmark
+      this.ctx.moveTo(checkX, checkY);
+      this.ctx.lineTo(checkX + checkWidth / 3, checkY + checkWidth / 3);
+      this.ctx.lineTo(checkX + checkWidth, checkY - checkWidth / 3);
+      this.ctx.stroke();
+    }
+  }
+
   private drawGridLines(
     columns: Column[],
     startRow: number,
@@ -1049,6 +1083,36 @@ export class CanvasRenderer<TData = any> {
 
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
+
+    // Check if clicking on checkbox column
+    const clickedColumn = columnIndex !== -1 ? columns[columnIndex] : null;
+    const isCheckboxColumn = clickedColumn && this.getColumnDef(clickedColumn)?.checkboxSelection;
+    
+    // If clicking on checkbox column, toggle selection for this row only
+    if (isCheckboxColumn) {
+      // Track old selection for damage tracking
+      const oldSelectedRows = new Set<number>(
+        this.gridApi
+          .getSelectedNodes()
+          .map((node) => node.rowIndex)
+          .filter((idx) => idx !== null) as number[]
+      );
+
+      rowNode.selected = !rowNode.selected;
+
+      // Track new selection
+      const newSelectedRows = new Set<number>(
+        this.gridApi
+          .getSelectedNodes()
+          .map((node) => node.rowIndex)
+          .filter((idx) => idx !== null) as number[]
+      );
+
+      // Mark changed rows as dirty
+      this.damageTracker.markSelectionChanged(oldSelectedRows, newSelectedRows);
+      this.scheduleRender();
+      return;
+    }
 
     // Track old selection for damage tracking
     const oldSelectedRows = new Set<number>(
