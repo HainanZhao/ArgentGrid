@@ -96,7 +96,7 @@ export const NumberFilter: Story = {
     columnDefs: [
       {
         field: 'id',
-        headerName: 'ID 🔢',
+        headerName: 'ID',
         width: 80,
         filter: 'number',
         floatingFilter: true,
@@ -197,7 +197,7 @@ export const AllFilterTypes: Story = {
     columnDefs: [
       {
         field: 'id',
-        headerName: 'ID 🔢',
+        headerName: 'ID',
         width: 80,
         filter: 'number',
         floatingFilter: true,

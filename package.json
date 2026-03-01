@@ -64,9 +64,10 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "lint": "biome lint src",
-    "check": "biome check src",
-    "format": "biome format src --write",
+    "test:e2e:update": "playwright test --update-snapshots",
+    "lint": "biome check src",
+    "lint:fix": "biome check src --write",
+    "lint:fix:unsafe": "biome check src --write --unsafe",
     "clean": "rm -rf dist",
     "storybook": "ng run argent-grid-storybook:storybook",
     "build-storybook": "ng run argent-grid-storybook:build-storybook"

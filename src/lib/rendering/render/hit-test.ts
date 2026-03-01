@@ -6,15 +6,7 @@
 
 import { Column } from '../../types/ag-grid-types';
 import { getColumnAtX, getRowAtY } from './walk';
-
-/**
- * Result of a grid hit test
- */
-export interface HitTestResult {
-  rowIndex: number;
-  columnIndex: number;
-  column: Column | null;
-}
+import { HitTestResult } from './types';
 
 /**
  * Perform a hit test on the grid
@@ -26,18 +18,21 @@ export function performHitTest(
   scrollTop: number,
   scrollLeft: number,
   viewportWidth: number,
-  columns: Column[]
+  columns: Column[],
+  availableWidth?: number
 ): HitTestResult {
   // Use walker utility for row detection
   const rowIndex = getRowAtY(canvasY, rowHeight, scrollTop);
 
   // Use walker utility for column detection
-  const result = getColumnAtX(columns, canvasX, scrollLeft, viewportWidth);
+  const result = getColumnAtX(columns, canvasX, scrollLeft, viewportWidth, availableWidth);
 
   return {
     rowIndex,
     columnIndex: result.index,
     column: result.column,
+    rowNode: null, // Should be populated by caller if needed
+    hitArea: result.column ? 'cell' : 'empty'
   };
 }
 

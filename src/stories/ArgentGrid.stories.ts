@@ -106,7 +106,7 @@ export const WithSorting: Story = {
     columnDefs: [
       {
         field: 'id',
-        headerName: 'ID ↕️',
+        headerName: 'ID',
         width: 80,
         sortable: true,
         headerComponentParams: { sortIcon: '↕️' },
@@ -153,7 +153,7 @@ export const WithSelection: Story = {
     columnDefs: [
       {
         field: 'id',
-        headerName: 'ID ☑️',
+        headerName: 'ID',
         width: 80,
         checkboxSelection: true,
         headerComponentParams: { selectionIcon: '☑️' },
@@ -183,7 +183,7 @@ export const WithFiltering: Story = {
     columnDefs: [
       {
         field: 'id',
-        headerName: 'ID 🔢',
+        headerName: 'ID',
         width: 80,
         filter: 'number',
         floatingFilter: true,

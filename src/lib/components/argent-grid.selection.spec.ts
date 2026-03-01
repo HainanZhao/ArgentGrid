@@ -1,9 +1,9 @@
 import { provideExperimentalZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, it, expect, beforeEach } from 'vitest';
-import { ArgentGridComponent } from './argent-grid.component';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { ArgentGridModule } from '../argent-grid.module';
 import { GridService } from '../services/grid.service';
+import { ArgentGridComponent } from './argent-grid.component';
 
 interface TestData {
   id: number;

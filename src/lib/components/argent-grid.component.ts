@@ -1,4 +1,4 @@
-import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
+import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -18,6 +18,7 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
+import { isColumnVisible } from '../rendering/render/column-utils';
 import { GridService } from '../services/grid.service';
 import { applyThemeCSSVariables, convertThemeToGridTheme } from '../themes/theme-builder';
 import {
@@ -25,6 +26,7 @@ import {
   ColDef,
   ColGroupDef,
   Column,
+  ColumnGroup,
   DefaultMenuItem,
   GetContextMenuItemsParams,
   GridApi,
@@ -75,8 +77,8 @@ export class ArgentGridComponent<TData = any>
     if (!this.gridApi) return 0;
     return this.gridApi
       .getAllColumns()
-      .filter((col) => col.visible)
-      .reduce((sum, col) => sum + col.width, 0);
+      .filter((col) => isColumnVisible(col))
+      .reduce((sum, col) => sum + Math.floor(col.width || 150), 0);
   }
 
   // Selection state
@@ -90,7 +92,7 @@ export class ArgentGridComponent<TData = any>
   }
 
   hasHeaderCheckbox(col: Column): boolean {
-    return col.colId === 'ag-Grid-SelectionColumn';
+    return !!col.headerCheckboxSelection;
   }
 
   trackByColumn(index: number, col: Column | ColDef<TData> | ColGroupDef<TData>): string {
@@ -111,6 +113,7 @@ export class ArgentGridComponent<TData = any>
   // Resizing state
   isResizing = false;
   resizeColumn: Column | null = null;
+  resizeItem: Column | ColumnGroup | null = null;
   private resizeStartX = 0;
   private resizeStartWidth = 0;
 
@@ -136,7 +139,10 @@ export class ArgentGridComponent<TData = any>
   private activeSetFilterColumn: Column | null = null;
   private initialColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
 
-  private gridApi!: GridApi<TData>;
+  public gridApi!: GridApi<TData>;
+  public isColumnVisible = isColumnVisible;
+  public Math = Math;
+  public scrollbarWidth = 0;
   private canvasRenderer!: CanvasRenderer;
   private destroy$ = new Subject<void>();
   private gridService = new GridService<TData>();
@@ -272,17 +278,30 @@ export class ArgentGridComponent<TData = any>
     if (this.viewportRef) {
       const rect = this.viewportRef.nativeElement.getBoundingClientRect();
       this.viewportHeight = rect.height || 500;
-      this.canvasRenderer?.setViewportDimensions(rect.width, this.viewportHeight);
+      this.canvasRenderer?.setViewportDimensions(rect.width, this.viewportHeight, this.scrollbarWidth);
+
+      const updateScrollbar = () => {
+        const viewport = this.viewportRef?.nativeElement;
+        if (!viewport) return;
+        const newWidth = viewport.offsetWidth - viewport.clientWidth;
+        if (this.scrollbarWidth !== newWidth) {
+          this.scrollbarWidth = newWidth;
+          this._cdr.detectChanges();
+        }
+      };
 
       // Synchronize horizontal scroll with DOM header
       this.horizontalScrollListener = () => {
+        const viewport = this.viewportRef?.nativeElement;
+        if (!viewport) return;
+
+        updateScrollbar();
+
         if (this.headerScrollableRef) {
-          this.headerScrollableRef.nativeElement.scrollLeft =
-            this.viewportRef.nativeElement.scrollLeft;
+          this.headerScrollableRef.nativeElement.scrollLeft = viewport.scrollLeft;
         }
         if (this.headerScrollableFilterRef) {
-          this.headerScrollableFilterRef.nativeElement.scrollLeft =
-            this.viewportRef.nativeElement.scrollLeft;
+          this.headerScrollableFilterRef.nativeElement.scrollLeft = viewport.scrollLeft;
         }
       };
 
@@ -293,16 +312,20 @@ export class ArgentGridComponent<TData = any>
       // Add ResizeObserver to handle sidebar toggling and other size changes
       if (typeof ResizeObserver !== 'undefined') {
         this.resizeObserver = new ResizeObserver((entries) => {
+          updateScrollbar();
           for (const entry of entries) {
             const { width, height } = entry.contentRect;
             this.viewportHeight = height;
-            this.canvasRenderer?.setViewportDimensions(width, height);
+            this.canvasRenderer?.setViewportDimensions(width, height, this.scrollbarWidth);
             this.canvasRenderer?.render();
             this._cdr.detectChanges();
           }
         });
         this.resizeObserver.observe(this.viewportRef.nativeElement);
       }
+
+      // Initial calculation
+      setTimeout(() => updateScrollbar());
     }
   }
 
@@ -346,8 +369,10 @@ export class ArgentGridComponent<TData = any>
         if (this.canvasRenderer) {
           this.canvasRenderer.render(); // This calls markAllDirty and schedules render
         }
-      } else {
+      } else if (event.type === 'columnsChanged' || event.type === 'columnGroupExpanded') {
         this.canvasRenderer?.render();
+      } else {
+        this.canvasRenderer?.renderFrame();
       }
       this._cdr.detectChanges();
     });
@@ -411,32 +436,198 @@ export class ArgentGridComponent<TData = any>
     this._cdr.detectChanges();
   }
 
+  getHeaderRows(): (Column | ColumnGroup)[][] {
+    if (!this.gridApi) return [];
+    return this.gridApi.getHeaderRows();
+  }
+
+  getPinnedLeftItems(row: (Column | ColumnGroup)[]): (Column | ColumnGroup)[] {
+    return row.filter((item) => item.pinned === 'left' && isColumnVisible(item));
+  }
+
+  getPinnedRightItems(row: (Column | ColumnGroup)[]): (Column | ColumnGroup)[] {
+    return row.filter((item) => item.pinned === 'right' && isColumnVisible(item));
+  }
+
+  getNonPinnedItems(row: (Column | ColumnGroup)[]): (Column | ColumnGroup)[] {
+    return row.filter((item) => !item.pinned && isColumnVisible(item));
+  }
+
+  getItemWidth(item: Column | ColumnGroup): number {
+    if ('children' in item) {
+      return item.children.reduce((sum, child) => {
+        if (isColumnVisible(child)) {
+          return sum + this.getItemWidth(child);
+        }
+        return sum;
+      }, 0);
+    }
+    return Math.floor(item.width || 150);
+  }
+
+  getItemRowSpan(item: Column | ColumnGroup, rowIndex: number): number {
+    if ('children' in item) {
+      return 1;
+    }
+    // Leaf node spans until the bottom
+    const totalRows = this.gridApi.getHeaderDepth();
+    return totalRows - rowIndex;
+  }
+
+  isColumnGroup(item: Column | ColumnGroup): item is ColumnGroup {
+    return 'children' in item;
+  }
+
+  trackByHeaderItem(
+    index: number,
+    entry: { item: Column | ColumnGroup; rowIndex: number }
+  ): string {
+    const item = entry.item;
+    return 'groupId' in item ? item.groupId : item.colId || index.toString();
+  }
+
+  getItemColSpan(item: Column | ColumnGroup): number {
+    if ('children' in item) {
+      return item.children.reduce((sum, child) => {
+        return sum + this.getItemColSpan(child);
+      }, 0);
+    }
+    return 1;
+  }
+
+  getScrollableHeaderWidth(): number {
+    return this.getNonPinnedColumns().reduce((sum, col) => sum + Math.floor(col.width || 150), 0);
+  }
+
+  getGridTemplateColumns(section: 'left' | 'right' | 'none'): string {
+    if (!this.gridApi) return '';
+    const allCols = this.gridApi.getAllColumns();
+    const sectionCols = allCols.filter((c) => {
+      if (section === 'left') return c.pinned === 'left';
+      if (section === 'right') return c.pinned === 'right';
+      return !c.pinned;
+    });
+
+    if (sectionCols.length === 0) return '';
+
+    const indices = sectionCols.map((c) => c.colIndex || 0);
+    const minIndex = Math.min(...indices);
+    const maxIndex = Math.max(...indices);
+
+    const widths = new Array(maxIndex - minIndex + 1).fill('0px');
+    sectionCols.forEach((c) => {
+      if (isColumnVisible(c)) {
+        widths[(c.colIndex || 0) - minIndex] = `${Math.floor(c.width || 150)}px`;
+      }
+    });
+
+    return widths.join(' ');
+  }
+
+  getColGridIndex(item: Column | ColumnGroup, section: 'left' | 'right' | 'none'): number {
+    if (!this.gridApi) return 1;
+    const allCols = this.gridApi.getAllColumns();
+    const sectionCols = allCols.filter((c) => {
+      if (section === 'left') return c.pinned === 'left';
+      if (section === 'right') return c.pinned === 'right';
+      return !c.pinned;
+    });
+    if (sectionCols.length === 0) return 1;
+    const minIndex = Math.min(...sectionCols.map((c) => c.colIndex || 0));
+
+    return (item.colIndex || 0) - minIndex + 1;
+  }
+
+  getScrollableColIndex(item: Column | ColumnGroup): number {
+    return this.getColGridIndex(item, 'none');
+  }
+
+  getRightPinnedColIndex(item: Column | ColumnGroup): number {
+    return this.getColGridIndex(item, 'right');
+  }
+
+  getLeftPinnedColIndex(item: Column | ColumnGroup): number {
+    return this.getColGridIndex(item, 'left');
+  }
+
+  getSectionHeaderItems(
+    section: 'left' | 'right' | 'none'
+  ): { item: Column | ColumnGroup; rowIndex: number }[] {
+    const items: { item: Column | ColumnGroup; rowIndex: number }[] = [];
+    const rows = this.getHeaderRows();
+    rows.forEach((row, i) => {
+      let rowItems: (Column | ColumnGroup)[] = [];
+      if (section === 'left') rowItems = this.getPinnedLeftItems(row);
+      else if (section === 'right') rowItems = this.getPinnedRightItems(row);
+      else rowItems = this.getNonPinnedItems(row);
+
+      rowItems.forEach((item) => items.push({ item, rowIndex: i }));
+    });
+    return items;
+  }
+
+  hasExpansionToggle(item: ColumnGroup): boolean {
+    return item.children.some(
+      (child) => child.columnGroupShow === 'open' || child.columnGroupShow === 'closed'
+    );
+  }
+
+  isRowGroupPanelVisible(): boolean {
+    const show = this.gridApi?.getGridOption('rowGroupPanelShow') || 'never';
+    if (show === 'always') return true;
+    if (show === 'onlyWhenGrouping') {
+      return (this.gridApi?.getRowGroupColumns()?.length || 0) > 0;
+    }
+    return false;
+  }
+
+  getRowGroupColumns(): Column[] {
+    if (!this.gridApi) return [];
+    const groupColIds = this.gridApi.getRowGroupColumns();
+    return this.gridApi.getAllColumns().filter((col) => groupColIds.includes(col.colId));
+  }
+
+  onRowGroupDropped(event: CdkDragDrop<any[]>): void {
+    const col = event.item.data as Column;
+    if (col && col.colId && col.colId !== 'ag-Grid-SelectionColumn') {
+      this.gridApi.addRowGroupColumn(col.colId);
+    }
+  }
+  removeRowGroup(col: Column): void {
+    this.gridApi.removeRowGroupColumn(col.colId);
+  }
+
+  toggleGroup(item: ColumnGroup, event: MouseEvent): void {
+    event.stopPropagation();
+    this.gridApi.toggleColumnGroup(item.groupId, !item.expanded);
+  }
+
   getColumnWidth(col: Column | ColDef<TData> | ColGroupDef<TData>): number {
     if ('children' in col) {
       // Column group - sum children widths
       return col.children.reduce((sum, child) => sum + this.getColumnWidth(child), 0);
     }
-    return col.width || 150;
+    return Math.floor(col.width || 150);
   }
 
   getLeftPinnedColumns(): Column[] {
     if (!this.gridApi) return [];
     return this.gridApi.getAllColumns().filter((col) => {
-      return col.visible && col.pinned === 'left';
+      return isColumnVisible(col) && col.pinned === 'left';
     });
   }
 
   getRightPinnedColumns(): Column[] {
     if (!this.gridApi) return [];
     return this.gridApi.getAllColumns().filter((col) => {
-      return col.visible && col.pinned === 'right';
+      return isColumnVisible(col) && col.pinned === 'right';
     });
   }
 
   getNonPinnedColumns(): Column[] {
     if (!this.gridApi) return [];
     return this.gridApi.getAllColumns().filter((col) => {
-      return col.visible && !col.pinned;
+      return isColumnVisible(col) && !col.pinned;
     });
   }
 
@@ -454,7 +645,7 @@ export class ArgentGridComponent<TData = any>
 
     // It's likely a Column object, look up its ColDef
     const colDef = this.getColumnDefForColumn(col as any);
-    return colDef ? colDef.sortable !== false : true;
+    return colDef && this.isColDef(colDef) ? colDef.sortable !== false : true;
   }
 
   getHeaderName(col: Column | ColDef<TData> | ColGroupDef<TData>): string {
@@ -509,7 +700,7 @@ export class ArgentGridComponent<TData = any>
     if ((col as any).colId === 'ag-Grid-SelectionColumn') return false;
     if ('children' in col) return false;
     const colDef = this.getColumnDefForColumn(col as any);
-    return colDef ? colDef.suppressHeaderMenuButton !== true : true;
+    return colDef && this.isColDef(colDef) ? colDef.suppressHeaderMenuButton !== true : true;
   }
 
   onHeaderMenuClick(event: MouseEvent, col: Column | ColDef<TData> | ColGroupDef<TData>): void {
@@ -569,7 +760,7 @@ export class ArgentGridComponent<TData = any>
 
     // 2. Filter items
     const colDef = this.getColumnDefForColumn(col);
-    if (colDef && colDef.filter !== false) {
+    if (colDef && this.isColDef(colDef) && colDef.filter !== false) {
       const filterType = colDef.filter || 'text';
 
       if (filterType === 'set') {
@@ -908,7 +1099,8 @@ export class ArgentGridComponent<TData = any>
   ): void {
     this.activeFilterPopupColumn = col;
     const colDef = this.getColumnDefForColumn(col);
-    this.activeFilterPopupType = colDef?.filter === 'number' ? 'number' : 'text';
+    this.activeFilterPopupType =
+      colDef && this.isColDef(colDef) && colDef.filter === 'number' ? 'number' : 'text';
 
     // Initialize operator and values from current model or default
     const model = this.gridApi?.getFilterModel()[col.colId] as any;
@@ -995,7 +1187,7 @@ export class ArgentGridComponent<TData = any>
 
   toggleColumnVisibility(col: Column): void {
     const colDef = this.getColumnDefForColumn(col);
-    if (colDef) {
+    if (colDef && this.isColDef(colDef)) {
       colDef.hide = col.visible; // Toggle
       this.initializeGrid(); // Re-initialize to handle visibility changes correctly
       this.canvasRenderer?.render();
@@ -1096,7 +1288,7 @@ export class ArgentGridComponent<TData = any>
 
     // Update original ColDef to ensure persistence
     const colDef = this.getColumnDefForColumn(col);
-    if (colDef) {
+    if (colDef && this.isColDef(colDef)) {
       colDef.sort = direction;
     }
 
@@ -1113,7 +1305,7 @@ export class ArgentGridComponent<TData = any>
 
     // Update the original column definition
     const colDef = this.getColumnDefForColumn(col);
-    if (colDef) {
+    if (colDef && this.isColDef(colDef)) {
       colDef.hide = true;
     }
 
@@ -1132,7 +1324,7 @@ export class ArgentGridComponent<TData = any>
 
     // Update the original column definition
     const colDef = this.getColumnDefForColumn(col);
-    if (colDef) {
+    if (colDef && this.isColDef(colDef)) {
       colDef.pinned = pin as any;
     }
 
@@ -1143,76 +1335,43 @@ export class ArgentGridComponent<TData = any>
     this.closeHeaderMenu();
   }
 
-  onColumnDropped(event: CdkDragDrop<any[]>, pinType: 'left' | 'right' | 'none'): void {
-    if (!this.columnDefs) return;
+  onColumnDropped(event: CdkDragDrop<any>, pinned: 'left' | 'right' | 'none'): void {
+    const col = event.item.data as Column;
+    if (!col) return;
+    
+    const targetPinned = pinned === 'none' ? false : pinned;
 
-    // Get current groups (using internal Columns)
-    const left = [...this.getLeftPinnedColumns()];
-    const center = [...this.getNonPinnedColumns()];
-    const right = [...this.getRightPinnedColumns()];
-
-    const containerMap: { [key: string]: any[] } = {
-      'left-pinned': left,
-      scrollable: center,
-      'right-pinned': right,
-    };
-
-    const previousContainerData = containerMap[event.previousContainer.id];
-    const currentContainerData = containerMap[event.container.id];
-
-    if (event.previousContainer === event.container) {
-      moveItemInArray(currentContainerData, event.previousIndex, event.currentIndex);
-    } else {
-      transferArrayItem(
-        previousContainerData,
-        currentContainerData,
-        event.previousIndex,
-        event.currentIndex
-      );
-
-      // Update pinned state of the moved column in its original definition
-      const movedCol = currentContainerData[event.currentIndex] as Column;
-      const colDef = this.getColumnDefForColumn(movedCol);
-      if (colDef) {
-        colDef.pinned = pinType === 'none' ? null : (pinType as any);
-      }
+    if (col.pinned !== targetPinned) {
+      this.gridApi.setColumnPinned(col, targetPinned);
     }
 
-    // Map internal Columns back to their original ColDefs in the new order
-    const orderedVisibleColDefs: (ColDef<TData> | ColGroupDef<TData>)[] = [];
-    [...left, ...center, ...right].forEach((col) => {
-      const def = this.getColumnDefForColumn(col);
-      if (def) orderedVisibleColDefs.push(def);
-    });
+    this.gridApi.moveColumn(col, event.currentIndex);
 
-    // Reconstruct full columnDefs array, maintaining hidden columns
-    const hidden = this.columnDefs.filter((c) => {
-      if ('children' in c) return false;
-      return (c as ColDef).hide;
-    });
-
-    const newDefs = [...orderedVisibleColDefs, ...hidden];
-
-    this.onColumnDefsChanged(newDefs);
+    this.canvasRenderer?.render();
+    this._cdr.detectChanges();
   }
 
   // --- Column Resizing Logic ---
 
-  isResizable(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
-    if ((col as any).colId === 'ag-Grid-SelectionColumn') return true;
-    if ('children' in col) return false;
-    const colDef = this.getColumnDefForColumn(col as any);
-    return colDef ? colDef.resizable !== false : true;
+  isResizable(item: Column | ColumnGroup | ColDef<TData> | ColGroupDef<TData>): boolean {
+    if ('children' in item) {
+      return (item as any).children.some((child: any) => this.isResizable(child));
+    }
+    const colId = (item as any).colId || (item as any).field?.toString();
+    if (colId === 'ag-Grid-SelectionColumn') return true;
+
+    const colDef = this.getColumnDefForColumn(item as any);
+    return colDef && this.isColDef(colDef) ? colDef.resizable !== false : true;
   }
 
-  onResizeMouseDown(event: MouseEvent, col: Column): void {
+  onResizeMouseDown(event: MouseEvent, item: Column | ColumnGroup): void {
     event.stopPropagation();
     event.preventDefault();
 
     this.isResizing = true;
-    this.resizeColumn = col;
+    this.resizeItem = item;
     this.resizeStartX = event.clientX;
-    this.resizeStartWidth = col.width;
+    this.resizeStartWidth = this.getItemWidth(item);
 
     const mouseMoveHandler = (e: MouseEvent) => this.onResizeMouseMove(e);
     const mouseUpHandler = () => {
@@ -1226,19 +1385,12 @@ export class ArgentGridComponent<TData = any>
   }
 
   private onResizeMouseMove(event: MouseEvent): void {
-    if (!this.isResizing || !this.resizeColumn) return;
+    if (!this.isResizing || !this.resizeItem) return;
 
     const deltaX = event.clientX - this.resizeStartX;
     const newWidth = Math.max(20, this.resizeStartWidth + deltaX);
 
-    // Update internal column width
-    this.resizeColumn.width = newWidth;
-
-    // Update original ColDef
-    const colDef = this.getColumnDefForColumn(this.resizeColumn);
-    if (colDef) {
-      colDef.width = newWidth;
-    }
+    this.applyResize(this.resizeItem!, newWidth);
 
     // Force re-render
     this.canvasRenderer?.render();
@@ -1247,7 +1399,29 @@ export class ArgentGridComponent<TData = any>
 
   private onResizeMouseUp(): void {
     this.isResizing = false;
-    this.resizeColumn = null;
+    this.resizeItem = null;
+  }
+
+  private applyResize(item: Column | ColumnGroup, newWidth: number): void {
+    if ('children' in item) {
+      const currentWidth = this.getItemWidth(item);
+      if (currentWidth === 0) return;
+
+      const ratio = newWidth / currentWidth;
+      item.children.forEach((child) => {
+        if (isColumnVisible(child)) {
+          const childWidth = this.getItemWidth(child);
+          this.applyResize(child, childWidth * ratio);
+        }
+      });
+    } else {
+      const finalWidth = Math.floor(newWidth);
+      (item as Column).width = finalWidth;
+      const colDef = this.getColumnDefForColumn(item as Column);
+      if (colDef && this.isColDef(colDef)) {
+        colDef.width = finalWidth;
+      }
+    }
   }
 
   // --- Floating Filter Logic ---
@@ -1297,7 +1471,7 @@ export class ArgentGridComponent<TData = any>
   private filterTimeout: any;
   onFloatingFilterInput(event: Event, col: Column | ColDef<TData> | ColGroupDef<TData>): void {
     const colDef = this.getColumnDefForColumn(col as any);
-    if (!colDef || 'children' in colDef) return;
+    if (!colDef || !this.isColDef(colDef)) return;
 
     const input = event.target as HTMLInputElement;
     const value = input.value;
@@ -1354,7 +1528,7 @@ export class ArgentGridComponent<TData = any>
     input: HTMLInputElement
   ): void {
     const colDef = this.getColumnDefForColumn(col as any);
-    if (!colDef || 'children' in colDef) return;
+    if (!colDef || !this.isColDef(colDef)) return;
 
     input.value = '';
     const colId = (col as any).colId || (col as any).field?.toString() || '';
@@ -1390,7 +1564,7 @@ export class ArgentGridComponent<TData = any>
 
     // Check if cell is editable
     const colDef = this.getColumnDefForColumn(column);
-    if (colDef && colDef.editable === false) return;
+    if (colDef && this.isColDef(colDef) && colDef.editable === false) return;
 
     // If already editing another cell, stop it first
     if (this.isEditing) {
@@ -1404,17 +1578,17 @@ export class ArgentGridComponent<TData = any>
     this.editingValue = value !== null && value !== undefined ? String(value) : '';
 
     // Calculate editor position based on row and column
-    const columns = this.gridApi.getAllColumns().filter((c) => c.visible);
+    const columns = this.gridApi.getAllColumns().filter((c) => isColumnVisible(c));
     let x = 0;
     for (const col of columns) {
       if (col.colId === colId) break;
-      x += col.width;
+      x += Math.floor(col.width || 150);
     }
 
     this.editorPosition = {
       x: x - this.canvasRenderer.currentScrollLeft,
       y: rowIndex * this.rowHeight - this.canvasRenderer.currentScrollTop,
-      width: column.width,
+      width: Math.floor(column.width),
       height: this.rowHeight,
     };
 
@@ -1558,30 +1732,37 @@ export class ArgentGridComponent<TData = any>
     }
   }
   private getColumnDefForColumn(
-    column: Column | ColDef<TData> | ColGroupDef<TData>
-  ): ColDef<TData> | null {
+    column: Column | ColumnGroup | ColDef<TData> | ColGroupDef<TData>
+  ): ColDef<TData> | ColGroupDef<TData> | null {
     if (!this.columnDefs) return null;
 
-    const colId = (column as any).colId || (column as any).field?.toString();
+    const colId =
+      (column as any).colId || (column as any).field?.toString() || (column as any).groupId;
     if (!colId) return null;
 
     const defaultColDef = this.gridOptions?.defaultColDef || {};
 
-    for (const def of this.columnDefs) {
-      if ('children' in def) {
-        const found = def.children.find((c) => {
-          const cDef = c as ColDef;
-          return cDef.colId === colId || cDef.field?.toString() === colId;
-        });
-        if (found) return { ...defaultColDef, ...(found as ColDef<TData>) } as ColDef<TData>;
-      } else {
-        const cDef = def as ColDef;
-        if (cDef.colId === colId || cDef.field?.toString() === colId) {
-          return { ...defaultColDef, ...cDef } as ColDef<TData>;
+    const findDef = (
+      defs: (ColDef<TData> | ColGroupDef<TData>)[]
+    ): ColDef<TData> | ColGroupDef<TData> | null => {
+      for (const def of defs) {
+        const defId = (def as any).colId || (def as any).field?.toString() || (def as any).groupId;
+        if (defId === colId) {
+          return 'children' in def ? def : ({ ...defaultColDef, ...def } as ColDef<TData>);
+        }
+        if ('children' in def) {
+          const found = findDef(def.children);
+          if (found) return found;
         }
       }
-    }
-    return null;
+      return null;
+    };
+
+    return findDef(this.columnDefs);
+  }
+
+  private isColDef(def: any): def is ColDef<TData> {
+    return def && !('children' in def);
   }
 
   onRowClick(rowIndex: number, event: MouseEvent): void {

@@ -6,12 +6,6 @@
 
 // Live data optimizations
 export { LiveDataOptimizations } from '../live-data-optimizations';
-// Rendering primitives
-export { drawCheckbox, drawGroupIndicator, drawSparkline } from './primitives';
-// Hit testing
-export * from './hit-test';
-// Column utilities
-export * from './column-utils';
 // Blitting optimization
 export {
   BlitState,
@@ -40,6 +34,10 @@ export {
   renderRow,
   truncateText,
 } from './cells';
+// Column utilities
+export * from './column-utils';
+// Hit testing
+export * from './hit-test';
 // Grid lines
 export {
   drawBorder,
@@ -55,6 +53,8 @@ export {
   drawVerticalLine,
   getColumnBorderPositions,
 } from './lines';
+// Rendering primitives
+export { drawCheckbox, drawGroupIndicator, drawSparkline } from './primitives';
 // Theme (re-export the DEFAULT_THEME and utilities)
 export {
   createTheme,

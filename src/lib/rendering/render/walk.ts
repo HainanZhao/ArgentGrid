@@ -25,14 +25,17 @@ import {
 export function walkColumns(
   columns: Column[],
   scrollX: number,
-  viewportWidth: number,
+  viewportWidth: number, // Total width of the container
   leftPinnedWidth: number,
   rightPinnedWidth: number,
-  callback: ColumnWalkCallback
+  callback: ColumnWalkCallback,
+  availableWidth?: number // Width excluding vertical scrollbar
 ): void {
   const leftPinned = columns.filter((c) => c.pinned === 'left');
   const rightPinned = columns.filter((c) => c.pinned === 'right');
   const centerColumns = columns.filter((c) => !c.pinned);
+
+  const effectiveWidth = availableWidth ?? viewportWidth;
 
   // 1. Left pinned columns (no scroll offset)
   let x = 0;
@@ -44,7 +47,7 @@ export function walkColumns(
 
   // 2. Center columns (with scroll offset and clipping)
   const centerStartX = Math.floor(leftPinnedWidth);
-  const centerEndX = Math.floor(viewportWidth - rightPinnedWidth);
+  const centerEndX = Math.floor(effectiveWidth - rightPinnedWidth);
 
   x = centerStartX - scrollX;
   for (const col of centerColumns) {
@@ -79,7 +82,8 @@ export function getPositionedColumns(
   scrollX: number,
   viewportWidth: number,
   leftPinnedWidth: number,
-  rightPinnedWidth: number
+  rightPinnedWidth: number,
+  availableWidth?: number
 ): PositionedColumn[] {
   const result: PositionedColumn[] = [];
 
@@ -91,7 +95,8 @@ export function getPositionedColumns(
     rightPinnedWidth,
     (column, x, width, isPinned, pinSide) => {
       result.push({ column, x, width, isPinned, pinSide });
-    }
+    },
+    availableWidth
   );
 
   return result;
@@ -214,9 +219,11 @@ export function getColumnAtX(
   columns: Column[],
   x: number,
   scrollX: number,
-  viewportWidth: number
+  viewportWidth: number,
+  availableWidth?: number
 ): { column: Column | null; index: number; localX: number } {
   const { left: leftPinnedWidth, right: rightPinnedWidth } = getPinnedWidths(columns);
+  const effectiveWidth = availableWidth ?? viewportWidth;
 
   const leftPinned = columns.filter((c) => c.pinned === 'left');
   const rightPinned = columns.filter((c) => c.pinned === 'right');
@@ -235,8 +242,9 @@ export function getColumnAtX(
   }
 
   // Check right pinned
-  if (x > viewportWidth - rightPinnedWidth) {
-    let colX = viewportWidth - rightPinnedWidth;
+  const centerEndX = Math.floor(effectiveWidth - rightPinnedWidth);
+  if (x > centerEndX) {
+    let colX = centerEndX;
     for (let i = 0; i < rightPinned.length; i++) {
       const col = rightPinned[i];
       if (x < colX + col.width) {
@@ -271,7 +279,7 @@ export function getColumnIndex(columns: Column[], colId: string): number {
  * Calculate total width of columns
  */
 export function getTotalColumnWidth(columns: Column[]): number {
-  return columns.reduce((sum, col) => sum + col.width, 0);
+  return columns.reduce((sum, col) => sum + Math.floor(col.width), 0);
 }
 
 // ============================================================================
@@ -316,7 +324,8 @@ export function calculateVisibleRange(
   viewportHeight: number,
   rowHeight: number,
   totalRowCount: number,
-  rowBuffer: number = 5
+  rowBuffer: number = 5,
+  availableWidth?: number
 ): VisibleRange {
   const { startRow, endRow } = getVisibleRowRange(
     scrollTop,
@@ -326,13 +335,15 @@ export function calculateVisibleRange(
     rowBuffer
   );
 
+  const effectiveWidth = availableWidth ?? viewportWidth;
+
   // For columns, we just track indices
   const centerColumns = columns.filter((c) => !c.pinned);
   const leftPinned = columns.filter((c) => c.pinned === 'left');
   const rightPinned = columns.filter((c) => c.pinned === 'right');
 
-  const leftPinnedWidth = leftPinned.reduce((sum, c) => sum + c.width, 0);
-  const rightPinnedWidth = rightPinned.reduce((sum, c) => sum + c.width, 0);
+  const leftPinnedWidth = leftPinned.reduce((sum, c) => sum + Math.floor(c.width), 0);
+  const rightPinnedWidth = rightPinned.reduce((sum, c) => sum + Math.floor(c.width), 0);
 
   // Find first and last visible center column
   let startColumnIndex = leftPinned.length;
@@ -341,21 +352,24 @@ export function calculateVisibleRange(
   let x = leftPinnedWidth - scrollLeft;
   for (let i = 0; i < centerColumns.length; i++) {
     const col = centerColumns[i];
-    if (x + col.width > leftPinnedWidth) {
+    const width = Math.floor(col.width);
+    if (x + width > leftPinnedWidth) {
       startColumnIndex = leftPinned.length + i;
       break;
     }
-    x += col.width;
+    x += width;
   }
 
   x = leftPinnedWidth - scrollLeft;
+  const centerEndX = Math.floor(effectiveWidth - rightPinnedWidth);
   for (let i = 0; i < centerColumns.length; i++) {
     const col = centerColumns[i];
-    if (x > viewportWidth - rightPinnedWidth) {
+    const width = Math.floor(col.width);
+    if (x > centerEndX) {
       endColumnIndex = leftPinned.length + i;
       break;
     }
-    x += col.width;
+    x += width;
   }
 
   // Add right pinned columns

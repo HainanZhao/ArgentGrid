@@ -1,10 +1,11 @@
 import { Column, GridApi, IRowNode } from '../types/ag-grid-types';
-
+import { LiveDataHandler } from './live-data-handler';
 // Import new rendering modules from the index
 import {
   // Blitting
   BlitState,
   ColumnPrepResult,
+  PositionedColumn,
   calculateBlit,
   // Theme
   DEFAULT_THEME,
@@ -27,15 +28,16 @@ import {
   getRowAtY,
   getValueByPath,
   getVisibleRowRange,
+  isColumnVisible,
   mergeTheme,
   performHitTest,
   prepColumn,
+  getPositionedColumns,
   // Cells
   truncateText,
   walkRows,
 } from './render';
 import { DamageTracker } from './utils/damage-tracker';
-import { LiveDataHandler } from './live-data-handler';
 
 /**
  * CanvasRenderer - High-performance canvas rendering engine for ArgentGrid
@@ -71,6 +73,7 @@ export class CanvasRenderer<TData = any> {
   private rowBuffer = 5;
   private viewportHeight = 0;
   private viewportWidth = 0;
+  private scrollbarWidth = 0;
 
   // Theme system
   private theme: GridTheme;
@@ -322,9 +325,10 @@ export class CanvasRenderer<TData = any> {
     this.scheduleRender();
   }
 
-  setViewportDimensions(width: number, height: number): void {
+  setViewportDimensions(width: number, height: number, scrollbarWidth: number = 0): void {
     this.viewportWidth = width;
     this.viewportHeight = height;
+    this.scrollbarWidth = scrollbarWidth;
     this.damageTracker.markAllDirty();
     this.updateCanvasSize();
   }
@@ -385,7 +389,7 @@ export class CanvasRenderer<TData = any> {
   }
 
   private getVisibleColumns(): Column[] {
-    return this.gridApi.getAllColumns().filter((col) => col.visible);
+    return this.gridApi.getAllColumns().filter((col) => isColumnVisible(col));
   }
 
   /**
@@ -410,9 +414,10 @@ export class CanvasRenderer<TData = any> {
     let x = 0;
     for (const column of columns) {
       const colDef = getColumnDef(column, this.gridApi);
+      const width = Math.floor(column.width);
       this.columnPreps.set(column.colId, prepColumn(this.ctx, column, colDef, this.theme));
       this.columnPositions.set(column.colId, x);
-      x += Math.floor(column.width);
+      x += width;
     }
   }
 
@@ -420,6 +425,7 @@ export class CanvasRenderer<TData = any> {
     const startTime = performance.now();
     const width = this.viewportWidth || this.canvas.clientWidth;
     const height = this.viewportHeight || this.canvas.clientHeight;
+    const availableWidth = width - this.scrollbarWidth;
 
     // Clear canvas
     this.ctx.clearRect(0, 0, width, height);
@@ -453,6 +459,15 @@ export class CanvasRenderer<TData = any> {
     this.ctx.font = getFontFromTheme(this.theme);
     this.ctx.textBaseline = 'middle';
 
+    const positionedColumns = getPositionedColumns(
+      allVisibleColumns,
+      this.scrollLeft,
+      width,
+      leftWidth,
+      rightWidth,
+      availableWidth
+    );
+
     // Render all visible rows
     walkRows(
       startRow,
@@ -462,16 +477,16 @@ export class CanvasRenderer<TData = any> {
       (rowIndex) => this.gridApi.getDisplayedRowAtIndex(rowIndex),
       (rowIndex, y, _rowHeight, rowNode) => {
         if (!rowNode) return;
-        this.renderRow(rowIndex, y, rowNode, allVisibleColumns, width, leftWidth, rightWidth);
+        this.renderRow(rowIndex, y, rowNode, positionedColumns);
       },
       this.gridApi
     );
 
     // Draw grid lines
-    this.drawGridLines(allVisibleColumns, startRow, endRow, width, height, leftWidth, rightWidth);
+    this.drawGridLines(positionedColumns, startRow, endRow, width, height, leftWidth, rightWidth);
 
     // Draw range selections
-    this.drawRangeSelections(allVisibleColumns, leftWidth, rightWidth, width);
+    this.drawRangeSelections(positionedColumns, leftWidth, rightWidth, width);
 
     // Store current frame for blitting
     this.blitState.setLastCanvas(this.canvas);
@@ -483,7 +498,7 @@ export class CanvasRenderer<TData = any> {
   }
 
   private drawRangeSelections(
-    allVisibleColumns: Column[],
+    positionedColumns: PositionedColumn[],
     leftPinnedWidth: number,
     rightPinnedWidth: number,
     viewportWidth: number
@@ -496,27 +511,16 @@ export class CanvasRenderer<TData = any> {
       const startY = range.startRow * this.rowHeight - this.scrollTop;
       const endY = (range.endRow + 1) * this.rowHeight - this.scrollTop;
 
-      // Calculate X boundaries
-      const startColIdx = allVisibleColumns.findIndex((c) => c.colId === range.startColumn);
-      const endColIdx = allVisibleColumns.findIndex((c) => c.colId === range.endColumn);
-
-      if (startColIdx === -1 || endColIdx === -1) continue;
-
       let minX = Infinity;
       let maxX = -Infinity;
 
       // Calculate the total bounding box of all columns in the range
       range.columns.forEach((col) => {
-        const xPos = getColumnX(
-          col,
-          this.columnPositions,
-          this.scrollLeft,
-          leftPinnedWidth,
-          rightPinnedWidth,
-          viewportWidth
-        );
-        minX = Math.min(minX, xPos);
-        maxX = Math.max(maxX, xPos + col.width);
+        const pc = positionedColumns.find((p) => p.column.colId === col.colId);
+        if (pc) {
+          minX = Math.min(minX, pc.x);
+          maxX = Math.max(maxX, pc.x + pc.width);
+        }
       });
 
       if (minX === Infinity) continue;
@@ -542,13 +546,10 @@ export class CanvasRenderer<TData = any> {
     rowIndex: number,
     y: number,
     rowNode: IRowNode<TData>,
-    allVisibleColumns: Column[],
-    viewportWidth: number,
-    leftWidth: number,
-    rightWidth: number
+    positionedColumns: PositionedColumn[]
   ): void {
     if (rowNode.detail) {
-      this.renderDetailRow(rowIndex, y, rowNode, viewportWidth);
+      this.renderDetailRow(rowIndex, y, rowNode, this.viewportWidth);
       return;
     }
 
@@ -562,61 +563,13 @@ export class CanvasRenderer<TData = any> {
     }
 
     this.ctx.fillStyle = bgColor;
-    this.ctx.fillRect(0, Math.floor(y), viewportWidth, rowHeight);
+    // Fill background for the entire available width
+    this.ctx.fillRect(0, Math.floor(y), this.viewportWidth - this.scrollbarWidth, rowHeight);
 
-    // Render left pinned columns
-    const leftPinned = allVisibleColumns.filter((c) => c.pinned === 'left');
-    this.renderColumns(
-      leftPinned,
-      0,
-      false,
-      rowNode,
-      y,
-      viewportWidth,
-      leftWidth,
-      rightWidth,
-      allVisibleColumns
-    );
-
-    // Render center columns (with clipping)
-    const centerColumns = allVisibleColumns.filter((c) => !c.pinned);
-    if (centerColumns.length > 0) {
-      this.ctx.save();
-      this.ctx.beginPath();
-      this.ctx.rect(
-        Math.floor(leftWidth),
-        Math.floor(y),
-        Math.floor(viewportWidth - leftWidth - rightWidth),
-        rowHeight
-      );
-      this.ctx.clip();
-      this.renderColumns(
-        centerColumns,
-        leftWidth,
-        true,
-        rowNode,
-        y,
-        viewportWidth,
-        leftWidth,
-        rightWidth,
-        allVisibleColumns
-      );
-      this.ctx.restore();
+    // Render columns using pre-calculated positions
+    for (const pc of positionedColumns) {
+      this.renderCell(pc.column, pc.x, y, pc.width, rowNode, positionedColumns);
     }
-
-    // Render right pinned columns
-    const rightPinned = allVisibleColumns.filter((c) => c.pinned === 'right');
-    this.renderColumns(
-      rightPinned,
-      viewportWidth - rightWidth,
-      false,
-      rowNode,
-      y,
-      viewportWidth,
-      leftWidth,
-      rightWidth,
-      allVisibleColumns
-    );
   }
 
   private renderDetailRow(
@@ -644,41 +597,13 @@ export class CanvasRenderer<TData = any> {
     this.ctx.font = getFontFromTheme(this.theme);
   }
 
-  private renderColumns(
-    columns: Column[],
-    startX: number,
-    isScrollable: boolean,
-    rowNode: IRowNode<TData>,
-    y: number,
-    viewportWidth: number,
-    leftWidth: number,
-    rightWidth: number,
-    allVisibleColumns: Column[]
-  ): void {
-    let x = startX;
-
-    for (const col of columns) {
-      const cellX = isScrollable ? x - this.scrollLeft : x;
-      const cellWidth = col.width;
-
-      // Skip if outside viewport (for center columns)
-      if (isScrollable && (cellX + cellWidth < leftWidth || cellX > viewportWidth - rightWidth)) {
-        x += cellWidth;
-        continue;
-      }
-
-      this.renderCell(col, cellX, y, cellWidth, rowNode, allVisibleColumns);
-      x += cellWidth;
-    }
-  }
-
   private renderCell(
     column: Column,
     x: number,
     y: number,
     width: number,
     rowNode: IRowNode<TData>,
-    allVisibleColumns: Column[]
+    positionedColumns: PositionedColumn[]
   ): void {
     const prep = this.columnPreps.get(column.colId);
     if (!prep) return;
@@ -720,8 +645,8 @@ export class CanvasRenderer<TData = any> {
     // Handle group indentation
     const isAutoGroupCol = column.colId === 'ag-Grid-AutoColumn';
     const isFirstColIfNoAutoGroup =
-      !allVisibleColumns.some((c) => c.colId === 'ag-Grid-AutoColumn') &&
-      column === allVisibleColumns[0];
+      !positionedColumns.some((pc) => pc.column.colId === 'ag-Grid-AutoColumn') &&
+      column === positionedColumns[0]?.column;
 
     if (
       (isAutoGroupCol || isFirstColIfNoAutoGroup) &&
@@ -749,7 +674,7 @@ export class CanvasRenderer<TData = any> {
   }
 
   private drawGridLines(
-    columns: Column[],
+    positionedColumns: PositionedColumn[],
     startRow: number,
     endRow: number,
     viewportWidth: number,
@@ -764,7 +689,7 @@ export class CanvasRenderer<TData = any> {
       endRow,
       this.rowHeight,
       this.scrollTop,
-      viewportWidth,
+      viewportWidth - this.scrollbarWidth,
       this.theme,
       this.gridApi
     );
@@ -772,7 +697,7 @@ export class CanvasRenderer<TData = any> {
     // Draw vertical column lines
     drawColumnLines(
       this.ctx,
-      columns,
+      this.getVisibleColumns(),
       this.scrollLeft,
       this.scrollTop,
       viewportWidth,
@@ -783,7 +708,8 @@ export class CanvasRenderer<TData = any> {
       startRow,
       endRow,
       this.rowHeight,
-      this.gridApi
+      this.gridApi,
+      viewportWidth - this.scrollbarWidth
     );
   }
 
@@ -800,7 +726,8 @@ export class CanvasRenderer<TData = any> {
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
-      this.getVisibleColumns()
+      this.getVisibleColumns(),
+      this.viewportWidth - this.scrollbarWidth
     );
     const columns = this.getVisibleColumns();
     const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
@@ -823,7 +750,8 @@ export class CanvasRenderer<TData = any> {
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
-      this.getVisibleColumns()
+      this.getVisibleColumns(),
+      this.viewportWidth - this.scrollbarWidth
     );
     const columns = this.getVisibleColumns();
     const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
@@ -843,7 +771,8 @@ export class CanvasRenderer<TData = any> {
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
-      this.getVisibleColumns()
+      this.getVisibleColumns(),
+      this.viewportWidth - this.scrollbarWidth
     );
     const columns = this.getVisibleColumns();
     const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
@@ -862,7 +791,8 @@ export class CanvasRenderer<TData = any> {
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
-      this.getVisibleColumns()
+      this.getVisibleColumns(),
+      this.viewportWidth - this.scrollbarWidth
     );
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
@@ -934,7 +864,8 @@ export class CanvasRenderer<TData = any> {
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
-      this.getVisibleColumns()
+      this.getVisibleColumns(),
+      this.viewportWidth - this.scrollbarWidth
     );
     if (columnIndex === -1) return;
 
