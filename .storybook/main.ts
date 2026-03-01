@@ -6,7 +6,6 @@ const config: StorybookConfig = {
     '@storybook/addon-essentials',
     '@storybook/addon-actions',
     '@storybook/addon-controls',
-    '@storybook/addon-docs',
     '@chromatic-com/storybook',
   ],
   framework: {
@@ -14,7 +13,7 @@ const config: StorybookConfig = {
     options: {},
   },
   docs: {
-    autodocs: true,
+    autodocs: false,
   },
 };
 

@@ -9,6 +9,9 @@ const preview: Preview = {
       },
     },
     layout: 'fullscreen',
+    docs: {
+      disable: true,
+    },
   },
 };
 

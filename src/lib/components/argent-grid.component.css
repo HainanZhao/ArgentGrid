@@ -184,11 +184,17 @@
 .argent-grid-header-row {
   display: flex;
   white-space: nowrap;
+  height: 100%; /* Added to ensure full height */
 }
 
 .argent-grid-header-scrollable {
   overflow: hidden;
   flex: 1;
+  display: flex; /* Added */
+}
+
+.argent-grid-header-scrollable .argent-grid-header-row {
+  flex: 1; /* Added to fill scrollable container height */
 }
 
 .argent-grid-header-pinned-left-container,
@@ -482,7 +488,12 @@
 
 .floating-filter-row {
   background: var(--ag-background-color, #fafafa);
-  border-top: 1px solid var(--ag-border-color, #e0e0e0);
+  border-top: 1px solid var(--ag-border-color, #babed1);
+}
+
+.argent-grid-floating-filter-cell {
+  padding: 4px 12px;
+  cursor: default;
 }
 
 .floating-filter-container {

@@ -136,7 +136,7 @@
           <div class="argent-grid-header-pinned-left-container">
             <div
               *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
-              class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
+              class="argent-grid-header-cell argent-grid-header-cell-pinned-left argent-grid-floating-filter-cell"
               [class.center-content]="col.colId === 'ag-Grid-SelectionColumn'"
               [style.width.px]="getColumnWidth(col)">
               <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
@@ -169,7 +169,7 @@
             <div class="argent-grid-header-row">
               <div
                 *ngFor="let col of getNonPinnedColumns(); trackBy: trackByColumn"
-                class="argent-grid-header-cell"
+                class="argent-grid-header-cell argent-grid-floating-filter-cell"
                 [class.center-content]="col.colId === 'ag-Grid-SelectionColumn'"
                 [style.width.px]="getColumnWidth(col)">
                 <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
@@ -202,7 +202,7 @@
           <div class="argent-grid-header-pinned-right-container">
             <div
               *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
-              class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
+              class="argent-grid-header-cell argent-grid-header-cell-pinned-right argent-grid-floating-filter-cell"
               [class.center-content]="col.colId === 'ag-Grid-SelectionColumn'"
               [style.width.px]="getColumnWidth(col)">
               <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
