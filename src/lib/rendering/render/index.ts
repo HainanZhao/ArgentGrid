@@ -6,6 +6,12 @@
 
 // Live data optimizations
 export { LiveDataOptimizations } from '../live-data-optimizations';
+// Rendering primitives
+export { drawCheckbox, drawGroupIndicator, drawSparkline } from './primitives';
+// Hit testing
+export * from './hit-test';
+// Column utilities
+export * from './column-utils';
 // Blitting optimization
 export {
   BlitState,

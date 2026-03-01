@@ -4,7 +4,7 @@
  * Draws grid lines (borders) efficiently.
  */
 
-import { Column } from '../../types/ag-grid-types';
+import { Column, GridApi } from '../../types/ag-grid-types';
 import { GridTheme, Rectangle } from './types';
 
 // ============================================================================
@@ -22,9 +22,14 @@ export function drawCrispLine(
   y2: number
 ): void {
   ctx.beginPath();
-  // Add 0.5 to pixel coordinates for crisp 1px lines
-  ctx.moveTo(Math.floor(x1) + 0.5, Math.floor(y1) + 0.5);
-  ctx.lineTo(Math.floor(x2) + 0.5, Math.floor(y2) + 0.5);
+  // For 1px lines, we want the center of the line to be at X.5
+  const snapX1 = Math.floor(x1) + 0.5;
+  const snapY1 = Math.floor(y1) + 0.5;
+  const snapX2 = Math.floor(x2) + 0.5;
+  const snapY2 = Math.floor(y2) + 0.5;
+  
+  ctx.moveTo(snapX1, snapY1);
+  ctx.lineTo(snapX2, snapY2);
   ctx.stroke();
 }
 
@@ -66,7 +71,8 @@ export function drawRowLines(
   rowHeight: number,
   scrollTop: number,
   viewportWidth: number,
-  theme: GridTheme
+  theme: GridTheme,
+  api?: GridApi
 ): void {
   ctx.strokeStyle = theme.borderColor || theme.gridLineColor;
   ctx.lineWidth = 1;
@@ -74,9 +80,12 @@ export function drawRowLines(
   ctx.beginPath();
 
   for (let row = startRow; row <= endRow; row++) {
-    const y = Math.floor(row * rowHeight - scrollTop) + 0.5;
-    ctx.moveTo(0, y);
-    ctx.lineTo(viewportWidth, y);
+    const y = Math.floor(api ? api.getRowY(row) - scrollTop : row * rowHeight - scrollTop);
+    // Draw border at the bottom of the row (y-0.5) to match DOM border-bottom
+    const borderY = y - 0.5;
+    if (borderY < 0) continue; // Skip top border if it's outside
+    ctx.moveTo(0, borderY);
+    ctx.lineTo(viewportWidth, borderY);
   }
 
   ctx.stroke();
@@ -97,7 +106,8 @@ export function drawColumnLines(
   theme: GridTheme,
   startRow: number = 0,
   endRow: number = 0,
-  rowHeight: number = 32
+  rowHeight: number = 32,
+  api?: GridApi
 ): void {
   ctx.strokeStyle = theme.borderColor || theme.gridLineColor;
   ctx.lineWidth = 1;
@@ -111,13 +121,13 @@ export function drawColumnLines(
   );
 
   // Calculate Y range for drawing
-  const drawY1 = Math.max(0, Math.floor(startRow * rowHeight - scrollTop));
-  const drawY2 = Math.min(viewportHeight, Math.floor(endRow * rowHeight - scrollTop));
+  const drawY1 = Math.floor(api ? api.getRowY(startRow) : startRow * rowHeight - scrollTop);
+  const drawY2 = Math.floor(api ? api.getRowY(endRow) : endRow * rowHeight - scrollTop);
 
   ctx.beginPath();
 
   for (const x of columnPositions) {
-    const borderX = Math.floor(x) + 0.5;
+    const borderX = Math.floor(x) - 0.5;
     ctx.moveTo(borderX, drawY1);
     ctx.lineTo(borderX, drawY2);
   }
@@ -144,14 +154,14 @@ export function getColumnBorderPositions(
   // Left pinned column borders
   let x = 0;
   for (const col of leftPinned) {
-    x += col.width;
+    x += Math.floor(col.width);
     positions.push(x);
   }
 
   // Center column borders
-  x = leftPinnedWidth - scrollX;
+  x = Math.floor(leftPinnedWidth) - scrollX;
   for (const col of centerColumns) {
-    x += col.width;
+    x += Math.floor(col.width);
     // Only include if visible
     if (x > leftPinnedWidth && x < viewportWidth - rightPinnedWidth) {
       positions.push(x);
@@ -159,9 +169,9 @@ export function getColumnBorderPositions(
   }
 
   // Right pinned column borders
-  x = viewportWidth - rightPinnedWidth;
+  x = Math.floor(viewportWidth - rightPinnedWidth);
   for (const col of rightPinned) {
-    x += col.width;
+    x += Math.floor(col.width);
     positions.push(x);
   }
 
@@ -183,10 +193,11 @@ export function drawGridLines(
   viewportHeight: number,
   leftPinnedWidth: number,
   rightPinnedWidth: number,
-  theme: GridTheme
+  theme: GridTheme,
+  api?: GridApi
 ): void {
   // Draw horizontal lines
-  drawRowLines(ctx, startRow, endRow, rowHeight, scrollTop, viewportWidth, theme);
+  drawRowLines(ctx, startRow, endRow, rowHeight, scrollTop, viewportWidth, theme, api);
 
   // Draw vertical lines
   drawColumnLines(
@@ -300,7 +311,7 @@ export function drawPinnedRegionBorders(
   // Left pinned border
   if (leftPinnedWidth > 0) {
     ctx.beginPath();
-    const x = Math.floor(leftPinnedWidth) + 0.5;
+    const x = Math.floor(leftPinnedWidth) - 0.5;
     ctx.moveTo(x, 0);
     ctx.lineTo(x, viewportHeight);
     ctx.stroke();
@@ -309,7 +320,7 @@ export function drawPinnedRegionBorders(
   // Right pinned border
   if (rightPinnedWidth > 0) {
     ctx.beginPath();
-    const x = Math.floor(viewportWidth - rightPinnedWidth) + 0.5;
+    const x = Math.floor(viewportWidth - rightPinnedWidth) - 0.5;
     ctx.moveTo(x, 0);
     ctx.lineTo(x, viewportHeight);
     ctx.stroke();

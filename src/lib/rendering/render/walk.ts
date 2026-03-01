@@ -37,35 +37,37 @@ export function walkColumns(
   // 1. Left pinned columns (no scroll offset)
   let x = 0;
   for (const col of leftPinned) {
-    callback(col, x, col.width, true, 'left');
-    x += col.width;
+    const width = Math.floor(col.width);
+    callback(col, x, width, true, 'left');
+    x += width;
   }
 
   // 2. Center columns (with scroll offset and clipping)
-  const centerStartX = leftPinnedWidth;
-  const centerEndX = viewportWidth - rightPinnedWidth;
-  const _centerWidth = centerEndX - centerStartX;
+  const centerStartX = Math.floor(leftPinnedWidth);
+  const centerEndX = Math.floor(viewportWidth - rightPinnedWidth);
 
-  x = leftPinnedWidth - scrollX;
+  x = centerStartX - scrollX;
   for (const col of centerColumns) {
+    const width = Math.floor(col.width);
     // Skip columns completely outside viewport
-    if (x + col.width < centerStartX) {
-      x += col.width;
+    if (x + width < centerStartX) {
+      x += width;
       continue;
     }
     if (x > centerEndX) {
       break; // Rest of columns are off-screen
     }
 
-    callback(col, x, col.width, false);
-    x += col.width;
+    callback(col, x, width, false);
+    x += width;
   }
 
   // 3. Right pinned columns (no scroll offset)
-  x = viewportWidth - rightPinnedWidth;
+  x = centerEndX;
   for (const col of rightPinned) {
-    callback(col, x, col.width, true, 'right');
-    x += col.width;
+    const width = Math.floor(col.width);
+    callback(col, x, width, true, 'right');
+    x += width;
   }
 }
 
@@ -99,9 +101,13 @@ export function getPositionedColumns(
  * Get pinned column widths
  */
 export function getPinnedWidths(columns: Column[]): { left: number; right: number } {
-  const left = columns.filter((c) => c.pinned === 'left').reduce((sum, c) => sum + c.width, 0);
+  const left = columns
+    .filter((c) => c.pinned === 'left')
+    .reduce((sum, c) => sum + Math.floor(c.width), 0);
 
-  const right = columns.filter((c) => c.pinned === 'right').reduce((sum, c) => sum + c.width, 0);
+  const right = columns
+    .filter((c) => c.pinned === 'right')
+    .reduce((sum, c) => sum + Math.floor(c.width), 0);
 
   return { left, right };
 }
