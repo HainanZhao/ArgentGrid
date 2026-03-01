@@ -27,6 +27,7 @@ const mockCanvasContext = {
   isPointInPath: vi.fn(),
   strokeRect: vi.fn(),
   strokeText: vi.fn(),
+  rect: vi.fn(),
   lineCap: 'butt',
   lineJoin: 'miter',
   lineWidth: 1,
@@ -288,5 +289,84 @@ describe('CanvasRenderer', () => {
     renderer.destroy();
     expect(removeSpy).toHaveBeenCalled();
     removeSpy.mockRestore();
+  });
+
+  it('should render checkbox for checkboxSelection column', () => {
+    // Setup mock column with checkboxSelection
+    const mockColumn = {
+      colId: 'select',
+      field: 'select',
+      width: 50,
+      visible: true,
+      pinned: null,
+    } as any;
+
+    const mockRowNode = {
+      data: { id: 1, name: 'Test' },
+      selected: true,
+      rowIndex: 0,
+      displayedRowIndex: 0,
+      group: false,
+      master: false,
+      level: 0,
+      expanded: false,
+      detail: false,
+    } as any;
+
+    vi.spyOn(mockApi, 'getAllColumns').mockReturnValue([mockColumn]);
+    vi.spyOn(mockApi, 'getColumnDefs').mockReturnValue([
+      { colId: 'select', field: 'select', checkboxSelection: true, width: 50 },
+    ]);
+    vi.spyOn(mockApi, 'getDisplayedRowAtIndex').mockReturnValue(mockRowNode);
+    vi.spyOn(mockApi, 'getDisplayedRowCount').mockReturnValue(1);
+
+    // Force a render
+    renderer.renderFrame();
+
+    // Verify strokeRect was called (for checkbox border)
+    expect(mockCanvasContext.strokeRect).toHaveBeenCalled();
+  });
+
+  it('should toggle row selection when clicking checkbox column', () => {
+    const mockColumn = {
+      colId: 'select',
+      field: 'select',
+      width: 50,
+      visible: true,
+      pinned: null,
+    } as any;
+
+    const mockRowNode = {
+      data: { id: 1, name: 'Test' },
+      selected: false,
+      rowIndex: 0,
+      displayedRowIndex: 0,
+      group: false,
+      master: false,
+      level: 0,
+      expanded: false,
+      detail: false,
+    } as any;
+
+    vi.spyOn(mockApi, 'getAllColumns').mockReturnValue([mockColumn]);
+    vi.spyOn(mockApi, 'getColumnDefs').mockReturnValue([
+      { colId: 'select', field: 'select', checkboxSelection: true, width: 50 },
+    ]);
+    vi.spyOn(mockApi, 'getDisplayedRowAtIndex').mockReturnValue(mockRowNode);
+    vi.spyOn(mockApi, 'getDisplayedRowCount').mockReturnValue(1);
+    vi.spyOn(mockApi, 'getSelectedNodes').mockReturnValue([]);
+
+    // Simulate click on checkbox area
+    const rect = mockCanvas.getBoundingClientRect();
+    const clickEvent = new MouseEvent('mousedown', {
+      clientX: rect.left + 25, // Center of checkbox column
+      clientY: rect.top + 16, // Center of first row
+      bubbles: true,
+    });
+
+    mockCanvas.dispatchEvent(clickEvent);
+
+    // Row selection should have been toggled
+    expect(mockRowNode.selected).toBe(true);
   });
 });
