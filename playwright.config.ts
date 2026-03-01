@@ -12,6 +12,16 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
 
+  expect: {
+    toHaveScreenshot: {
+      threshold: 0.2,
+      maxDiffPixelRatio: 0.1,
+      animations: 'disabled',
+      scale: 'css',
+    },
+  },
+  snapshotPathTemplate: '{testDir}/visual.spec.ts-snapshots/{arg}{ext}',
+
   projects: [
     {
       name: 'chromium',

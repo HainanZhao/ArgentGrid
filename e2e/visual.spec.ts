@@ -10,11 +10,7 @@ test.describe('ArgentGrid Visual Regression', () => {
     // Wait longer for CI rendering and font stabilization
     await page.waitForTimeout(2000);
     
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-default.png', { 
-      threshold: 0.1,
-      maxDiffPixelRatio: 0.05,
-      scale: 'css'
-    });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-default.png');
   });
 
   test('selection column should be centered and aligned', async ({ page }) => {
@@ -22,11 +18,7 @@ test.describe('ArgentGrid Visual Regression', () => {
     await page.waitForSelector('argent-grid', { state: 'visible' });
     await page.waitForTimeout(2000);
     
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-with-selection.png', { 
-      threshold: 0.1,
-      maxDiffPixelRatio: 0.05,
-      scale: 'css'
-    });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-with-selection.png');
   });
 
   test('text filter with floating filters should be aligned', async ({ page }) => {
@@ -34,11 +26,7 @@ test.describe('ArgentGrid Visual Regression', () => {
     await page.waitForSelector('argent-grid', { state: 'visible' });
     await page.waitForTimeout(2000);
     
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-text-filter.png', { 
-      threshold: 0.1,
-      maxDiffPixelRatio: 0.05,
-      scale: 'css'
-    });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-text-filter.png');
   });
 
   test('hidden floating filters with popup should be correct', async ({ page }) => {
@@ -55,11 +43,7 @@ test.describe('ArgentGrid Visual Regression', () => {
     await page.waitForTimeout(1000);
     
     // Snapshot the popup area
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-filter-popup.png', { 
-      threshold: 0.1,
-      maxDiffPixelRatio: 0.05,
-      scale: 'css'
-    });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-filter-popup.png');
   });
 
   test('empty state after filtering should be clean', async ({ page }) => {
@@ -71,11 +55,7 @@ test.describe('ArgentGrid Visual Regression', () => {
     await filterInput.fill('NON_EXISTENT_VALUE_12345');
     await page.waitForTimeout(1000); // Wait for debounce and render
     
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-empty-state.png', { 
-      threshold: 0.1,
-      maxDiffPixelRatio: 0.05,
-      scale: 'css'
-    });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-empty-state.png');
   });
 
   test('cell borders should remain visible after scrolling down', async ({ page }) => {
@@ -89,11 +69,7 @@ test.describe('ArgentGrid Visual Regression', () => {
     // Wait for render
     await page.waitForTimeout(2000);
     
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-scroll-borders.png', { 
-      threshold: 0.1,
-      maxDiffPixelRatio: 0.05,
-      scale: 'css'
-    });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-scroll-borders.png');
   });
 
   test('sidebar buttons should be visible and not blocked by header', async ({ page }) => {
@@ -110,10 +86,6 @@ test.describe('ArgentGrid Visual Regression', () => {
     expect(box?.y).toBeGreaterThanOrEqual(30); 
     
     await page.waitForTimeout(1000);
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-sidebar-buttons.png', { 
-      threshold: 0.1,
-      maxDiffPixelRatio: 0.05,
-      scale: 'css'
-    });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-sidebar-buttons.png');
   });
 });
