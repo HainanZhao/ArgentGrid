@@ -46,37 +46,23 @@ There were problems when compiling your code with Webpack.
 
 ## ✅ What DOES Work
 
-### 1. Demo App (RECOMMENDED)
+### 1. Story Files (Ready for Future)
 
-The demo app serves as component documentation:
+All story files are in **`src/stories/`** and ready:
 
-```bash
-cd demo-app
-npm start
-# Open http://localhost:4200
-```
+| Story File | Stories | Status |
+|------------|---------|--------|
+| `src/stories/ArgentGrid.stories.ts` | 8 | ✅ Ready |
+| `src/stories/Filtering.stories.ts` | 5 | ✅ Ready |
+| `src/stories/Grouping.stories.ts` | 4 | ✅ Ready |
+| `src/stories/Theming.stories.ts` | 5 | ✅ Ready |
+| `src/stories/Advanced.stories.ts` | Multiple | ✅ Ready |
+| `src/stories/CellRenderers.stories.ts` | Multiple | ✅ Ready |
+| `src/stories/Benchmark.stories.ts` | Multiple | ✅ Ready |
 
-**Features:**
-- ✅ All grid features demonstrated
-- ✅ Theme customization (Dark/Light mode)
-- ✅ Live data demos (Stock ticker, log stream)
-- ✅ Performance benchmarks (100K rows)
-- ✅ Interactive controls
+**Total:** 30+ stories ready for Storybook 8.x
 
-### 2. Story Files (Ready for Future)
-
-All story files are written and ready:
-- ✅ `src/stories/ArgentGrid.stories.ts` - 8 stories
-- ✅ `src/stories/Filtering.stories.ts` - 5 stories
-- ✅ `src/stories/Grouping.stories.ts` - 4 stories
-- ✅ `src/stories/Theming.stories.ts` - 5 stories
-- ✅ `src/stories/Advanced.stories.ts` - Multiple stories
-- ✅ `src/stories/CellRenderers.stories.ts` - Multiple stories
-- ✅ `src/stories/Benchmark.stories.ts` - Performance tests
-
-**Once Storybook 8.x is released**, these stories will work immediately.
-
-### 3. Documentation
+### 2. Documentation
 
 Comprehensive documentation exists:
 - ✅ [THEME-API-GUIDE.md](./THEME-API-GUIDE.md) - Theme API
@@ -87,16 +73,7 @@ Comprehensive documentation exists:
 
 ## 🔧 Workarounds
 
-### Option 1: Use Demo App (RECOMMENDED)
-
-```bash
-cd demo-app
-npm start
-```
-
-This is the **recommended approach** until Storybook 8.x is stable.
-
-### Option 2: Wait for Storybook 8.x
+### Option 1: Wait for Storybook 8.x (RECOMMENDED)
 
 **Expected:** Q2 2026
 
@@ -107,7 +84,7 @@ npx storybook upgrade
 npm run storybook
 ```
 
-### Option 3: Downgrade to Angular 17
+### Option 2: Downgrade to Angular 17
 
 **NOT RECOMMENDED** - Only if Storybook is absolutely critical:
 
@@ -119,19 +96,22 @@ npm run storybook
 
 ---
 
-## 📋 Story Files Status
+## 📋 Story Files Location
 
-| Story File | Status | Stories | Ready for SB 8.x |
-|------------|--------|---------|------------------|
-| ArgentGrid.stories.ts | ✅ Written | 8 | ✅ Yes |
-| Filtering.stories.ts | ✅ Written | 5 | ✅ Yes |
-| Grouping.stories.ts | ✅ Written | 4 | ✅ Yes |
-| Theming.stories.ts | ✅ Written | 5 | ✅ Yes |
-| Advanced.stories.ts | ✅ Written | Multiple | ✅ Yes |
-| CellRenderers.stories.ts | ✅ Written | Multiple | ✅ Yes |
-| Benchmark.stories.ts | ✅ Written | Multiple | ✅ Yes |
+**All stories are in:** `src/stories/`
 
-**Total:** 30+ stories ready for Storybook 8.x
+```
+src/stories/
+├── ArgentGrid.stories.ts       # 8 stories
+├── Filtering.stories.ts         # 5 stories (with visual indicators)
+├── Grouping.stories.ts          # 4 stories (with icons)
+├── Theming.stories.ts           # 5 stories
+├── Advanced.stories.ts          # Multiple stories
+├── CellRenderers.stories.ts     # Multiple stories
+└── Benchmark.stories.ts         # Performance tests
+```
+
+**Once Storybook 8.x is released**, these stories will work immediately.
 
 ---
 
@@ -159,9 +139,9 @@ npm run storybook
 ## ✅ Recommendation
 
 **For now:**
-1. Use **demo app** (`npm start`) for component exploration
-2. Read **documentation** for feature guides
-3. **Wait for Storybook 8.x** (Q2 2026)
+1. Read **documentation** for feature guides
+2. **Wait for Storybook 8.x** (Q2 2026)
+3. All 30+ stories are ready and will work immediately
 
 **Once Storybook 8.x is released:**
 1. Run `npx storybook upgrade`
@@ -171,5 +151,5 @@ npm run storybook
 ---
 
 **Status:** ⏸️ **ON HOLD** - Waiting for Storybook 8.x with Angular 18 support  
-**Workaround:** Use demo app (`npm start`)  
-**Stories:** ✅ 30+ stories ready for Storybook 8.x
+**Stories:** ✅ 30+ stories in `src/stories/` (ready for Storybook 8.x)  
+**Documentation:** ✅ Complete
