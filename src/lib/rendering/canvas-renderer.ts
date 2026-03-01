@@ -8,13 +8,19 @@ import {
   calculateBlit,
   // Theme
   DEFAULT_THEME,
+  drawCheckbox,
   drawColumnLines,
+  drawGroupIndicator,
   drawRangeSelectionBorder,
   // Lines
   drawRowLines,
+  drawSparkline,
   // Types
   GridTheme,
+  getCenterColumnOffset,
   getColumnAtX,
+  getColumnDef,
+  getColumnX,
   getFontFromTheme,
   getFormattedValue,
   getPinnedWidths,
@@ -22,12 +28,14 @@ import {
   getValueByPath,
   getVisibleRowRange,
   mergeTheme,
+  performHitTest,
   prepColumn,
   // Cells
   truncateText,
   walkRows,
 } from './render';
 import { DamageTracker } from './utils/damage-tracker';
+import { LiveDataHandler } from './live-data-handler';
 
 /**
  * CanvasRenderer - High-performance canvas rendering engine for ArgentGrid
@@ -80,32 +88,16 @@ export class CanvasRenderer<TData = any> {
   // Blitting state
   private blitState = new BlitState();
 
+  // Live data handling
+  private liveDataHandler: LiveDataHandler<TData>;
+
   // Column prep results cache
   private columnPreps: Map<string, ColumnPrepResult<TData>> = new Map();
 
   /**
    * Column positions cache for O(1) lookup
-   *
-   * Performance optimization: Instead of O(n) linear search through all columns
-   * to find a column's X position, we cache positions during prepareColumns().
-   * This reduces getColumnX() from O(n) to O(1), improving cell rendering performance
-   * by 5-10% for wide grids with many columns.
-   *
-   * @see prepareColumns() - Where positions are cached
-   * @see getColumnX() - Where cached positions are used
    */
   private columnPositions: Map<string, number> = new Map();
-
-  // Live data optimization: Update batching
-  private updateBuffer: TData[] = [];
-  private updateBufferTimer: number | null = null;
-  private batchInterval = 100; // ms - batch updates every 100ms (~10fps for data)
-
-  // Live data optimization: Dirty row tracking
-  private dirtyRows: Set<number> = new Set();
-
-  // Live data optimization: Row index by ID for O(1) updates
-  private rowIndexById: Map<string, number> = new Map();
 
   // Event listener references for cleanup
   private scrollListener?: (e: Event) => void;
@@ -134,6 +126,7 @@ export class CanvasRenderer<TData = any> {
     this.gridApi = gridApi;
     this.rowHeight = rowHeight;
     this.theme = mergeTheme(DEFAULT_THEME, { rowHeight }, theme || {});
+    this.liveDataHandler = new LiveDataHandler(gridApi);
 
     this.setupEventListeners();
     this.resize();
@@ -168,132 +161,27 @@ export class CanvasRenderer<TData = any> {
    * @param intervalMs - Batch interval in milliseconds (default: 100ms = ~10fps)
    */
   setBatchInterval(intervalMs: number): void {
-    this.batchInterval = Math.max(16, intervalMs); // Minimum 16ms (~60fps)
+    this.liveDataHandler.setBatchInterval(intervalMs);
   }
 
-  /**
-   * Add row data with batching for live data scenarios
-   *
-   * Performance optimization: Instead of rendering immediately on every update,
-   * buffers updates and renders in batches. For 10 entries/sec, this reduces
-   * render calls from 10/sec to 1/sec (90% reduction).
-   *
-   * @param data - Row data to add
-   * @param immediate - If true, flush buffer immediately
-   */
   addRowData(data: TData, immediate = false): void {
-    this.updateBuffer.push(data);
-
-    // Index row by ID if available
-    const dataWithId = data as any;
-    if (dataWithId.id) {
-      const index = this.gridApi.getRowData().length + this.updateBuffer.length - 1;
-      this.rowIndexById.set(dataWithId.id, index);
-    }
-
-    if (immediate) {
-      this.flushUpdateBuffer();
-    } else if (!this.updateBufferTimer) {
-      this.updateBufferTimer = window.setTimeout(() => {
-        this.flushUpdateBuffer();
-      }, this.batchInterval);
-    }
+    this.liveDataHandler.addRowData(data, immediate, () => this.renderFrame());
   }
 
-  /**
-   * Flush update buffer and trigger render
-   */
   flushUpdateBuffer(): void {
-    if (this.updateBuffer.length === 0) return;
-
-    if (this.updateBufferTimer) {
-      clearTimeout(this.updateBufferTimer);
-      this.updateBufferTimer = null;
-    }
-
-    // Apply transaction to add buffered rows
-    this.gridApi.applyTransaction({ add: this.updateBuffer });
-    this.updateBuffer = [];
-    this.totalRowCount = this.gridApi.getDisplayedRowCount();
-
-    // Mark new rows as dirty
-    const startIndex = this.totalRowCount - this.updateBuffer.length;
-    for (let i = 0; i < this.updateBuffer.length; i++) {
-      this.dirtyRows.add(startIndex + i);
-    }
-
-    this.renderFrame();
+    this.liveDataHandler.flushUpdateBuffer(() => this.renderFrame());
   }
 
-  /**
-   * Mark a row as dirty (needs re-rendering)
-   *
-   * Performance optimization: Only re-renders changed rows instead of all visible rows.
-   * For sparse updates (1 row out of 100), provides 99% reduction in rendering work.
-   *
-   * @param rowIndex - Index of row to mark as dirty
-   */
   markRowDirty(rowIndex: number): void {
-    this.dirtyRows.add(rowIndex);
+    this.liveDataHandler.markRowDirty(rowIndex);
   }
 
-  /**
-   * Update row data by ID with O(1) lookup
-   *
-   * Performance optimization: Uses row index cache for O(1) lookup instead
-   * of O(n) linear search. Essential for high-frequency updates by ID.
-   *
-   * @param id - Row ID
-   * @param updates - Partial row data to update
-   * @returns true if row was found and updated
-   *
-   * @performance O(1) - Constant time lookup
-   */
   updateRowById(id: string, updates: Partial<TData>): boolean {
-    const index = this.rowIndexById.get(id);
-    const rowData = this.gridApi.getRowData();
-    if (index === undefined || index >= rowData.length) {
-      return false;
-    }
-
-    // Apply update via transaction
-    this.gridApi.applyTransaction({ update: [{ ...rowData[index], ...updates }] });
-    this.markRowDirty(index);
-    return true;
+    return this.liveDataHandler.updateRowById(id, updates);
   }
 
-  /**
-   * Remove row by ID
-   *
-   * @param id - Row ID to remove
-   * @returns true if row was found and removed
-   */
   removeRowById(id: string): boolean {
-    const index = this.rowIndexById.get(id);
-    if (index === undefined) {
-      return false;
-    }
-
-    // Remove via transaction
-    const rowData = this.gridApi.getRowData();
-    this.gridApi.applyTransaction({ remove: [rowData[index]] });
-    this.rowIndexById.delete(id);
-    this.rebuildRowIndex();
-    return true;
-  }
-
-  /**
-   * Rebuild row index after bulk changes
-   */
-  private rebuildRowIndex(): void {
-    this.rowIndexById.clear();
-    const rowData = this.gridApi.getRowData();
-    rowData.forEach((row, index) => {
-      const rowWithId = row as any;
-      if (rowWithId.id) {
-        this.rowIndexById.set(rowWithId.id, index);
-      }
-    });
+    return this.liveDataHandler.removeRowById(id);
   }
 
   /**
@@ -331,44 +219,6 @@ export class CanvasRenderer<TData = any> {
     const columns = this.getVisibleColumns();
     const result = getColumnAtX(columns, x, this.scrollLeft, this.viewportWidth);
     return result?.column || null;
-  }
-
-  /**
-   * Get X position for a column (O(1) lookup)
-   *
-   * Performance optimization: Uses cached column positions from prepareColumns()
-   * instead of iterating through all columns. This reduces complexity from O(n) to O(1),
-   * where n is the number of visible columns. For grids with 100+ columns, this provides
-   * significant performance improvements during cell rendering.
-   *
-   * @param targetCol - Target column
-   * @param leftPinnedWidth - Total width of left-pinned columns
-   * @param rightPinnedWidth - Total width of right-pinned columns
-   * @param viewportWidth - Total viewport width
-   * @returns X position in canvas coordinates
-   *
-   * @see prepareColumns() - Where column positions are cached
-   * @see columnPositions - Cache of column X positions
-   *
-   * @performance O(1) - Constant time lookup
-   */
-  private getColumnX(
-    targetCol: Column,
-    leftPinnedWidth: number,
-    rightPinnedWidth: number,
-    viewportWidth: number
-  ): number {
-    // Use cached column position (O(1) lookup)
-    const baseX = this.columnPositions.get(targetCol.colId) || 0;
-
-    // Adjust for pinned columns and scroll position
-    if (targetCol.pinned === 'left') {
-      return baseX;
-    } else if (targetCol.pinned === 'right') {
-      return viewportWidth - rightPinnedWidth + (baseX - (viewportWidth - rightPinnedWidth));
-    } else {
-      return leftPinnedWidth - this.scrollLeft + (baseX - leftPinnedWidth);
-    }
   }
 
   /**
@@ -567,7 +417,7 @@ export class CanvasRenderer<TData = any> {
     // Cache column definitions and X positions in a single pass
     let x = 0;
     for (const column of columns) {
-      const colDef = this.getColumnDef(column);
+      const colDef = getColumnDef(column, this.gridApi);
       this.columnPreps.set(column.colId, prepColumn(this.ctx, column, colDef, this.theme));
       this.columnPositions.set(column.colId, x);
       x += column.width;
@@ -605,9 +455,10 @@ export class CanvasRenderer<TData = any> {
     this.ctx.textBaseline = 'middle';
 
     // Performance optimization: Render only dirty rows if available
-    if (this.dirtyRows.size > 0 && this.dirtyRows.size < endRow - startRow) {
+    const dirtyRows = this.liveDataHandler.getDirtyRows();
+    if (dirtyRows.size > 0 && dirtyRows.size < endRow - startRow) {
       // Render only dirty rows (sparse update)
-      this.dirtyRows.forEach((rowIndex) => {
+      dirtyRows.forEach((rowIndex) => {
         if (rowIndex >= startRow && rowIndex < endRow) {
           const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
           if (rowNode) {
@@ -618,7 +469,7 @@ export class CanvasRenderer<TData = any> {
           }
         }
       });
-      this.dirtyRows.clear();
+      this.liveDataHandler.clearDirtyRows();
     } else {
       // Render all visible rows (full update)
       walkRows(
@@ -675,7 +526,14 @@ export class CanvasRenderer<TData = any> {
 
       // Calculate the total bounding box of all columns in the range
       range.columns.forEach((col) => {
-        const xPos = this.getColumnX(col, leftPinnedWidth, rightPinnedWidth, viewportWidth);
+        const xPos = getColumnX(
+          col,
+          this.columnPositions,
+          this.scrollLeft,
+          leftPinnedWidth,
+          rightPinnedWidth,
+          viewportWidth
+        );
         minX = Math.min(minX, xPos);
         maxX = Math.max(maxX, xPos + col.width);
       });
@@ -855,13 +713,13 @@ export class CanvasRenderer<TData = any> {
       const checkboxY = Math.floor(y + (this.rowHeight - checkboxSize) / 2);
       const checkboxX = Math.floor(x + (width - checkboxSize) / 2);
         
-      this.drawCheckbox(checkboxX, checkboxY, checkboxSize, rowNode.selected);
+      drawCheckbox(this.ctx, checkboxX, checkboxY, checkboxSize, rowNode.selected, this.theme);
       return; // Dedicated column only shows checkbox
     }
     
     // Check for sparkline
     if (prep.colDef?.sparklineOptions) {
-      this.drawSparkline(cellValue, x, y, width, this.rowHeight, prep.colDef.sparklineOptions);
+      drawSparkline(this.ctx, cellValue, x, y, width, this.rowHeight, prep.colDef.sparklineOptions);
       return;
     }
 
@@ -892,7 +750,7 @@ export class CanvasRenderer<TData = any> {
 
       // Draw expand/collapse indicator
       if (rowNode.group || rowNode.master) {
-        this.drawGroupIndicator(textX, y, rowNode.expanded);
+        drawGroupIndicator(this.ctx, textX, y, this.rowHeight, rowNode.expanded, this.theme);
         textX += this.theme.groupIndicatorSize + 3;
       }
     }
@@ -905,134 +763,6 @@ export class CanvasRenderer<TData = any> {
 
     if (truncatedText) {
       this.ctx.fillText(truncatedText, Math.floor(textX), Math.floor(y + this.rowHeight / 2));
-    }
-  }
-
-  private drawSparkline(
-    data: any[],
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    options: SparklineOptions
-  ): void {
-    if (!Array.isArray(data) || data.length === 0) return;
-
-    const padding = options.padding || { top: 4, bottom: 4, left: 4, right: 4 };
-    const drawX = x + (padding.left || 0);
-    const drawY = y + (padding.top || 0);
-    const drawWidth = width - (padding.left || 0) - (padding.right || 0);
-    const drawHeight = height - (padding.top || 0) - (padding.bottom || 0);
-
-    if (drawWidth <= 0 || drawHeight <= 0) return;
-
-    const min = Math.min(...data);
-    const max = Math.max(...data);
-    const range = max - min || 1;
-
-    const type = options.type || 'line';
-
-    this.ctx.save();
-
-    if (type === 'line' || type === 'area') {
-      this.ctx.beginPath();
-      for (let i = 0; i < data.length; i++) {
-        const px = drawX + (i / (data.length - 1)) * drawWidth;
-        const py = drawY + drawHeight - ((data[i] - min) / range) * drawHeight;
-
-        if (i === 0) this.ctx.moveTo(px, py);
-        else this.ctx.lineTo(px, py);
-      }
-
-      if (type === 'area') {
-        const areaOptions = options.area || {};
-        this.ctx.lineTo(drawX + drawWidth, drawY + drawHeight);
-        this.ctx.lineTo(drawX, drawY + drawHeight);
-        this.ctx.closePath();
-        this.ctx.fillStyle = areaOptions.fill || 'rgba(33, 150, 243, 0.3)';
-        this.ctx.fill();
-
-        // Stroke the top line
-        this.ctx.beginPath();
-        for (let i = 0; i < data.length; i++) {
-          const px = drawX + (i / (data.length - 1)) * drawWidth;
-          const py = drawY + drawHeight - ((data[i] - min) / range) * drawHeight;
-          if (i === 0) this.ctx.moveTo(px, py);
-          else this.ctx.lineTo(px, py);
-        }
-      }
-
-      const lineOptions = (type === 'area' ? options.area : options.line) || {};
-      this.ctx.strokeStyle = lineOptions.stroke || '#2196f3';
-      this.ctx.lineWidth = lineOptions.strokeWidth || 1.5;
-      this.ctx.lineJoin = 'round';
-      this.ctx.lineCap = 'round';
-      this.ctx.stroke();
-    } else if (type === 'column' || type === 'bar') {
-      const colOptions = options.column || {};
-      const colPadding = colOptions.padding || 0.1;
-      const colWidth = drawWidth / data.length;
-      const barWidth = colWidth * (1 - colPadding);
-
-      this.ctx.fillStyle = colOptions.fill || '#2196f3';
-
-      for (let i = 0; i < data.length; i++) {
-        const px = drawX + i * colWidth + (colWidth * colPadding) / 2;
-        const valHeight = ((data[i] - min) / range) * drawHeight;
-        const py = drawY + drawHeight - valHeight;
-
-        this.ctx.fillRect(
-          Math.floor(px),
-          Math.floor(py),
-          Math.floor(barWidth),
-          Math.ceil(valHeight)
-        );
-      }
-    }
-
-    this.ctx.restore();
-  }
-
-  private drawGroupIndicator(x: number, y: number, expanded: boolean): void {
-    this.ctx.beginPath();
-    const centerY = Math.floor(y + this.rowHeight / 2);
-    const size = this.theme.groupIndicatorSize;
-
-    if (expanded) {
-      // Expanded: horizontal line
-      this.ctx.moveTo(Math.floor(x), centerY);
-      this.ctx.lineTo(Math.floor(x + size), centerY);
-    } else {
-      // Collapsed: plus sign
-      const halfSize = size / 2;
-      this.ctx.moveTo(Math.floor(x), centerY);
-      this.ctx.lineTo(Math.floor(x + size), centerY);
-      this.ctx.moveTo(Math.floor(x + halfSize), centerY - halfSize);
-      this.ctx.lineTo(Math.floor(x + halfSize), centerY + halfSize);
-    }
-    this.ctx.stroke();
-  }
-
-  private drawCheckbox(x: number, y: number, size: number, checked: boolean): void {
-    // Draw checkbox border
-    this.ctx.strokeStyle = this.theme.borderColor; // Use border color instead of text color for a softer look
-    this.ctx.lineWidth = 1.2;
-    this.ctx.strokeRect(Math.floor(x) + 0.5, Math.floor(y) + 0.5, size, size);
-
-    // Draw checkmark if checked
-    if (checked) {
-      this.ctx.strokeStyle = this.theme.textCell;
-      this.ctx.beginPath();
-      const padding = 3;
-      const checkX = x + padding;
-      const checkY = y + size / 2;
-      const checkWidth = size - padding * 2;
-      
-      // Draw checkmark
-      this.ctx.moveTo(checkX, checkY);
-      this.ctx.lineTo(checkX + checkWidth / 3, checkY + checkWidth / 3);
-      this.ctx.lineTo(checkX + checkWidth, checkY - checkWidth / 3);
-      this.ctx.stroke();
     }
   }
 
@@ -1080,7 +810,16 @@ export class CanvasRenderer<TData = any> {
   // ============================================================================
 
   private handleMouseDown(event: MouseEvent): void {
-    const { rowIndex, columnIndex } = this.getHitTestResult(event);
+    const rect = this.canvas.getBoundingClientRect();
+    const { rowIndex, columnIndex } = performHitTest(
+      event.clientX - rect.left,
+      event.clientY - rect.top,
+      this.rowHeight,
+      this.scrollTop,
+      this.scrollLeft,
+      this.viewportWidth,
+      this.getVisibleColumns()
+    );
     const columns = this.getVisibleColumns();
     const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
 
@@ -1098,7 +837,16 @@ export class CanvasRenderer<TData = any> {
   }
 
   private handleMouseMove(event: MouseEvent): void {
-    const { rowIndex, columnIndex } = this.getHitTestResult(event);
+    const rect = this.canvas.getBoundingClientRect();
+    const { rowIndex, columnIndex } = performHitTest(
+      event.clientX - rect.left,
+      event.clientY - rect.top,
+      this.rowHeight,
+      this.scrollTop,
+      this.scrollLeft,
+      this.viewportWidth,
+      this.getVisibleColumns()
+    );
     const columns = this.getVisibleColumns();
     const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
 
@@ -1109,7 +857,16 @@ export class CanvasRenderer<TData = any> {
   }
 
   private handleMouseUp(event: MouseEvent): void {
-    const { rowIndex, columnIndex } = this.getHitTestResult(event);
+    const rect = this.canvas.getBoundingClientRect();
+    const { rowIndex, columnIndex } = performHitTest(
+      event.clientX - rect.left,
+      event.clientY - rect.top,
+      this.rowHeight,
+      this.scrollTop,
+      this.scrollLeft,
+      this.viewportWidth,
+      this.getVisibleColumns()
+    );
     const columns = this.getVisibleColumns();
     const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
 
@@ -1119,7 +876,16 @@ export class CanvasRenderer<TData = any> {
   }
 
   private handleClick(event: MouseEvent): void {
-    const { rowIndex, columnIndex } = this.getHitTestResult(event);
+    const rect = this.canvas.getBoundingClientRect();
+    const { rowIndex, columnIndex } = performHitTest(
+      event.clientX - rect.left,
+      event.clientY - rect.top,
+      this.rowHeight,
+      this.scrollTop,
+      this.scrollLeft,
+      this.viewportWidth,
+      this.getVisibleColumns()
+    );
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
 
@@ -1141,7 +907,6 @@ export class CanvasRenderer<TData = any> {
         !columns.some((c) => c.colId === 'ag-Grid-AutoColumn') && columnIndex === 0;
 
       if (isAutoGroupCol || isFirstColIfNoAutoGroup) {
-        const rect = this.canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const { left: leftWidth } = getPinnedWidths(columns);
 
@@ -1155,7 +920,7 @@ export class CanvasRenderer<TData = any> {
             this.viewportWidth -
             columns.filter((c) => c.pinned === 'right').reduce((sum, c) => sum + c.width, 0);
         } else {
-          colX = leftWidth + this.getCenterColumnOffset(clickedCol) - this.scrollLeft;
+          colX = leftWidth + getCenterColumnOffset(clickedCol, columns) - this.scrollLeft;
         }
 
         const indent = rowNode.level * this.theme.groupIndentWidth;
@@ -1183,7 +948,16 @@ export class CanvasRenderer<TData = any> {
   }
 
   private handleDoubleClick(event: MouseEvent): void {
-    const { rowIndex, columnIndex } = this.getHitTestResult(event);
+    const rect = this.canvas.getBoundingClientRect();
+    const { rowIndex, columnIndex } = performHitTest(
+      event.clientX - rect.left,
+      event.clientY - rect.top,
+      this.rowHeight,
+      this.scrollTop,
+      this.scrollLeft,
+      this.viewportWidth,
+      this.getVisibleColumns()
+    );
     if (columnIndex === -1) return;
 
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
@@ -1199,60 +973,15 @@ export class CanvasRenderer<TData = any> {
 
   getHitTestResult(event: MouseEvent): { rowIndex: number; columnIndex: number } {
     const rect = this.canvas.getBoundingClientRect();
-    const canvasY = event.clientY - rect.top;
-    const canvasX = event.clientX - rect.left;
-
-    // Use walker utility for row detection
-    const rowIndex = getRowAtY(canvasY, this.rowHeight, this.scrollTop);
-
-    // Use walker utility for column detection
-    const result = getColumnAtX(
-      this.getVisibleColumns(),
-      canvasX,
+    return performHitTest(
+      event.clientX - rect.left,
+      event.clientY - rect.top,
+      this.rowHeight,
+      this.scrollTop,
       this.scrollLeft,
-      this.viewportWidth
+      this.viewportWidth,
+      this.getVisibleColumns()
     );
-
-    return { rowIndex, columnIndex: result.index };
-  }
-
-  private getCenterColumnOffset(targetCol: Column): number {
-    const columns = this.getVisibleColumns().filter((c) => !c.pinned);
-    let offset = 0;
-    for (const col of columns) {
-      if (col === targetCol) return offset;
-      offset += col.width;
-    }
-    return offset;
-  }
-
-  private getColumnDef(column: Column): ColDef<TData> | null {
-    const allDefs = this.gridApi.getColumnDefs();
-    if (!allDefs) return null;
-
-    for (const def of allDefs) {
-      if ('children' in def) {
-        const found = def.children.find((c) => {
-          const cDef = c as ColDef;
-          return (
-            cDef.colId === column.colId ||
-            cDef.field?.toString() === column.colId ||
-            cDef.field?.toString() === column.field
-          );
-        });
-        if (found) return found as ColDef<TData>;
-      } else {
-        const cDef = def as ColDef;
-        if (
-          cDef.colId === column.colId ||
-          cDef.field?.toString() === column.colId ||
-          cDef.field?.toString() === column.field
-        ) {
-          return def as ColDef<TData>;
-        }
-      }
-    }
-    return null;
   }
 
   // ============================================================================
