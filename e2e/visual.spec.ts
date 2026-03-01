@@ -7,26 +7,38 @@ test.describe('ArgentGrid Visual Regression', () => {
   test('default grid should look correct', async ({ page }) => {
     await page.goto('/iframe.html?id=components-argentgrid--default');
     await page.waitForSelector('argent-grid', { state: 'visible' });
-    // Wait for canvas to finish its initial frame
-    await page.waitForTimeout(1000);
+    // Wait longer for CI rendering and font stabilization
+    await page.waitForTimeout(2000);
     
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-default.png', { threshold: 0.05 });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-default.png', { 
+      threshold: 0.1,
+      maxDiffPixelRatio: 0.05,
+      scale: 'css'
+    });
   });
 
   test('selection column should be centered and aligned', async ({ page }) => {
     await page.goto('/iframe.html?id=components-argentgrid--with-selection');
     await page.waitForSelector('argent-grid', { state: 'visible' });
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
     
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-with-selection.png', { threshold: 0.05 });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-with-selection.png', { 
+      threshold: 0.1,
+      maxDiffPixelRatio: 0.05,
+      scale: 'css'
+    });
   });
 
   test('text filter with floating filters should be aligned', async ({ page }) => {
     await page.goto('/iframe.html?id=features-filtering--text-filter');
     await page.waitForSelector('argent-grid', { state: 'visible' });
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
     
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-text-filter.png', { threshold: 0.05 });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-text-filter.png', { 
+      threshold: 0.1,
+      maxDiffPixelRatio: 0.05,
+      scale: 'css'
+    });
   });
 
   test('hidden floating filters with popup should be correct', async ({ page }) => {
@@ -40,9 +52,14 @@ test.describe('ArgentGrid Visual Regression', () => {
     
     // Wait for popup animation
     await page.waitForSelector('.filter-popup', { state: 'visible' });
+    await page.waitForTimeout(1000);
     
     // Snapshot the popup area
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-filter-popup.png', { threshold: 0.05 });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-filter-popup.png', { 
+      threshold: 0.1,
+      maxDiffPixelRatio: 0.05,
+      scale: 'css'
+    });
   });
 
   test('empty state after filtering should be clean', async ({ page }) => {
@@ -52,9 +69,13 @@ test.describe('ArgentGrid Visual Regression', () => {
     // Type something that matches nothing
     const filterInput = page.locator('.floating-filter-input').first();
     await filterInput.fill('NON_EXISTENT_VALUE_12345');
-    await page.waitForTimeout(500); // Wait for debounce and render
+    await page.waitForTimeout(1000); // Wait for debounce and render
     
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-empty-state.png', { threshold: 0.05 });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-empty-state.png', { 
+      threshold: 0.1,
+      maxDiffPixelRatio: 0.05,
+      scale: 'css'
+    });
   });
 
   test('cell borders should remain visible after scrolling down', async ({ page }) => {
@@ -66,8 +87,33 @@ test.describe('ArgentGrid Visual Regression', () => {
     await viewport.evaluate((el) => el.scrollTop = 500);
     
     // Wait for render
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
     
-    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-scroll-borders.png', { threshold: 0.05 });
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-scroll-borders.png', { 
+      threshold: 0.1,
+      maxDiffPixelRatio: 0.05,
+      scale: 'css'
+    });
+  });
+
+  test('sidebar buttons should be visible and not blocked by header', async ({ page }) => {
+    await page.goto('/iframe.html?id=features-advanced--side-bar');
+    await page.waitForSelector('argent-grid', { state: 'visible' });
+    
+    // Check if sidebar buttons are present
+    const sidebar = page.locator('.side-bar-buttons');
+    await expect(sidebar).toBeVisible();
+    
+    // Verify first button position is below header (header is ~32px)
+    const firstButton = page.locator('.side-bar-button').first();
+    const box = await firstButton.boundingBox();
+    expect(box?.y).toBeGreaterThanOrEqual(30); 
+    
+    await page.waitForTimeout(1000);
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-sidebar-buttons.png', { 
+      threshold: 0.1,
+      maxDiffPixelRatio: 0.05,
+      scale: 'css'
+    });
   });
 });

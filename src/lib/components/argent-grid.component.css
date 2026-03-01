@@ -40,7 +40,7 @@
   right: 0;
   top: 0;
   bottom: 0;
-  z-index: 15;
+  z-index: 25; /* Higher than header z-index (20) */
   background: transparent;
   display: flex;
   flex-direction: row-reverse;
@@ -60,6 +60,7 @@
   pointer-events: none;
   height: 100%;
   border-left: 1px solid var(--ag-border-color, #babed1);
+  padding-top: 32px; /* Start below the header row */
 }
 
 .side-bar-button {
@@ -87,6 +88,7 @@
 .tool-panel-content {
   width: 250px;
   padding: 12px;
+  padding-top: 32px; /* Start below the header row */
   overflow-y: auto;
   background: var(--ag-background-color, #fff);
   pointer-events: auto;
