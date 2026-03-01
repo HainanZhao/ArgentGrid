@@ -187,28 +187,28 @@ export const WithFiltering: Story = {
         field: 'id', 
         headerName: 'ID 🔢', 
         width: 80, 
-        filter: 'number',
+        filter: 'number', floatingFilter: true,
         headerComponentParams: { filterIcon: '🔢' }
       },
       { 
         field: 'name', 
         headerName: 'Name 🔤', 
         width: 200, 
-        filter: 'text',
+        filter: 'text', floatingFilter: true,
         headerComponentParams: { filterIcon: '🔤' }
       },
       { 
         field: 'department', 
         headerName: 'Department ☑️', 
         width: 180, 
-        filter: 'set',
+        filter: 'set', floatingFilter: true,
         headerComponentParams: { filterIcon: '☑️' }
       },
       { 
         field: 'role', 
         headerName: 'Role 🔤', 
         width: 250, 
-        filter: 'text',
+        filter: 'text', floatingFilter: true,
         headerComponentParams: { filterIcon: '🔤' }
       },
     ],
@@ -216,7 +216,6 @@ export const WithFiltering: Story = {
     height: '500px',
     width: '100%',
     theme: themeQuartz,
-    enableFloatingFilters: true, // Show filter inputs in header
   },
   parameters: {
     docs: {
