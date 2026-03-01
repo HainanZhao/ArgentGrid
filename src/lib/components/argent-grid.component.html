@@ -5,17 +5,7 @@
       <div class="argent-grid-header">
         <!-- Main Header Row -->
         <div class="argent-grid-header-row">
-          <!-- Selection Column Header -->
-          <div
-            *ngIf="showSelectionColumn"
-            class="argent-grid-header-cell argent-grid-selection-header"
-            [style.width.px]="selectionColumnWidth"
-            (click)="onSelectionHeaderClick()">
-            <input type="checkbox"
-                   [checked]="isAllSelected"
-                   [indeterminate]="isIndeterminateSelection"
-                   (change)="onSelectionHeaderChange($event)" />
-          </div>
+
         
           <!-- Left Pinned Columns -->
           <div class="argent-grid-header-pinned-left-container"
@@ -27,12 +17,19 @@
             <div
               *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
               class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
+              [class.center-content]="col.colId === 'ag-Grid-SelectionColumn'"
               [style.width.px]="getColumnWidth(col)"
               [class.sortable]="isSortable(col)"
               (click)="onHeaderClick(col)"
               cdkDrag
               [cdkDragData]="col">
               <div class="argent-grid-header-content" cdkDragHandle>
+                <div *ngIf="hasHeaderCheckbox(col)" class="argent-grid-header-checkbox">
+                  <input type="checkbox"
+                         [checked]="isAllSelected"
+                         [indeterminate]="isIndeterminateSelection"
+                         (change)="onSelectionHeaderChange($event)" />
+                </div>
                 <span class="header-text">{{ getHeaderName(col) }}</span>
                 <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
               </div>
@@ -59,12 +56,19 @@
               <div
                 *ngFor="let col of getNonPinnedColumns(); trackBy: trackByColumn"
                 class="argent-grid-header-cell"
+                [class.center-content]="col.colId === 'ag-Grid-SelectionColumn'"
                 [style.width.px]="getColumnWidth(col)"
                 [class.sortable]="isSortable(col)"
                 (click)="onHeaderClick(col)"
                 cdkDrag
                 [cdkDragData]="col">
                 <div class="argent-grid-header-content" cdkDragHandle>
+                  <div *ngIf="hasHeaderCheckbox(col)" class="argent-grid-header-checkbox">
+                    <input type="checkbox"
+                           [checked]="isAllSelected"
+                           [indeterminate]="isIndeterminateSelection"
+                           (change)="onSelectionHeaderChange($event)" />
+                  </div>
                   <span class="header-text">{{ getHeaderName(col) }}</span>
                   <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
                 </div>
@@ -90,12 +94,19 @@
             <div
               *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
               class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
+              [class.center-content]="col.colId === 'ag-Grid-SelectionColumn'"
               [style.width.px]="getColumnWidth(col)"
               [class.sortable]="isSortable(col)"
               (click)="onHeaderClick(col)"
               cdkDrag
               [cdkDragData]="col">
               <div class="argent-grid-header-content" cdkDragHandle>
+                <div *ngIf="hasHeaderCheckbox(col)" class="argent-grid-header-checkbox">
+                  <input type="checkbox"
+                         [checked]="isAllSelected"
+                         [indeterminate]="isIndeterminateSelection"
+                         (change)="onSelectionHeaderChange($event)" />
+                </div>
                 <span class="header-text">{{ getHeaderName(col) }}</span>
                 <span class="sort-indicator" *ngIf="getSortIndicator(col)">{{ getSortIndicator(col) }}</span>
               </div>
@@ -113,14 +124,14 @@
 
         <!-- Floating Filter Row -->
         <div class="argent-grid-header-row floating-filter-row" *ngIf="hasFloatingFilters()">
-          <!-- Selection Column Padding -->
-          <div *ngIf="showSelectionColumn" class="argent-grid-header-cell" [style.width.px]="selectionColumnWidth"></div>
+
 
           <!-- Left Pinned Filters -->
           <div class="argent-grid-header-pinned-left-container">
             <div
               *ngFor="let col of getLeftPinnedColumns(); trackBy: trackByColumn"
               class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
+              [class.center-content]="col.colId === 'ag-Grid-SelectionColumn'"
               [style.width.px]="getColumnWidth(col)">
               <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
                 <!-- Set Filter Button -->
@@ -153,6 +164,7 @@
               <div
                 *ngFor="let col of getNonPinnedColumns(); trackBy: trackByColumn"
                 class="argent-grid-header-cell"
+                [class.center-content]="col.colId === 'ag-Grid-SelectionColumn'"
                 [style.width.px]="getColumnWidth(col)">
                 <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
                   <!-- Set Filter Button -->
@@ -185,6 +197,7 @@
             <div
               *ngFor="let col of getRightPinnedColumns(); trackBy: trackByColumn"
               class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
+              [class.center-content]="col.colId === 'ag-Grid-SelectionColumn'"
               [style.width.px]="getColumnWidth(col)">
               <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
                 <!-- Set Filter Button -->

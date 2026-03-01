@@ -842,10 +842,18 @@ export class CanvasRenderer<TData = any> {
 
     const cellValue = column.field ? getValueByPath(rowNode.data, column.field) : undefined;
     
-    // Check for checkbox selection column
-    if (prep.colDef?.checkboxSelection) {
-      this.drawCheckbox(x, y, width, this.rowHeight, rowNode.selected);
-      return;
+    let textX = x + this.theme.cellPadding;
+
+    const isSelectionColumn = column.colId === 'ag-Grid-SelectionColumn';
+
+    // Check for checkbox selection
+    if (isSelectionColumn) {
+      const checkboxSize = 16;
+      const checkboxY = Math.floor(y + (this.rowHeight - checkboxSize) / 2);
+      const checkboxX = Math.floor(x + (width - checkboxSize) / 2);
+        
+      this.drawCheckbox(checkboxX, checkboxY, checkboxSize, rowNode.selected);
+      return; // Dedicated column only shows checkbox
     }
     
     // Check for sparkline
@@ -865,8 +873,6 @@ export class CanvasRenderer<TData = any> {
     if (!formattedValue) return;
 
     this.ctx.fillStyle = this.theme.textCell;
-
-    let textX = x + this.theme.cellPadding;
 
     // Handle group indentation
     const isAutoGroupCol = column.colId === 'ag-Grid-AutoColumn';
@@ -1004,24 +1010,20 @@ export class CanvasRenderer<TData = any> {
     this.ctx.stroke();
   }
 
-  private drawCheckbox(x: number, y: number, width: number, height: number, checked: boolean): void {
-    const checkboxSize = Math.min(18, height - 8); // Fit within cell with padding
-    const checkboxX = Math.floor(x + (width - checkboxSize) / 2);
-    const checkboxY = Math.floor(y + (height - checkboxSize) / 2);
-
+  private drawCheckbox(x: number, y: number, size: number, checked: boolean): void {
     // Draw checkbox border
     this.ctx.strokeStyle = this.theme.textCell;
     this.ctx.lineWidth = 1.5;
-    this.ctx.strokeRect(checkboxX, checkboxY, checkboxSize, checkboxSize);
+    this.ctx.strokeRect(x, y, size, size);
 
     // Draw checkmark if checked
     if (checked) {
-      this.ctx.fillStyle = this.theme.textCell;
+      this.ctx.strokeStyle = this.theme.textCell;
       this.ctx.beginPath();
-      const padding = 4;
-      const checkX = checkboxX + padding;
-      const checkY = checkboxY + checkboxSize / 2;
-      const checkWidth = checkboxSize - padding * 2;
+      const padding = 3;
+      const checkX = x + padding;
+      const checkY = y + size / 2;
+      const checkWidth = size - padding * 2;
       
       // Draw checkmark
       this.ctx.moveTo(checkX, checkY);
@@ -1048,7 +1050,8 @@ export class CanvasRenderer<TData = any> {
       this.rowHeight,
       this.scrollTop,
       viewportWidth,
-      this.theme
+      this.theme,
+      this.gridApi
     );
 
     // Draw vertical column lines
@@ -1064,7 +1067,8 @@ export class CanvasRenderer<TData = any> {
       this.theme,
       startRow,
       endRow,
-      this.rowHeight
+      this.rowHeight,
+      this.gridApi
     );
   }
 
@@ -1086,7 +1090,7 @@ export class CanvasRenderer<TData = any> {
 
     // Check if clicking on checkbox column
     const clickedColumn = columnIndex !== -1 ? columns[columnIndex] : null;
-    const isCheckboxColumn = clickedColumn && this.getColumnDef(clickedColumn)?.checkboxSelection;
+    const isCheckboxColumn = clickedColumn && clickedColumn.colId === 'ag-Grid-SelectionColumn';
     
     // If clicking on checkbox column, toggle selection for this row only
     if (isCheckboxColumn) {
@@ -1197,10 +1201,16 @@ export class CanvasRenderer<TData = any> {
         }
 
         const indent = rowNode.level * this.theme.groupIndentWidth;
-        const indicatorAreaEnd =
-          colX + this.theme.cellPadding + indent + this.theme.groupIndicatorSize + 3;
+        let textX = colX + this.theme.cellPadding;
+        
+        // Account for dedicated selection column if clicked directly on it
+        if (clickedCol.colId === 'ag-Grid-SelectionColumn') {
+          textX += clickedCol.width;
+        }
 
-        if (x >= colX + this.theme.cellPadding + indent && x < indicatorAreaEnd) {
+        const indicatorAreaEnd = textX + indent + this.theme.groupIndicatorSize + 3;
+
+        if (x >= textX + indent && x < indicatorAreaEnd) {
           this.gridApi.setRowNodeExpanded(rowNode, !rowNode.expanded);
           this.damageTracker.markAllDirty(); // Group expansion affects many rows
           this.render();

@@ -226,6 +226,28 @@
   transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
 }
 
+.argent-grid-header-checkbox {
+  display: flex;
+  align-items: center;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.argent-grid-header-cell.center-content .argent-grid-header-checkbox {
+  margin-right: 0;
+}
+
+.argent-grid-header-cell.center-content {
+  justify-content: center;
+}
+
+.argent-grid-header-checkbox input {
+  margin: 0;
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+
 .argent-grid-header-cell {
   padding: 8px 12px;
   border-right: 1px solid var(--ag-border-color, #babed1);

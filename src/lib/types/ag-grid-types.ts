@@ -463,6 +463,8 @@ export interface Column {
   sort?: SortDirection;
   sortIndex?: number;
   aggFunc?: string | null;
+  checkboxSelection?: boolean;
+  headerCheckboxSelection?: boolean;
 }
 
 export interface IRowNode<TData = any> {

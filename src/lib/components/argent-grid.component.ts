@@ -83,6 +83,14 @@ export class ArgentGridComponent<TData = any>
   isAllSelected = false;
   isIndeterminateSelection = false;
 
+  hasCheckboxSelection(col: Column): boolean {
+    return col.colId === 'ag-Grid-SelectionColumn';
+  }
+
+  hasHeaderCheckbox(col: Column): boolean {
+    return col.colId === 'ag-Grid-SelectionColumn';
+  }
+
   trackByColumn(index: number, col: Column | ColDef<TData> | ColGroupDef<TData>): string {
     return (col as any).colId || (col as any).field?.toString() || index.toString();
   }
@@ -320,9 +328,8 @@ export class ArgentGridComponent<TData = any>
       this._cdr.detectChanges();
     });
 
-    // Check if any column has checkbox selection
-    this.showSelectionColumn =
-      this.columnDefs?.some((col) => !('children' in col) && col.checkboxSelection) || false;
+    // Selection column is now handled within the data columns
+    this.showSelectionColumn = false;
 
     // Canvas renderer will be initialized in ngAfterViewInit
 
@@ -427,6 +434,9 @@ export class ArgentGridComponent<TData = any>
   getHeaderName(col: Column | ColDef<TData> | ColGroupDef<TData>): string {
     if ('children' in col) {
       return col.headerName || '';
+    }
+    if ((col as any).colId === 'ag-Grid-SelectionColumn') {
+      return '';
     }
     return col.headerName || (col as any).field?.toString() || '';
   }

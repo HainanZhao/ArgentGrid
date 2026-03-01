@@ -86,7 +86,22 @@ export class GridService<TData = any> {
     const isGrouping = groupColumns.length > 0;
     const groupDisplayType = this.gridOptions?.groupDisplayType || 'singleColumn';
 
-    // 1. Handle Auto Group Column (for singleColumn display)
+    // 1. Handle Selection Column
+    const hasCheckboxSelection = this.columnDefs?.some((col) => !('children' in col) && col.checkboxSelection);
+    if (hasCheckboxSelection) {
+      const selectionCol: Column = {
+        colId: 'ag-Grid-SelectionColumn',
+        field: 'ag-Grid-SelectionColumn',
+        headerName: '',
+        width: 50,
+        pinned: 'left',
+        visible: true,
+        sort: null,
+      };
+      this.columns.set(selectionCol.colId, selectionCol);
+    }
+
+    // 2. Handle Auto Group Column (for singleColumn display)
     if (
       isGrouping &&
       (groupDisplayType === 'singleColumn' || !this.gridOptions?.groupDisplayType)
@@ -177,6 +192,8 @@ export class GridService<TData = any> {
           : def.sort || null,
       sortIndex: def.sortIndex ?? undefined,
       aggFunc: typeof def.aggFunc === 'string' ? def.aggFunc : null,
+      checkboxSelection: !!def.checkboxSelection,
+      headerCheckboxSelection: !!def.headerCheckboxSelection,
     };
     this.columns.set(colId, column);
   }
