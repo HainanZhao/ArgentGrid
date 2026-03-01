@@ -130,9 +130,9 @@ export class BenchmarkWrapperComponent implements AfterViewInit, OnDestroy {
     { field: 'id', headerName: 'ID', width: 80, sortable: true },
     { field: 'name', headerName: 'Name', width: 200, sortable: true },
     { field: 'department', headerName: 'Department', width: 180, sortable: true },
-    { field: 'role', headerName: 'Role', width: 250 },
-    { field: 'salary', headerName: 'Salary', width: 120, sortable: true },
-    { field: 'location', headerName: 'Location', width: 150 },
+    { field: 'role', headerName: 'Role', width: 250, filter: true },
+    { field: 'salary', headerName: 'Salary', width: 120, sortable: true, filter: 'number' },
+    { field: 'location', headerName: 'Location', width: 150, filter: true },
   ];
 
   rowData: Employee[] = [];
@@ -143,6 +143,11 @@ export class BenchmarkWrapperComponent implements AfterViewInit, OnDestroy {
   gridOptions = {
     floatingFilter: true,
     enableRangeSelection: true,
+    defaultColDef: {
+      filter: true,
+      sortable: true,
+      resizable: true,
+    }
   };
 
   private gridApi?: GridApi<Employee>;

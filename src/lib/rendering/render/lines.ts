@@ -121,8 +121,8 @@ export function drawColumnLines(
   );
 
   // Calculate Y range for drawing
-  const drawY1 = Math.floor(api ? api.getRowY(startRow) : startRow * rowHeight - scrollTop);
-  const drawY2 = Math.floor(api ? api.getRowY(endRow) : endRow * rowHeight - scrollTop);
+  const drawY1 = Math.floor(api ? api.getRowY(startRow) - scrollTop : startRow * rowHeight - scrollTop);
+  const drawY2 = Math.floor(api ? api.getRowY(endRow) - scrollTop : endRow * rowHeight - scrollTop);
 
   ctx.beginPath();
 
@@ -212,7 +212,8 @@ export function drawGridLines(
     theme,
     startRow,
     endRow,
-    rowHeight
+    rowHeight,
+    api
   );
 }
 

@@ -146,10 +146,13 @@ export class GridService<TData = any> {
       if ('children' in def) {
         // Column group
         def.children.forEach((child, childIndex) => {
-          this.addColumn(child, index * 100 + childIndex, isGrouping);
+          // Merge defaultColDef for nested columns too
+          const mergedChild = { ...this.gridOptions?.defaultColDef, ...child };
+          this.addColumn(mergedChild, index * 100 + childIndex, isGrouping);
         });
       } else {
-        this.addColumn(def, index, isGrouping);
+        const mergedDef = { ...this.gridOptions?.defaultColDef, ...def };
+        this.addColumn(mergedDef, index, isGrouping);
       }
     });
   }
@@ -209,6 +212,7 @@ export class GridService<TData = any> {
       aggFunc: typeof def.aggFunc === 'string' ? def.aggFunc : null,
       checkboxSelection: !!def.checkboxSelection,
       headerCheckboxSelection: !!def.headerCheckboxSelection,
+      filter: def.filter,
     };
     this.columns.set(colId, column);
   }
@@ -898,7 +902,8 @@ export class GridService<TData = any> {
    * Get the Y position for a row index
    */
   getRowY(index: number): number {
-    if (index < 0 || index >= this.cumulativeRowHeights.length) return 0;
+    if (index <= 0) return 0;
+    if (index >= this.cumulativeRowHeights.length) return this.totalHeight;
     return this.cumulativeRowHeights[index];
   }
 

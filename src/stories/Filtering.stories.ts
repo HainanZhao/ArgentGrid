@@ -184,20 +184,14 @@ export const SetFilter: Story = {
   },
 };
 
-export const DateFilter: Story = {
+export const HiddenFloatingFilters: Story = {
   args: {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
-      { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'department', headerName: 'Department', width: 180 },
-      { 
-        field: 'startDate', 
-        headerName: 'Start Date 📅', 
-        width: 150, 
-        filter: 'date', floatingFilter: true,
-        headerComponentParams: { filterIcon: '📅' }
-      },
-      { field: 'salary', headerName: 'Salary', width: 120 },
+      { field: 'name', headerName: 'Name', width: 200, filter: 'text' },
+      { field: 'department', headerName: 'Department', width: 180, filter: 'text' },
+      { field: 'role', headerName: 'Role', width: 250, filter: 'text' },
+      { field: 'salary', headerName: 'Salary', width: 120, filter: 'number' },
     ],
     rowData: generateData(50),
     height: '500px',
@@ -208,7 +202,7 @@ export const DateFilter: Story = {
     docs: {
       description: {
         story:
-          'Date filter on Start Date column. **Filter input visible in header**. Click the filter input to open a date picker. Supports date range selection.',
+          'Filtering enabled but **floating filters are hidden**. Use the column header menu (3 dots) to change filter types and values.',
       },
     },
   },

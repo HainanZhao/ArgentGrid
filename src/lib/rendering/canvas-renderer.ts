@@ -69,7 +69,6 @@ export class CanvasRenderer<TData = any> {
   private animationFrameId: number | null = null;
   private renderPending = false;
   private rowBuffer = 5;
-  private totalRowCount = 0;
   private viewportHeight = 0;
   private viewportWidth = 0;
 
@@ -323,12 +322,6 @@ export class CanvasRenderer<TData = any> {
     this.scheduleRender();
   }
 
-  setTotalRowCount(count: number): void {
-    this.totalRowCount = count;
-    this.damageTracker.markAllDirty();
-    this.updateCanvasSize();
-  }
-
   setViewportDimensions(width: number, height: number): void {
     this.viewportWidth = width;
     this.viewportHeight = height;
@@ -420,7 +413,7 @@ export class CanvasRenderer<TData = any> {
       const colDef = getColumnDef(column, this.gridApi);
       this.columnPreps.set(column.colId, prepColumn(this.ctx, column, colDef, this.theme));
       this.columnPositions.set(column.colId, x);
-      x += column.width;
+      x += Math.floor(column.width);
     }
   }
 
@@ -437,7 +430,14 @@ export class CanvasRenderer<TData = any> {
     const { left: leftWidth, right: rightWidth } = getPinnedWidths(allVisibleColumns);
 
     // Calculate visible row range
-    const totalRows = this.totalRowCount || this.gridApi.getDisplayedRowCount();
+    const totalRows = this.gridApi.getDisplayedRowCount();
+    
+    if (totalRows === 0) {
+      this.damageTracker.clear();
+      this.lastRenderDuration = performance.now() - startTime;
+      return;
+    }
+
     const { startRow, endRow } = getVisibleRowRange(
       this.scrollTop,
       height,
@@ -454,37 +454,19 @@ export class CanvasRenderer<TData = any> {
     this.ctx.font = getFontFromTheme(this.theme);
     this.ctx.textBaseline = 'middle';
 
-    // Performance optimization: Render only dirty rows if available
-    const dirtyRows = this.liveDataHandler.getDirtyRows();
-    if (dirtyRows.size > 0 && dirtyRows.size < endRow - startRow) {
-      // Render only dirty rows (sparse update)
-      dirtyRows.forEach((rowIndex) => {
-        if (rowIndex >= startRow && rowIndex < endRow) {
-          const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
-          if (rowNode) {
-            const y = rowIndex * this.rowHeight - this.scrollTop;
-            // Clear only this row's area
-            this.ctx.clearRect(0, y, width, this.rowHeight);
-            this.renderRow(rowIndex, y, rowNode, allVisibleColumns, width, leftWidth, rightWidth);
-          }
-        }
-      });
-      this.liveDataHandler.clearDirtyRows();
-    } else {
-      // Render all visible rows (full update)
-      walkRows(
-        startRow,
-        endRow,
-        this.scrollTop,
-        this.rowHeight,
-        (rowIndex) => this.gridApi.getDisplayedRowAtIndex(rowIndex),
-        (rowIndex, y, _rowHeight, rowNode) => {
-          if (!rowNode) return;
-          this.renderRow(rowIndex, y, rowNode, allVisibleColumns, width, leftWidth, rightWidth);
-        },
-        this.gridApi
-      );
-    }
+    // Render all visible rows
+    walkRows(
+      startRow,
+      endRow,
+      this.scrollTop,
+      this.rowHeight,
+      (rowIndex) => this.gridApi.getDisplayedRowAtIndex(rowIndex),
+      (rowIndex, y, _rowHeight, rowNode) => {
+        if (!rowNode) return;
+        this.renderRow(rowIndex, y, rowNode, allVisibleColumns, width, leftWidth, rightWidth);
+      },
+      this.gridApi
+    );
 
     // Draw grid lines
     this.drawGridLines(allVisibleColumns, startRow, endRow, width, height, leftWidth, rightWidth);
@@ -549,8 +531,8 @@ export class CanvasRenderer<TData = any> {
           height: endY - startY,
         },
         {
-          color: this.theme.bgSelection,
-          fillColor: `${this.theme.bgSelection}40`, // 25% opacity
+          color: '#2196f3', // Strong blue border (Material Blue)
+          fillColor: 'rgba(33, 150, 243, 0.25)', // 25% blue tint
           lineWidth: 2,
         }
       );
@@ -572,6 +554,7 @@ export class CanvasRenderer<TData = any> {
     }
 
     const isEvenRow = rowIndex % 2 === 0;
+    const rowHeight = rowNode.rowHeight || this.rowHeight;
 
     // Draw row background
     let bgColor = isEvenRow ? this.theme.bgCellEven : this.theme.bgCell;
@@ -580,7 +563,7 @@ export class CanvasRenderer<TData = any> {
     }
 
     this.ctx.fillStyle = bgColor;
-    this.ctx.fillRect(0, Math.floor(y), viewportWidth, this.rowHeight);
+    this.ctx.fillRect(0, Math.floor(y), viewportWidth, rowHeight);
 
     // Render left pinned columns
     const leftPinned = allVisibleColumns.filter((c) => c.pinned === 'left');
@@ -605,7 +588,7 @@ export class CanvasRenderer<TData = any> {
         Math.floor(leftWidth),
         Math.floor(y),
         Math.floor(viewportWidth - leftWidth - rightWidth),
-        this.rowHeight
+        rowHeight
       );
       this.ctx.clip();
       this.renderColumns(

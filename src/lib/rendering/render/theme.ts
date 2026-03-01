@@ -18,7 +18,7 @@ export const DEFAULT_THEME: GridTheme = {
   bgCell: '#ffffff',
   bgCellEven: '#f8f9fa',
   bgHeader: '#f8f9fa',
-  bgSelection: '#e3f2fd',
+  bgSelection: '#d1e9ff', // Clearer blue for selection
   bgHover: '#f0f2f5',
   bgGroupRow: '#f5f5f5',
 

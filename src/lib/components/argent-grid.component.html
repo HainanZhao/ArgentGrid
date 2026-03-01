@@ -246,6 +246,62 @@
         </argent-set-filter>
       </div>
 
+      <!-- Text/Number Filter Popup -->
+      <div *ngIf="activeFilterPopup"
+           class="filter-popup"
+           [style.left.px]="filterPopupPosition.x"
+           [style.top.px]="filterPopupPosition.y"
+           (clickOutside)="closeFilterPopup()"
+           clickOutside>
+        <div class="filter-popup-header">
+          <span>Filter {{ getHeaderName(activeFilterPopupColumn!) }}</span>
+          <span class="filter-popup-close" (click)="closeFilterPopup()">✕</span>
+        </div>
+        <div class="filter-popup-body">
+          <!-- Operator Select -->
+          <div class="filter-popup-row">
+            <select class="filter-popup-select" 
+                    [value]="activeFilterOperator"
+                    (change)="onFilterPopupOperatorChange($any($event.target).value)">
+              <ng-container *ngIf="activeFilterPopupType === 'text'">
+                <option *ngFor="let op of textFilterOperators" [value]="op.value">{{ op.label }}</option>
+              </ng-container>
+              <ng-container *ngIf="activeFilterPopupType === 'number'">
+                <option *ngFor="let op of numberFilterOperators" [value]="op.value">{{ op.label }}</option>
+              </ng-container>
+            </select>
+          </div>
+
+          <!-- Value Input(s) -->
+          <ng-container *ngIf="activeFilterOperator !== 'blank' && activeFilterOperator !== 'notBlank'">
+            <div class="filter-popup-row">
+              <input #filterPopupInput
+                     [type]="activeFilterPopupType === 'number' ? 'number' : 'text'"
+                     class="filter-popup-input"
+                     [value]="filterValue1"
+                     (input)="onFilterPopupInput($event)"
+                     (keydown.enter)="closeFilterPopup()"
+                     [placeholder]="activeFilterOperator === 'inRange' ? 'From...' : 'Filter value...'"
+                     autofocus />
+            </div>
+
+            <div class="filter-popup-row" *ngIf="activeFilterOperator === 'inRange'">
+              <input type="number"
+                     class="filter-popup-input"
+                     [value]="filterValue2"
+                     (input)="onFilterPopupInput($event, true)"
+                     (keydown.enter)="closeFilterPopup()"
+                     [placeholder]="'To...'" />
+            </div>
+          </ng-container>
+
+          <div class="filter-popup-footer">
+            <button class="filter-popup-btn clear-btn" (click)="clearColumnFilter(activeFilterPopupColumn!)">Clear</button>
+            <button class="filter-popup-btn apply-btn" (click)="closeFilterPopup()">Apply</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Canvas Layer for Data Viewport with virtual scrolling -->
       <div class="argent-grid-viewport" #viewport>
         <!-- Spacer to create scrollbars for virtual scrolling -->
@@ -330,28 +386,28 @@
        [style.top.px]="headerMenuPosition.y"
        [style.left.px]="headerMenuPosition.x"
        (click)="$event.stopPropagation()">
-    <div class="menu-item" (click)="sortColumnMenu('asc')">
-      <span class="menu-icon">↑</span> Sort Ascending
-    </div>
-    <div class="menu-item" (click)="sortColumnMenu('desc')">
-      <span class="menu-icon">↓</span> Sort Descending
-    </div>
-    <div class="menu-item" (click)="sortColumnMenu(null)">
-      <span class="menu-icon">✕</span> Clear Sort
-    </div>
-    <div class="menu-divider"></div>
-    <div class="menu-item" (click)="hideColumnMenu()">
-      <span class="menu-icon">ø</span> Hide Column
-    </div>
-    <div class="menu-item" (click)="pinColumnMenu('left')">
-      <span class="menu-icon">«</span> Pin Left
-    </div>
-    <div class="menu-item" (click)="pinColumnMenu('right')">
-      <span class="menu-icon">»</span> Pin Right
-    </div>
-    <div class="menu-item" (click)="pinColumnMenu(null)">
-      <span class="menu-icon">↺</span> Unpin
-    </div>
+    <ng-container *ngFor="let item of headerMenuItems">
+      <div *ngIf="item.separator" class="menu-divider"></div>
+      <div *ngIf="!item.separator" 
+           class="menu-item" 
+           [class.disabled]="item.disabled"
+           [class.has-submenu]="item.subMenu && item.subMenu.length > 0"
+           (click)="!item.disabled && item.action(); !item.subMenu && closeHeaderMenu()">
+        <span class="menu-icon" *ngIf="item.icon">{{ item.icon }}</span>
+        <span class="menu-text">{{ item.name }}</span>
+        <span class="menu-arrow" *ngIf="item.subMenu && item.subMenu.length > 0">▶</span>
+        
+        <!-- Sub-menu -->
+        <div class="argent-grid-header-menu sub-menu" *ngIf="item.subMenu && item.subMenu.length > 0">
+          <div *ngFor="let subItem of item.subMenu" 
+               class="menu-item"
+               (click)="subItem.action(); closeHeaderMenu(); $event.stopPropagation()">
+            <span class="menu-icon" *ngIf="subItem.icon">{{ subItem.icon }}</span>
+            <span class="menu-text">{{ subItem.name }}</span>
+          </div>
+        </div>
+      </div>
+    </ng-container>
   </div>
 
   <!-- Context Menu Overlay -->

@@ -465,6 +465,7 @@ export interface Column {
   aggFunc?: string | null;
   checkboxSelection?: boolean;
   headerCheckboxSelection?: boolean;
+  filter?: any;
 }
 
 export interface IRowNode<TData = any> {

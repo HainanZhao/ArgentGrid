@@ -273,7 +273,6 @@ export class ArgentGridComponent<TData = any>
       const rect = this.viewportRef.nativeElement.getBoundingClientRect();
       this.viewportHeight = rect.height || 500;
       this.canvasRenderer?.setViewportDimensions(rect.width, this.viewportHeight);
-      this.canvasRenderer?.setTotalRowCount(this.rowData?.length || 0);
 
       // Synchronize horizontal scroll with DOM header
       this.horizontalScrollListener = () => {
@@ -379,7 +378,6 @@ export class ArgentGridComponent<TData = any>
 
     if (this.gridApi) {
       this.gridApi.setRowData(newData || []);
-      this.canvasRenderer?.setTotalRowCount(newData?.length || 0);
       this.canvasRenderer?.render();
     }
 
@@ -505,6 +503,8 @@ export class ArgentGridComponent<TData = any>
 
   // --- Header Menu Logic ---
 
+  headerMenuItems: MenuItemDef[] = [];
+
   hasHeaderMenu(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
     if ((col as any).colId === 'ag-Grid-SelectionColumn') return false;
     if ('children' in col) return false;
@@ -521,6 +521,7 @@ export class ArgentGridComponent<TData = any>
     }
 
     this.activeHeaderMenu = col;
+    this.headerMenuItems = this.getHeaderMenuItems(col as Column);
 
     // Position menu below the icon using fixed (viewport) coordinates
     const target = event.target as HTMLElement;
@@ -532,14 +533,107 @@ export class ArgentGridComponent<TData = any>
     // Prevent menu from going off-screen
     if (x < 0) x = 0;
     if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
-    if (y + 250 > window.innerHeight) {
-      // Assuming max menu height ~250px
-      y = rect.top - 250; // Show above if overflows bottom
+    
+    // Check if menu would overflow bottom
+    const estimatedHeight = this.headerMenuItems.length * 30 + 20;
+    if (y + estimatedHeight > window.innerHeight) {
+      y = Math.max(0, rect.top - estimatedHeight);
     }
 
     this.headerMenuPosition = { x, y };
 
     this._cdr.detectChanges();
+  }
+
+  private getHeaderMenuItems(col: Column): MenuItemDef[] {
+    const items: MenuItemDef[] = [];
+    const colId = col.colId;
+
+    // 1. Sort items
+    items.push({
+      name: 'Sort Ascending',
+      icon: '↑',
+      action: () => this.sortColumnMenu('asc'),
+    });
+    items.push({
+      name: 'Sort Descending',
+      icon: '↓',
+      action: () => this.sortColumnMenu('desc'),
+    });
+    items.push({
+      name: 'Clear Sort',
+      icon: '✕',
+      action: () => this.sortColumnMenu(null),
+    });
+
+    items.push({ name: '', action: () => {}, separator: true });
+
+    // 2. Filter items
+    const colDef = this.getColumnDefForColumn(col);
+    if (colDef && colDef.filter !== false) {
+      const filterType = colDef.filter || 'text';
+      
+      if (filterType === 'set') {
+        items.push({
+          name: 'Filter...',
+          icon: 'Y',
+          action: () => {
+            this.openSetFilter(null, col, { ...this.headerMenuPosition });
+            this.closeHeaderMenu();
+          }
+        });
+      } else {
+        items.push({
+          name: 'Filter...',
+          icon: 'Y',
+          action: () => {
+            this.openFilterPopup(null, col, { ...this.headerMenuPosition });
+            this.closeHeaderMenu();
+          }
+        });
+      }
+    }
+
+    items.push({ name: '', action: () => {}, separator: true });
+
+    // 3. Pinning items
+    items.push({
+      name: 'Pin Left',
+      icon: '«',
+      action: () => this.pinColumnMenu('left'),
+    });
+    items.push({
+      name: 'Pin Right',
+      icon: '»',
+      action: () => this.pinColumnMenu('right'),
+    });
+    items.push({
+      name: 'Unpin',
+      icon: '↺',
+      action: () => this.pinColumnMenu(null),
+    });
+
+    items.push({ name: '', action: () => {}, separator: true });
+
+    // 4. Hide item
+    items.push({
+      name: 'Hide Column',
+      icon: 'ø',
+      action: () => this.hideColumnMenu(),
+    });
+
+    return items;
+  }
+
+  public clearColumnFilter(col: Column): void {
+    const field = col.field;
+    if (!field || !this.gridApi) return;
+
+    const currentModel = this.gridApi.getFilterModel();
+    delete (currentModel as any)[field];
+    this.gridApi.setFilterModel(currentModel);
+    this.closeHeaderMenu();
+    this.closeFilterPopup();
   }
 
   closeHeaderMenu(): void {
@@ -680,9 +774,11 @@ export class ArgentGridComponent<TData = any>
     return colDef.filter === 'set';
   }
 
-  openSetFilter(event: MouseEvent, col: Column | ColDef<TData>): void {
-    event.stopPropagation();
-    event.preventDefault();
+  openSetFilter(event: MouseEvent | null, col: Column | ColDef<TData>, position?: { x: number, y: number }): void {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
 
     this.activeSetFilterColumn = col as Column;
 
@@ -695,19 +791,140 @@ export class ArgentGridComponent<TData = any>
       ? (colDef.valueFormatter as any)
       : undefined;
 
-    const rect = (event.target as HTMLElement).getBoundingClientRect();
-    this.setFilterPosition = {
-      x: rect.left,
-      y: rect.bottom + 5,
-    };
+    if (position) {
+      this.setFilterPosition = position;
+    } else if (event) {
+      const rect = (event.target as HTMLElement).getBoundingClientRect();
+      this.setFilterPosition = {
+        x: rect.left,
+        y: rect.bottom + 5,
+      };
+    }
 
-    this.activeSetFilter = true;
-    this._cdr.detectChanges();
+    setTimeout(() => {
+      this.activeSetFilter = true;
+      this._cdr.detectChanges();
+    });
   }
 
   closeSetFilter(): void {
     this.activeSetFilter = false;
     this.activeSetFilterColumn = null;
+    this._cdr.detectChanges();
+  }
+
+  // Filter Popup state
+  activeFilterPopup = false;
+  activeFilterPopupColumn: Column | null = null;
+  activeFilterPopupType: 'text' | 'number' | 'date' | 'boolean' | 'set' | 'multiFilter' = 'text';
+  activeFilterOperator: string = 'contains';
+  filterPopupPosition = { x: 0, y: 0 };
+  filterValue1: string = '';
+  filterValue2: string = '';
+
+  readonly textFilterOperators = [
+    { value: 'contains', label: 'Contains' },
+    { value: 'notContains', label: 'Not contains' },
+    { value: 'equals', label: 'Equals' },
+    { value: 'notEquals', label: 'Not equals' },
+    { value: 'startsWith', label: 'Starts with' },
+    { value: 'endsWith', label: 'Ends with' },
+    { value: 'blank', label: 'Blank' },
+    { value: 'notBlank', label: 'Not blank' },
+  ];
+
+  readonly numberFilterOperators = [
+    { value: 'equals', label: 'Equals' },
+    { value: 'notEquals', label: 'Not equals' },
+    { value: 'greaterThan', label: 'Greater than' },
+    { value: 'greaterThanOrEqual', label: 'Greater than or equals' },
+    { value: 'lessThan', label: 'Less than' },
+    { value: 'lessThanOrEqual', label: 'Less than or equals' },
+    { value: 'inRange', label: 'In range' },
+    { value: 'blank', label: 'Blank' },
+    { value: 'notBlank', label: 'Not blank' },
+  ];
+
+  onFilterPopupOperatorChange(operator: string): void {
+    this.activeFilterOperator = operator;
+    this.applyPopupFilter();
+  }
+
+  onFilterPopupInput(event: Event, isSecondValue: boolean = false): void {
+    const value = (event.target as HTMLInputElement).value;
+    if (isSecondValue) {
+      this.filterValue2 = value;
+    } else {
+      this.filterValue1 = value;
+    }
+    this.applyPopupFilter();
+  }
+
+  private applyPopupFilter(): void {
+    if (!this.activeFilterPopupColumn || !this.gridApi) return;
+    
+    const col = this.activeFilterPopupColumn;
+    const field = col.field;
+    if (!field) return;
+
+    const currentModel = this.gridApi.getFilterModel();
+    
+    if (this.activeFilterOperator === 'blank' || this.activeFilterOperator === 'notBlank') {
+      currentModel[col.colId] = {
+        filterType: this.activeFilterPopupType,
+        type: this.activeFilterOperator
+      };
+    } else {
+      const value = this.filterValue1;
+      if (!value && this.activeFilterOperator !== 'inRange') {
+        delete currentModel[col.colId];
+      } else {
+        const filterModel: any = {
+          filterType: this.activeFilterPopupType,
+          type: this.activeFilterOperator,
+          filter: value
+        };
+        
+        if (this.activeFilterOperator === 'inRange') {
+          filterModel.filterTo = this.filterValue2;
+        }
+        
+        currentModel[col.colId] = filterModel;
+      }
+    }
+
+    this.gridApi.setFilterModel(currentModel);
+    this.canvasRenderer?.render();
+    this._cdr.detectChanges();
+  }
+
+  openFilterPopup(event: MouseEvent | null, col: Column, position?: { x: number, y: number }): void {
+    this.activeFilterPopupColumn = col;
+    const colDef = this.getColumnDefForColumn(col);
+    this.activeFilterPopupType = colDef?.filter === 'number' ? 'number' : 'text';
+    
+    // Initialize operator and values from current model or default
+    const model = this.gridApi?.getFilterModel()[col.colId] as any;
+    this.activeFilterOperator = model?.type || (this.activeFilterPopupType === 'number' ? 'equals' : 'contains');
+    this.filterValue1 = model?.filter || '';
+    this.filterValue2 = model?.filterTo || '';
+
+    if (position) {
+      this.filterPopupPosition = position;
+    } else if (event) {
+      const rect = (event.target as HTMLElement).getBoundingClientRect();
+      this.filterPopupPosition = { x: rect.left, y: rect.bottom + 5 };
+    }
+
+    setTimeout(() => {
+      this.activeFilterPopup = true;
+      this._cdr.detectChanges();
+    });
+  }
+
+  closeFilterPopup(): void {
+    this.activeFilterPopup = false;
+    this.activeFilterPopupColumn = null;
     this._cdr.detectChanges();
   }
 
@@ -1029,6 +1246,7 @@ export class ArgentGridComponent<TData = any>
 
   hasFloatingFilters(): boolean {
     if (this.gridApi?.getGridOption('floatingFilter')) return true;
+    if (this.gridOptions?.defaultColDef?.floatingFilter) return true;
 
     if (!this.columnDefs) return false;
     return this.columnDefs.some((col) => {
@@ -1079,14 +1297,16 @@ export class ArgentGridComponent<TData = any>
     clearTimeout(this.filterTimeout);
     this.filterTimeout = setTimeout(() => {
       const currentModel = this.gridApi.getFilterModel();
+      const existingFilter = (currentModel[colId] || {}) as any;
 
-      if (!value) {
+      if (!value && existingFilter.type !== 'blank' && existingFilter.type !== 'notBlank') {
         delete currentModel[colId];
       } else {
         const filterType = this.getFilterTypeFromCol(colDef);
         currentModel[colId] = {
+          ...existingFilter,
           filterType: filterType as any,
-          type: filterType === 'text' ? 'contains' : 'equals',
+          type: existingFilter.type || (filterType === 'text' ? 'contains' : 'equals'),
           filter: value,
         };
       }
@@ -1334,17 +1554,19 @@ export class ArgentGridComponent<TData = any>
     const colId = (column as any).colId || (column as any).field?.toString();
     if (!colId) return null;
 
+    const defaultColDef = this.gridOptions?.defaultColDef || {};
+
     for (const def of this.columnDefs) {
       if ('children' in def) {
         const found = def.children.find((c) => {
           const cDef = c as ColDef;
           return cDef.colId === colId || cDef.field?.toString() === colId;
         });
-        if (found) return found as ColDef<TData>;
+        if (found) return { ...defaultColDef, ...(found as ColDef<TData>) } as ColDef<TData>;
       } else {
         const cDef = def as ColDef;
         if (cDef.colId === colId || cDef.field?.toString() === colId) {
-          return def as ColDef<TData>;
+          return { ...defaultColDef, ...cDef } as ColDef<TData>;
         }
       }
     }

@@ -1,4 +1,4 @@
-import { Directive, EventEmitter, HostListener, Output } from '@angular/core';
+import { Directive, ElementRef, EventEmitter, HostListener, Output } from '@angular/core';
 
 @Directive({
   selector: '[clickOutside]',
@@ -7,9 +7,12 @@ import { Directive, EventEmitter, HostListener, Output } from '@angular/core';
 export class ClickOutsideDirective {
   @Output() clickOutside = new EventEmitter<void>();
 
+  constructor(private elementRef: ElementRef) {}
+
   @HostListener('document:click', ['$event.target'])
   onClick(target: HTMLElement): void {
-    if (!target.closest('.set-filter-popup')) {
+    const clickedInside = this.elementRef.nativeElement.contains(target);
+    if (!clickedInside) {
       this.clickOutside.emit();
     }
   }
