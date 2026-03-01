@@ -55,26 +55,58 @@ function generateData(count: number): Employee[] {
   }));
 }
 
+// Common column definitions with filter indicators
+const filterIndicatorRenderer = (params: any) => {
+  const filterType = params.colDef.filter || 'text';
+  const icons: Record<string, string> = {
+    text: '🔤',
+    number: '🔢',
+    date: '📅',
+    set: '☑️',
+    boolean: '✓',
+  };
+  return `<span style="float: right; opacity: 0.5;">${icons[filterType] || '🔍'}</span>`;
+};
+
 export const TextFilter: Story = {
   args: {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
-      { field: 'name', headerName: 'Name', width: 200, filter: 'text' },
-      { field: 'department', headerName: 'Department', width: 180, filter: 'text' },
-      { field: 'role', headerName: 'Role', width: 250, filter: 'text' },
+      { 
+        field: 'name', 
+        headerName: 'Name 🔤', 
+        width: 200, 
+        filter: 'text',
+        headerComponentParams: { filterIcon: '🔤' }
+      },
+      { 
+        field: 'department', 
+        headerName: 'Department 🔤', 
+        width: 180, 
+        filter: 'text',
+        headerComponentParams: { filterIcon: '🔤' }
+      },
+      { 
+        field: 'role', 
+        headerName: 'Role 🔤', 
+        width: 250, 
+        filter: 'text',
+        headerComponentParams: { filterIcon: '🔤' }
+      },
       { field: 'salary', headerName: 'Salary', width: 120 },
       { field: 'location', headerName: 'Location', width: 150 },
     ],
     rowData: generateData(50),
-    height: '400px',
+    height: '500px',
     width: '100%',
     theme: themeQuartz,
+    enableFloatingFilters: true, // Show filter inputs in header
   },
   parameters: {
     docs: {
       description: {
         story:
-          'Text filters on Name, Department, and Role columns. Click filter icon to open filter menu.',
+          'Text filters on Name, Department, and Role columns. **Filter inputs are visible in the header row** (floating filters). Type to filter results.',
       },
     },
   },
@@ -83,22 +115,35 @@ export const TextFilter: Story = {
 export const NumberFilter: Story = {
   args: {
     columnDefs: [
-      { field: 'id', headerName: 'ID', width: 80, filter: 'number' },
+      { 
+        field: 'id', 
+        headerName: 'ID 🔢', 
+        width: 80, 
+        filter: 'number',
+        headerComponentParams: { filterIcon: '🔢' }
+      },
       { field: 'name', headerName: 'Name', width: 200 },
       { field: 'department', headerName: 'Department', width: 180 },
-      { field: 'salary', headerName: 'Salary', width: 120, filter: 'number' },
+      { 
+        field: 'salary', 
+        headerName: 'Salary 🔢', 
+        width: 120, 
+        filter: 'number',
+        headerComponentParams: { filterIcon: '🔢' }
+      },
       { field: 'location', headerName: 'Location', width: 150 },
     ],
     rowData: generateData(50),
-    height: '400px',
+    height: '500px',
     width: '100%',
     theme: themeQuartz,
+    enableFloatingFilters: true, // Show filter inputs in header
   },
   parameters: {
     docs: {
       description: {
         story:
-          'Number filters on ID and Salary columns. Supports equals, greater than, less than, etc.',
+          'Number filters on ID and Salary columns. **Filter inputs visible in header**. Supports equals, greater than, less than, etc. Try typing "> 100000" in Salary filter.',
       },
     },
   },
@@ -109,21 +154,34 @@ export const SetFilter: Story = {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
       { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'department', headerName: 'Department', width: 180, filter: 'set' },
+      { 
+        field: 'department', 
+        headerName: 'Department ☑️', 
+        width: 180, 
+        filter: 'set',
+        headerComponentParams: { filterIcon: '☑️' }
+      },
       { field: 'role', headerName: 'Role', width: 250 },
       { field: 'salary', headerName: 'Salary', width: 120 },
-      { field: 'location', headerName: 'Location', width: 150, filter: 'set' },
+      { 
+        field: 'location', 
+        headerName: 'Location ☑️', 
+        width: 150, 
+        filter: 'set',
+        headerComponentParams: { filterIcon: '☑️' }
+      },
     ],
     rowData: generateData(50),
-    height: '400px',
+    height: '500px',
     width: '100%',
     theme: themeQuartz,
+    enableFloatingFilters: true, // Show filter inputs in header
   },
   parameters: {
     docs: {
       description: {
         story:
-          'Set filters on Department and Location columns. Allows quick multi-select from a list of unique values.',
+          'Set filters on Department and Location columns. **Filter inputs visible in header**. Click the filter input to see a dropdown list of unique values with checkboxes for multi-select.',
       },
     },
   },
@@ -135,88 +193,81 @@ export const DateFilter: Story = {
       { field: 'id', headerName: 'ID', width: 80 },
       { field: 'name', headerName: 'Name', width: 200 },
       { field: 'department', headerName: 'Department', width: 180 },
-      { field: 'startDate', headerName: 'Start Date', width: 130, filter: 'date' },
+      { 
+        field: 'startDate', 
+        headerName: 'Start Date 📅', 
+        width: 150, 
+        filter: 'date',
+        headerComponentParams: { filterIcon: '📅' }
+      },
       { field: 'salary', headerName: 'Salary', width: 120 },
     ],
     rowData: generateData(50),
-    height: '400px',
+    height: '500px',
     width: '100%',
     theme: themeQuartz,
-  },
-  parameters: {
-    docs: {
-      description: {
-        story: 'Date filter on Start Date column. Supports date range selection.',
-      },
-    },
-  },
-};
-
-export const FloatingFilters: Story = {
-  args: {
-    columnDefs: [
-      { field: 'id', headerName: 'ID', width: 80, filter: 'number', floatingFilter: true },
-      { field: 'name', headerName: 'Name', width: 200, filter: 'text', floatingFilter: true },
-      {
-        field: 'department',
-        headerName: 'Department',
-        width: 180,
-        filter: 'set',
-        floatingFilter: true,
-      },
-      { field: 'role', headerName: 'Role', width: 250, filter: 'text', floatingFilter: true },
-      { field: 'salary', headerName: 'Salary', width: 120, filter: 'number', floatingFilter: true },
-      {
-        field: 'location',
-        headerName: 'Location',
-        width: 150,
-        filter: 'set',
-        floatingFilter: true,
-      },
-    ],
-    rowData: generateData(50),
-    height: '450px',
-    width: '100%',
-    theme: themeQuartz,
+    enableFloatingFilters: true, // Show filter inputs in header
   },
   parameters: {
     docs: {
       description: {
         story:
-          'Floating filters appear below column headers for quick filtering without opening filter menus.',
+          'Date filter on Start Date column. **Filter input visible in header**. Click the filter input to open a date picker. Supports date range selection.',
       },
     },
   },
 };
 
-export const CombinedFilters: Story = {
+export const AllFilterTypes: Story = {
   args: {
     columnDefs: [
-      { field: 'id', headerName: 'ID', width: 80, filter: 'number', floatingFilter: true },
-      { field: 'name', headerName: 'Name', width: 200, filter: 'text' },
-      {
-        field: 'department',
-        headerName: 'Department',
-        width: 180,
-        filter: 'set',
-        floatingFilter: true,
+      { 
+        field: 'id', 
+        headerName: 'ID 🔢', 
+        width: 80, 
+        filter: 'number',
+        headerComponentParams: { filterIcon: '🔢' }
       },
-      { field: 'role', headerName: 'Role', width: 250, filter: 'text' },
-      { field: 'salary', headerName: 'Salary', width: 120, filter: 'number', floatingFilter: true },
-      { field: 'location', headerName: 'Location', width: 150, filter: 'set' },
+      { 
+        field: 'name', 
+        headerName: 'Name 🔤', 
+        width: 200, 
+        filter: 'text',
+        headerComponentParams: { filterIcon: '🔤' }
+      },
+      { 
+        field: 'department', 
+        headerName: 'Department ☑️', 
+        width: 180, 
+        filter: 'set',
+        headerComponentParams: { filterIcon: '☑️' }
+      },
+      { 
+        field: 'startDate', 
+        headerName: 'Start Date 📅', 
+        width: 150, 
+        filter: 'date',
+        headerComponentParams: { filterIcon: '📅' }
+      },
+      { 
+        field: 'salary', 
+        headerName: 'Salary 🔢', 
+        width: 120, 
+        filter: 'number',
+        headerComponentParams: { filterIcon: '🔢' }
+      },
     ],
-    rowData: generateData(100),
+    rowData: generateData(50),
     height: '500px',
     width: '100%',
     theme: themeQuartz,
-    gridOptions: {
-      sideBar: true,
-    },
+    enableFloatingFilters: true, // Show ALL filter inputs in header
   },
   parameters: {
     docs: {
       description: {
-        story: 'Combined filter types with side bar. Enable side bar for advanced filtering panel.',
+        story:
+          '**All filter types in one grid** with floating filters enabled. Each column shows its filter type with an emoji indicator (🔤 Text, 🔢 Number, ☑️ Set, 📅 Date). Filter inputs are visible in the header row for easy access.',
       },
     },
   },
