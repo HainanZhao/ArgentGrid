@@ -116,6 +116,7 @@ export const WithSelection: Story = {
       { field: 'role', headerName: 'Role', width: 250 },
     ],
     rowData: generateData(50),
+    rowSelection: 'multiple',
     height: '400px',
     width: '100%',
   },

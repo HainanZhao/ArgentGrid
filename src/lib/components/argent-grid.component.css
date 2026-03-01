@@ -229,8 +229,10 @@
 .argent-grid-header-checkbox {
   display: flex;
   align-items: center;
+  justify-content: center;
   margin-right: 8px;
   flex-shrink: 0;
+  height: 100%;
 }
 
 .argent-grid-header-cell.center-content .argent-grid-header-checkbox {
@@ -239,6 +241,12 @@
 
 .argent-grid-header-cell.center-content {
   justify-content: center;
+}
+
+.argent-grid-header-cell.center-content .argent-grid-header-content {
+  justify-content: center;
+  flex: none; /* Don't grow so parent's justify-content works better, or just center inside */
+  width: 100%;
 }
 
 .argent-grid-header-checkbox input {

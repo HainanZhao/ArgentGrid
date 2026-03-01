@@ -489,6 +489,7 @@ export interface IRowNode<TData = any> {
   lastChild: boolean;
   rowIndex: number | null;
   displayedRowIndex: number;
+  setSelected(selected: boolean, clearSelection?: boolean): void;
 }
 
 export interface GroupRowNode<TData = any> {

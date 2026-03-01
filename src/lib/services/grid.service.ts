@@ -75,6 +75,20 @@ export class GridService<TData = any> {
     return `argent-grid-${Math.random().toString(36).substr(2, 9)}`;
   }
 
+  private hasCheckboxSelection(): boolean {
+    if (this.gridOptions?.selectionColumnDef?.checkboxes) return true;
+    if (!this.columnDefs) return false;
+
+    const check = (defs: (ColDef | ColGroupDef)[]): boolean => {
+      return defs.some((def) => {
+        if ('children' in def) return check(def.children);
+        return !!def.checkboxSelection;
+      });
+    };
+
+    return check(this.columnDefs);
+  }
+
   private initializeColumns(): void {
     if (!this.columnDefs) {
       return;
@@ -87,8 +101,7 @@ export class GridService<TData = any> {
     const groupDisplayType = this.gridOptions?.groupDisplayType || 'singleColumn';
 
     // 1. Handle Selection Column
-    const hasCheckboxSelection = this.columnDefs?.some((col) => !('children' in col) && col.checkboxSelection);
-    if (hasCheckboxSelection) {
+    if (this.hasCheckboxSelection()) {
       const selectionCol: Column = {
         colId: 'ag-Grid-SelectionColumn',
         field: 'ag-Grid-SelectionColumn',
@@ -97,6 +110,8 @@ export class GridService<TData = any> {
         pinned: 'left',
         visible: true,
         sort: null,
+        checkboxSelection: true,
+        headerCheckboxSelection: true,
       };
       this.columns.set(selectionCol.colId, selectionCol);
     }
@@ -1233,6 +1248,25 @@ export class GridService<TData = any> {
           lastChild: index === flattened.length - 1,
           rowIndex: index,
           displayedRowIndex: index,
+          setSelected: (selected: boolean, clearSelection: boolean = false) => {
+            const changed = node.selected !== selected || clearSelection;
+            if (!changed) return;
+
+            if (clearSelection) {
+              this.rowNodes.forEach((n) => {
+                n.selected = false;
+              });
+              this.selectedRows.clear();
+            }
+            
+            node.selected = selected;
+            if (selected) {
+              this.selectedRows.add(node.id!);
+            } else {
+              this.selectedRows.delete(node.id!);
+            }
+            this.gridStateChanged$.next({ type: 'selectionChanged' });
+          },
         };
         this.rowNodes.set(id, node);
       }
@@ -1479,6 +1513,25 @@ export class GridService<TData = any> {
           lastChild: index === orderedRows.length - 1,
           rowIndex: index,
           displayedRowIndex: this.displayedRowNodes.length,
+          setSelected: (selected: boolean, clearSelection: boolean = false) => {
+            const changed = node.selected !== selected || clearSelection;
+            if (!changed) return;
+
+            if (clearSelection) {
+              this.rowNodes.forEach((n) => {
+                n.selected = false;
+              });
+              this.selectedRows.clear();
+            }
+            
+            node.selected = selected;
+            if (selected) {
+              this.selectedRows.add(node.id!);
+            } else {
+              this.selectedRows.delete(node.id!);
+            }
+            this.gridStateChanged$.next({ type: 'selectionChanged' });
+          },
         };
         this.rowNodes.set(id!, node);
       }
@@ -1506,6 +1559,10 @@ export class GridService<TData = any> {
             lastChild: false,
             rowIndex: null,
             displayedRowIndex: this.displayedRowNodes.length,
+            setSelected: (selected: boolean) => {
+              detailNode!.selected = selected;
+              this.gridStateChanged$.next({ type: 'selectionChanged' });
+            },
           };
           this.rowNodes.set(detailId, detailNode);
         } else {

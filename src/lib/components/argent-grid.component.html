@@ -22,12 +22,14 @@
               [class.sortable]="isSortable(col)"
               (click)="onHeaderClick(col)"
               cdkDrag
+              [cdkDragDisabled]="col.colId === 'ag-Grid-SelectionColumn'"
               [cdkDragData]="col">
               <div class="argent-grid-header-content" cdkDragHandle>
                 <div *ngIf="hasHeaderCheckbox(col)" class="argent-grid-header-checkbox">
                   <input type="checkbox"
                          [checked]="isAllSelected"
                          [indeterminate]="isIndeterminateSelection"
+                         (click)="$event.stopPropagation()"
                          (change)="onSelectionHeaderChange($event)" />
                 </div>
                 <span class="header-text">{{ getHeaderName(col) }}</span>
@@ -61,12 +63,14 @@
                 [class.sortable]="isSortable(col)"
                 (click)="onHeaderClick(col)"
                 cdkDrag
+                [cdkDragDisabled]="col.colId === 'ag-Grid-SelectionColumn'"
                 [cdkDragData]="col">
                 <div class="argent-grid-header-content" cdkDragHandle>
                   <div *ngIf="hasHeaderCheckbox(col)" class="argent-grid-header-checkbox">
                     <input type="checkbox"
                            [checked]="isAllSelected"
                            [indeterminate]="isIndeterminateSelection"
+                           (click)="$event.stopPropagation()"
                            (change)="onSelectionHeaderChange($event)" />
                   </div>
                   <span class="header-text">{{ getHeaderName(col) }}</span>
@@ -99,12 +103,14 @@
               [class.sortable]="isSortable(col)"
               (click)="onHeaderClick(col)"
               cdkDrag
+              [cdkDragDisabled]="col.colId === 'ag-Grid-SelectionColumn'"
               [cdkDragData]="col">
               <div class="argent-grid-header-content" cdkDragHandle>
                 <div *ngIf="hasHeaderCheckbox(col)" class="argent-grid-header-checkbox">
                   <input type="checkbox"
                          [checked]="isAllSelected"
                          [indeterminate]="isIndeterminateSelection"
+                         (click)="$event.stopPropagation()"
                          (change)="onSelectionHeaderChange($event)" />
                 </div>
                 <span class="header-text">{{ getHeaderName(col) }}</span>

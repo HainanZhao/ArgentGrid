@@ -31,6 +31,7 @@ import {
   GridOptions,
   IRowNode,
   MenuItemDef,
+  RowSelectionOptions,
 } from '../types/ag-grid-types';
 
 @Component({
@@ -49,6 +50,7 @@ export class ArgentGridComponent<TData = any>
   @Input() height = '500px';
   @Input() width = '100%';
   @Input() rowHeight = 32;
+  @Input() rowSelection: RowSelectionOptions | 'single' | 'multiple' | undefined;
 
   @Output() gridReady = new EventEmitter<GridApi<TData>>();
   @Output() rowClicked = new EventEmitter<{ data: TData; node: IRowNode<TData> }>();
@@ -165,6 +167,13 @@ export class ArgentGridComponent<TData = any>
     // Handle gridOptions changes
     if (changes.gridOptions && !changes.gridOptions.firstChange) {
       this.onGridOptionsChanged(changes.gridOptions.currentValue);
+    }
+
+    // Handle rowSelection changes
+    if (changes.rowSelection && !changes.rowSelection.firstChange) {
+      if (this.gridApi) {
+        this.gridApi.setGridOption('rowSelection', changes.rowSelection.currentValue);
+      }
     }
 
     // Handle theme changes
@@ -316,15 +325,31 @@ export class ArgentGridComponent<TData = any>
   }
 
   private initializeGrid(): void {
+    // Merge individual inputs into grid options if provided
+    const options = { ...this.gridOptions };
+    if (this.rowSelection) {
+      options.rowSelection = this.rowSelection;
+    }
+
     // Initialize grid API
-    this.gridApi = this.gridService.createApi(this.columnDefs, this.rowData, this.gridOptions);
+    this.gridApi = this.gridService.createApi(this.columnDefs, this.rowData, options);
 
     // Listen for grid state changes from API (filters, sorts, options)
     this.gridService.gridStateChanged$.pipe(takeUntil(this.destroy$)).subscribe((event) => {
       if (event.type === 'optionChanged' && event.key === 'sideBar') {
         this.sideBarVisible = !!event.value;
       }
-      this.canvasRenderer?.render();
+      if (event.type === 'selectionChanged') {
+        this.updateSelectionState();
+        
+        // Mark all rows as potentially dirty for selection change to ensure canvas redraws
+        // In a more optimized version, we'd only mark specific rows.
+        if (this.canvasRenderer) {
+          this.canvasRenderer.render(); // This calls markAllDirty and schedules render
+        }
+      } else {
+        this.canvasRenderer?.render();
+      }
       this._cdr.detectChanges();
     });
 
@@ -418,6 +443,9 @@ export class ArgentGridComponent<TData = any>
   }
 
   isSortable(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
+    const colId = (col as any).colId || (col as any).field?.toString();
+    if (colId === 'ag-Grid-SelectionColumn') return false;
+
     // If it has children, it's a group and cannot be sorted directly
     if ('children' in col) return false;
 
@@ -449,6 +477,13 @@ export class ArgentGridComponent<TData = any>
   }
 
   onHeaderClick(col: Column | ColDef<TData> | ColGroupDef<TData>): void {
+    if (this.isResizing) return;
+
+    if ((col as any).colId === 'ag-Grid-SelectionColumn') {
+      // Selection is now handled by the checkbox directly to avoid resizing interference
+      return;
+    }
+
     if (!this.isSortable(col) || 'children' in col) {
       return;
     }
@@ -471,6 +506,7 @@ export class ArgentGridComponent<TData = any>
   // --- Header Menu Logic ---
 
   hasHeaderMenu(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
+    if ((col as any).colId === 'ag-Grid-SelectionColumn') return false;
     if ('children' in col) return false;
     const colDef = this.getColumnDefForColumn(col as any);
     return colDef ? colDef.suppressHeaderMenuButton !== true : true;
@@ -938,6 +974,7 @@ export class ArgentGridComponent<TData = any>
   // --- Column Resizing Logic ---
 
   isResizable(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
+    if ((col as any).colId === 'ag-Grid-SelectionColumn') return true;
     if ('children' in col) return false;
     const colDef = this.getColumnDefForColumn(col as any);
     return colDef ? colDef.resizable !== false : true;
@@ -1314,25 +1351,25 @@ export class ArgentGridComponent<TData = any>
     return null;
   }
 
-  // Selection Methods
   onRowClick(rowIndex: number, event: MouseEvent): void {
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
 
-    // Handle multi-select with Ctrl/Cmd
-    if (event.ctrlKey || event.metaKey) {
-      rowNode.selected = !rowNode.selected;
-    } else if (event.shiftKey) {
-      // Range selection (TODO: implement)
-      rowNode.selected = true;
+    const selectionMode = this.gridApi.getGridOption('rowSelection') || 'single';
+    const isMultiSelect = (selectionMode as any) === 'multiple' || (selectionMode as any) === 'multiRow';
+
+    if (isMultiSelect && (event.ctrlKey || event.metaKey)) {
+      rowNode.setSelected(!rowNode.selected);
+    } else if (isMultiSelect && event.shiftKey) {
+      rowNode.setSelected(true);
     } else {
-      // Single select - deselect all others
-      this.gridApi.deselectAll();
-      rowNode.selected = true;
+      if (rowNode.selected) {
+        rowNode.setSelected(false);
+      } else {
+        rowNode.setSelected(true, true);
+      }
     }
 
-    this.updateSelectionState();
-    this.canvasRenderer?.render();
     this.selectionChanged.emit(this.gridApi.getSelectedRows());
   }
 

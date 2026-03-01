@@ -497,11 +497,14 @@ export class CanvasRenderer<TData = any> {
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
 
-    if (typeof this.ctx.setTransform === 'function') {
-      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    } else {
-      this.ctx.scale(dpr, dpr);
+    if (this.ctx) {
+      if (typeof this.ctx.setTransform === 'function') {
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      } else {
+        (this.ctx as any).scale(dpr, dpr);
+      }
     }
+
 
     // Reset blit state on resize
     this.blitState.reset();
@@ -848,7 +851,7 @@ export class CanvasRenderer<TData = any> {
 
     // Check for checkbox selection
     if (isSelectionColumn) {
-      const checkboxSize = 16;
+      const checkboxSize = 14;
       const checkboxY = Math.floor(y + (this.rowHeight - checkboxSize) / 2);
       const checkboxX = Math.floor(x + (width - checkboxSize) / 2);
         
@@ -1012,9 +1015,9 @@ export class CanvasRenderer<TData = any> {
 
   private drawCheckbox(x: number, y: number, size: number, checked: boolean): void {
     // Draw checkbox border
-    this.ctx.strokeStyle = this.theme.textCell;
-    this.ctx.lineWidth = 1.5;
-    this.ctx.strokeRect(x, y, size, size);
+    this.ctx.strokeStyle = this.theme.borderColor; // Use border color instead of text color for a softer look
+    this.ctx.lineWidth = 1.2;
+    this.ctx.strokeRect(Math.floor(x) + 0.5, Math.floor(y) + 0.5, size, size);
 
     // Draw checkmark if checked
     if (checked) {
@@ -1088,63 +1091,10 @@ export class CanvasRenderer<TData = any> {
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
 
-    // Check if clicking on checkbox column
     const clickedColumn = columnIndex !== -1 ? columns[columnIndex] : null;
     const isCheckboxColumn = clickedColumn && clickedColumn.colId === 'ag-Grid-SelectionColumn';
     
-    // If clicking on checkbox column, toggle selection for this row only
-    if (isCheckboxColumn) {
-      // Track old selection for damage tracking
-      const oldSelectedRows = new Set<number>(
-        this.gridApi
-          .getSelectedNodes()
-          .map((node) => node.rowIndex)
-          .filter((idx) => idx !== null) as number[]
-      );
-
-      rowNode.selected = !rowNode.selected;
-
-      // Track new selection
-      const newSelectedRows = new Set<number>(
-        this.gridApi
-          .getSelectedNodes()
-          .map((node) => node.rowIndex)
-          .filter((idx) => idx !== null) as number[]
-      );
-
-      // Mark changed rows as dirty
-      this.damageTracker.markSelectionChanged(oldSelectedRows, newSelectedRows);
-      this.scheduleRender();
-      return;
-    }
-
-    // Track old selection for damage tracking
-    const oldSelectedRows = new Set<number>(
-      this.gridApi
-        .getSelectedNodes()
-        .map((node) => node.rowIndex)
-        .filter((idx) => idx !== null) as number[]
-    );
-
-    if (event.ctrlKey || event.metaKey) {
-      rowNode.selected = !rowNode.selected;
-    } else {
-      this.gridApi.deselectAll();
-      rowNode.selected = true;
-    }
-
-    // Track new selection
-    const newSelectedRows = new Set<number>(
-      this.gridApi
-        .getSelectedNodes()
-        .map((node) => node.rowIndex)
-        .filter((idx) => idx !== null) as number[]
-    );
-
-    // Mark changed rows as dirty
-    this.damageTracker.markSelectionChanged(oldSelectedRows, newSelectedRows);
-
-    this.scheduleRender();
+    // Selection logic moved to handleClick to prevent double-toggling with onRowClick/DOM events
   }
 
   private handleMouseMove(event: MouseEvent): void {
@@ -1172,6 +1122,14 @@ export class CanvasRenderer<TData = any> {
     const { rowIndex, columnIndex } = this.getHitTestResult(event);
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
+
+    // Handle selection column
+    const columns = this.getVisibleColumns();
+    const clickedCol = columnIndex !== -1 ? columns[columnIndex] : null;
+    if (clickedCol?.colId === 'ag-Grid-SelectionColumn') {
+      rowNode.setSelected(!rowNode.selected);
+      return;
+    }
 
     // Handle expand/collapse
     if ((rowNode.group || rowNode.master) && columnIndex !== -1) {
