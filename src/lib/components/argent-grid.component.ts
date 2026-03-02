@@ -125,6 +125,10 @@ export class ArgentGridComponent<TData = any>
   sideBarVisible = false;
   activeToolPanel: 'columns' | 'filters' | null = null;
 
+  // Row Group Panel state
+  rowGroupPanelShow: 'always' | 'onlyWhenGrouping' | 'never' = 'never';
+  rowGroupColumns: Column[] = [];
+
   // Context Menu state
   activeContextMenu = false;
   contextMenuPosition = { x: 0, y: 0 };
@@ -356,10 +360,17 @@ export class ArgentGridComponent<TData = any>
     // Initialize grid API
     this.gridApi = this.gridService.createApi(this.columnDefs, this.rowData, options);
 
+    // Initial state sync
+    this.rowGroupPanelShow = this.gridApi.getGridOption('rowGroupPanelShow') || 'never';
+    this.updateRowGroupColumns();
+
     // Listen for grid state changes from API (filters, sorts, options)
     this.gridService.gridStateChanged$.pipe(takeUntil(this.destroy$)).subscribe((event) => {
       if (event.type === 'optionChanged' && event.key === 'sideBar') {
         this.sideBarVisible = !!event.value;
+      }
+      if (event.type === 'optionChanged' && event.key === 'rowGroupPanelShow') {
+        this.rowGroupPanelShow = event.value || 'never';
       }
       if (event.type === 'selectionChanged') {
         this.updateSelectionState();
@@ -370,6 +381,7 @@ export class ArgentGridComponent<TData = any>
           this.canvasRenderer.render(); // This calls markAllDirty and schedules render
         }
       } else if (event.type === 'columnsChanged' || event.type === 'columnGroupExpanded') {
+        this.updateRowGroupColumns();
         this.canvasRenderer?.render();
       } else {
         this.canvasRenderer?.renderFrame();
@@ -431,6 +443,11 @@ export class ArgentGridComponent<TData = any>
       Object.keys(newOptions).forEach((key) => {
         this.gridApi.setGridOption(key as any, (newOptions as any)[key]);
       });
+
+      if (newOptions.rowGroupPanelShow) {
+        this.rowGroupPanelShow = newOptions.rowGroupPanelShow;
+      }
+
       this.canvasRenderer?.render();
     }
     this._cdr.detectChanges();
@@ -573,18 +590,29 @@ export class ArgentGridComponent<TData = any>
   }
 
   isRowGroupPanelVisible(): boolean {
-    const show = this.gridApi?.getGridOption('rowGroupPanelShow') || 'never';
+    const show = this.rowGroupPanelShow;
     if (show === 'always') return true;
     if (show === 'onlyWhenGrouping') {
-      return (this.gridApi?.getRowGroupColumns()?.length || 0) > 0;
+      return this.rowGroupColumns.length > 0;
     }
     return false;
   }
 
-  getRowGroupColumns(): Column[] {
-    if (!this.gridApi) return [];
+  trackByRowGroup(index: number, col: Column): string {
+    return col.colId || index.toString();
+  }
+
+  private updateRowGroupColumns(): void {
+    if (!this.gridApi) {
+      this.rowGroupColumns = [];
+      return;
+    }
     const groupColIds = this.gridApi.getRowGroupColumns();
-    return this.gridApi.getAllColumns().filter((col) => groupColIds.includes(col.colId));
+    this.rowGroupColumns = this.gridApi.getAllColumns().filter((col) => groupColIds.includes(col.colId));
+  }
+
+  getRowGroupColumns(): Column[] {
+    return this.rowGroupColumns;
   }
 
   onRowGroupDropped(event: CdkDragDrop<any[]>): void {
@@ -714,21 +742,29 @@ export class ArgentGridComponent<TData = any>
     this.activeHeaderMenu = col;
     this.headerMenuItems = this.getHeaderMenuItems(col as Column);
 
-    // Position menu below the icon using fixed (viewport) coordinates
+    // Position menu below the icon using coordinates relative to the grid container
     const target = event.target as HTMLElement;
     const rect = target.getBoundingClientRect();
+    const containerRect = this._elementRef.nativeElement.getBoundingClientRect();
 
-    let x = rect.right - 200; // Align right, assuming menu width ~200px
-    let y = rect.bottom + 4;
+    // Align left edge of menu with left edge of icon
+    let x = rect.left - containerRect.left; 
+    let y = rect.bottom - containerRect.top + 4;
 
-    // Prevent menu from going off-screen
+    // Prevent menu from going off-container bounds
+    const containerWidth = this._elementRef.nativeElement.offsetWidth;
+    const containerHeight = this._elementRef.nativeElement.offsetHeight;
+
+    // Assuming menu width is up to 200px for boundary checks
+    if (x + 200 > containerWidth) {
+      x = rect.right - containerRect.left - 200; // Flip to right-aligned if it overflows
+    }
     if (x < 0) x = 0;
-    if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
 
     // Check if menu would overflow bottom
     const estimatedHeight = this.headerMenuItems.length * 30 + 20;
-    if (y + estimatedHeight > window.innerHeight) {
-      y = Math.max(0, rect.top - estimatedHeight);
+    if (y + estimatedHeight > containerHeight) {
+      y = Math.max(0, rect.top - containerRect.top - estimatedHeight);
     }
 
     this.headerMenuPosition = { x, y };
@@ -889,13 +925,17 @@ export class ArgentGridComponent<TData = any>
 
     this.activeContextMenu = true;
 
-    // Position menu at mouse coordinates (fixed/viewport)
-    let x = event.clientX;
-    let y = event.clientY;
+    // Position menu at mouse coordinates relative to container
+    const containerRect = this._elementRef.nativeElement.getBoundingClientRect();
+    let x = event.clientX - containerRect.left;
+    let y = event.clientY - containerRect.top;
 
-    // Prevent menu from going off-screen
-    if (x + 200 > window.innerWidth) x = window.innerWidth - 200;
-    if (y + 200 > window.innerHeight) y = window.innerHeight - 200;
+    // Prevent menu from going off-container bounds
+    const containerWidth = this._elementRef.nativeElement.offsetWidth;
+    const containerHeight = this._elementRef.nativeElement.offsetHeight;
+
+    if (x + 200 > containerWidth) x = containerWidth - 200;
+    if (y + 200 > containerHeight) y = containerHeight - 200;
 
     this.contextMenuPosition = { x, y };
 
@@ -989,9 +1029,10 @@ export class ArgentGridComponent<TData = any>
       this.setFilterPosition = position;
     } else if (event) {
       const rect = (event.target as HTMLElement).getBoundingClientRect();
+      const containerRect = this._elementRef.nativeElement.getBoundingClientRect();
       this.setFilterPosition = {
-        x: rect.left,
-        y: rect.bottom + 5,
+        x: rect.left - containerRect.left,
+        y: rect.bottom - containerRect.top + 5,
       };
     }
 
@@ -1113,7 +1154,11 @@ export class ArgentGridComponent<TData = any>
       this.filterPopupPosition = position;
     } else if (event) {
       const rect = (event.target as HTMLElement).getBoundingClientRect();
-      this.filterPopupPosition = { x: rect.left, y: rect.bottom + 5 };
+      const containerRect = this._elementRef.nativeElement.getBoundingClientRect();
+      this.filterPopupPosition = { 
+        x: rect.left - containerRect.left, 
+        y: rect.bottom - containerRect.top + 5 
+      };
     }
 
     setTimeout(() => {

@@ -248,9 +248,14 @@ export class GridService<TData = any> {
     topLevelColumns.push(...processDefs(defsToProcess, 0));
 
     // 4. Add back any columns that were in existingColumns but not in defs
-    // (like SelectionColumn or AutoColumn if they were already there)
-    existingColumns.forEach(c => {
-      if (!this.columns.has(c.colId)) {
+    // (Only for normal columns, not internal Selection or AutoGroup columns
+    // which are handled in steps 1 and 2 above)
+    existingColumns.forEach((c) => {
+      if (
+        c.colId !== 'ag-Grid-SelectionColumn' &&
+        c.colId !== 'ag-Grid-AutoColumn' &&
+        !this.columns.has(c.colId)
+      ) {
         this.columns.set(c.colId, c);
       }
     });
@@ -688,6 +693,7 @@ export class GridService<TData = any> {
         if (!this.gridOptions) {
           this.gridOptions = {} as GridOptions<TData>;
         }
+        if (this.gridOptions[key] === value) return;
         this.gridOptions[key] = value;
         this.gridStateChanged$.next({ type: 'optionChanged', key: key as string, value });
       },
@@ -1321,15 +1327,33 @@ export class GridService<TData = any> {
     }
 
     // Re-initialize from cache (respects current expansion state)
-    this.updateExpansionStateInCache(this.cachedGroupedData);
+    const defaultExpanded = this.gridOptions?.groupDefaultExpanded ?? 0;
+    this.updateExpansionStateInCache(this.cachedGroupedData, 0, defaultExpanded);
     this.initializeRowNodesFromGroupedData();
   }
 
-  private updateExpansionStateInCache(groupedData: (TData | GroupRowNode<TData>)[]): void {
+  private updateExpansionStateInCache(
+    groupedData: (TData | GroupRowNode<TData>)[],
+    level: number,
+    defaultExpanded: number
+  ): void {
+    const isDefaultExpanded = defaultExpanded === -1 || level < defaultExpanded;
+
     for (const item of groupedData) {
       if (this.isGroupRowNode(item)) {
-        item.expanded = this.expandedGroups.has(item.id);
-        this.updateExpansionStateInCache(item.children);
+        // If it's already in the set, respect that. Otherwise use default.
+        if (this.expandedGroups.has(item.id)) {
+          item.expanded = true;
+        } else if (isDefaultExpanded) {
+          item.expanded = true;
+          this.expandedGroups.add(item.id); // Also sync back to the set
+        } else {
+          item.expanded = false;
+        }
+
+        if (item.children) {
+          this.updateExpansionStateInCache(item.children, level + 1, defaultExpanded);
+        }
       }
     }
   }

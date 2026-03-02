@@ -2,7 +2,8 @@
   <div class="argent-grid-main-layout" cdkDropListGroup>
     <div class="argent-grid-content-area">
       <!-- Row Group Panel -->
-      <div class="argent-grid-row-group-panel" 
+      <div class="argent-grid-row-group-panel"
+           *ngIf="isRowGroupPanelVisible()"
            cdkDropList
            id="row-group-panel"
            cdkDropListOrientation="horizontal"
@@ -10,7 +11,7 @@
         <div class="row-group-placeholder" *ngIf="getRowGroupColumns().length === 0">
           Drag columns here to group
         </div>
-        <div *ngFor="let col of getRowGroupColumns()" class="row-group-pill">
+        <div *ngFor="let col of getRowGroupColumns(); trackBy: trackByRowGroup" class="row-group-pill">
           <span class="pill-text">{{ getHeaderName(col) }}</span>
           <span class="pill-close" (click)="removeRowGroup(col)">✕</span>
         </div>
@@ -321,5 +322,48 @@
   <!-- Set Filter Popup -->
   <div *ngIf="activeSetFilter" class="set-filter-popup" [style.left.px]="setFilterPosition.x" [style.top.px]="setFilterPosition.y" (clickOutside)="closeSetFilter()" clickOutside>
     <argent-set-filter [values]="setFilterValues" [valueFormatter]="setFilterValueFormatter" (filterChanged)="onSetFilterChanged($event)"></argent-set-filter>
+  </div>
+
+  <!-- Context Menu -->
+  <div class="context-menu-popup" *ngIf="activeContextMenu" [style.top.px]="contextMenuPosition.y" [style.left.px]="contextMenuPosition.x" (click)="$event.stopPropagation()">
+    <ng-container *ngFor="let item of contextMenuItems">
+      <div *ngIf="item.separator" class="menu-divider"></div>
+      <div *ngIf="!item.separator" class="menu-item" [class.disabled]="item.disabled" (click)="!item.disabled && item.action(); !item.subMenu && closeContextMenu()">
+        <span class="menu-icon" *ngIf="item.icon">{{ item.icon }}</span>
+        <span class="menu-text">{{ item.name }}</span>
+      </div>
+    </ng-container>
+  </div>
+
+  <!-- Filter Popup -->
+  <div *ngIf="activeFilterPopup" class="filter-popup" [style.left.px]="filterPopupPosition.x" [style.top.px]="filterPopupPosition.y" (clickOutside)="closeFilterPopup()" clickOutside (click)="$event.stopPropagation()">
+    <div class="filter-popup-content">
+      <div class="filter-popup-header">
+        Filter {{ getHeaderName(activeFilterPopupColumn!) }}
+      </div>
+      <select class="filter-operator-select" [value]="activeFilterOperator" (change)="onFilterPopupOperatorChange($any($event.target).value)">
+        <option *ngFor="let op of (activeFilterPopupType === 'number' ? numberFilterOperators : textFilterOperators)" [value]="op.value">{{ op.label }}</option>
+      </select>
+      
+      <div class="filter-input-container">
+        <input class="filter-input" 
+               [type]="activeFilterPopupType === 'number' ? 'number' : 'text'" 
+               [value]="filterValue1"
+               (input)="onFilterPopupInput($event, false)"
+               placeholder="Filter..." />
+      </div>
+      
+      <div class="filter-input-container" *ngIf="activeFilterOperator === 'inRange'">
+        <input class="filter-input" 
+               [type]="activeFilterPopupType === 'number' ? 'number' : 'text'" 
+               [value]="filterValue2"
+               (input)="onFilterPopupInput($event, true)"
+               placeholder="to..." />
+      </div>
+      
+      <div class="filter-popup-footer">
+        <button class="filter-clear-btn" (click)="clearColumnFilter(activeFilterPopupColumn!)">Clear Filter</button>
+      </div>
+    </div>
   </div>
 </div>
