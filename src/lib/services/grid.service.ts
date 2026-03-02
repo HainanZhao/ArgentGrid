@@ -40,7 +40,12 @@ export class GridService<TData = any> {
   private cellRanges: CellRange[] = [];
   private gridId: string = '';
   private gridOptions: GridOptions<TData> | null = null;
-  public gridStateChanged$ = new Subject<{ type: string; key?: string; value?: any; changedRowIndices?: number[] }>();
+  public gridStateChanged$ = new Subject<{
+    type: string;
+    key?: string;
+    value?: any;
+    changedRowIndices?: number[];
+  }>();
 
   // Row height cache
   private cumulativeRowHeights: number[] = [];
@@ -1112,9 +1117,9 @@ export class GridService<TData = any> {
       }
 
       // Emit transactionApplied with changed row indices for efficient rendering
-      this.gridStateChanged$.next({ 
+      this.gridStateChanged$.next({
         type: 'transactionApplied',
-        changedRowIndices
+        changedRowIndices,
       });
     }
 

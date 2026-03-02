@@ -2,10 +2,7 @@ import { Column, GridApi, IRowNode } from '../types/ag-grid-types';
 import { LiveDataHandler } from './live-data-handler';
 // Import new rendering modules from the index
 import {
-  // Blitting
-  BlitState,
   ColumnPrepResult,
-  calculateBlit,
   // Theme
   DEFAULT_THEME,
   drawCheckbox,
@@ -68,7 +65,6 @@ export class CanvasRenderer<TData = any> {
   }
 
   private animationFrameId: number | null = null;
-  private renderPending = false;
   // When a render is already in-flight and another is requested, coalesce it here
   // so it fires immediately after the current frame completes rather than being dropped.
   private nextRenderPending = false;
@@ -89,19 +85,11 @@ export class CanvasRenderer<TData = any> {
   // Damage tracking
   private damageTracker = new DamageTracker();
 
-  // Blitting state
-  private blitState = new BlitState();
-
   // Live data handling
   private liveDataHandler: LiveDataHandler<TData>;
 
   // Column prep results cache
   private columnPreps: Map<string, ColumnPrepResult<TData>> = new Map();
-
-  /**
-   * Column positions cache for O(1) lookup
-   */
-  private columnPositions: Map<string, number> = new Map();
 
   // Event listener references for cleanup
   private scrollListener?: (e: Event) => void;
@@ -298,32 +286,9 @@ export class CanvasRenderer<TData = any> {
     const container = this.canvas.parentElement;
     if (!container) return;
 
-    const _oldScrollTop = this.scrollTop;
-    const _oldScrollLeft = this.scrollLeft;
-
     this.scrollTop = container.scrollTop;
     this.scrollLeft = container.scrollLeft;
-
-    // Update blit state
-    const lastScroll = this.blitState.updateScroll(this.scrollLeft, this.scrollTop);
-
-    // Check if we should blit
-    const { left, right } = getPinnedWidths(this.getVisibleColumns());
-    const blitResult = calculateBlit(
-      { x: this.scrollLeft, y: this.scrollTop },
-      lastScroll,
-      { width: this.viewportWidth, height: this.viewportHeight },
-      { left, right }
-    );
-
-    if (blitResult.canBlit && this.blitState.hasLastFrame()) {
-      // Blitting is possible - the render will copy from last frame
-      this.damageTracker.markAllDirty(); // For now, still do full redraw but with blit
-    } else {
-      // Full redraw needed
-      this.damageTracker.markAllDirty();
-    }
-
+    this.damageTracker.markAllDirty();
     this.scheduleRender();
   }
 
@@ -354,17 +319,7 @@ export class CanvasRenderer<TData = any> {
     // ResizeObserver and create an infinite grow loop.
     this.canvas.width = width * dpr;
     this.canvas.height = height * dpr;
-
-    if (this.ctx) {
-      if (typeof this.ctx.setTransform === 'function') {
-        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      } else {
-        (this.ctx as any).scale(dpr, dpr);
-      }
-    }
-
-    // Reset blit state on resize
-    this.blitState.reset();
+    this.ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.scheduleRender();
   }
 
@@ -383,24 +338,20 @@ export class CanvasRenderer<TData = any> {
 
   /**
    * Schedule a render on the next animation frame.
-   * Coalesces multiple calls: if a frame is already in-flight, sets a flag so
-   * exactly one more frame fires after it completes (no renders are dropped,
-   * no renders pile up).
-   * Skips scheduling entirely if nothing is marked dirty.
+   * Coalesces: if a frame is already in-flight, marks a follow-up so the next
+   * frame fires immediately after (no renders dropped, no pile-up).
+   * No-op if nothing is dirty.
    */
   private scheduleRender(): void {
-    // Don't queue a rAF at all if there's nothing to paint.
     if (!this.damageTracker.hasDamage()) return;
 
-    if (this.renderPending || this.animationFrameId !== null) {
+    if (this.animationFrameId !== null) {
       this.nextRenderPending = true;
       return;
     }
 
-    this.renderPending = true;
     this.animationFrameId = requestAnimationFrame(() => {
       this.doRender();
-      this.renderPending = false;
       this.animationFrameId = null;
 
       if (this.nextRenderPending) {
@@ -418,32 +369,14 @@ export class CanvasRenderer<TData = any> {
     return this.gridApi.getAllColumns().filter((col) => isColumnVisible(col));
   }
 
-  /**
-   * Prepare columns for rendering
-   *
-   * Caches column definitions and X positions for efficient cell rendering.
-   * This is called once per render frame before rendering visible rows.
-   *
-   * Performance optimizations:
-   * 1. Column definition caching - Avoids repeated getColumnDef() calls
-   * 2. Column position caching - Enables O(1) column X lookup instead of O(n)
-   *
-   * @see columnPreps - Cached column definitions
-   * @see columnPositions - Cached column X positions
-   */
+  /** Build the per-column prep cache once per frame before rendering visible rows. */
   private prepareColumns(): void {
-    const columns = this.getVisibleColumns();
     this.columnPreps.clear();
-    this.columnPositions.clear();
-
-    // Cache column definitions and X positions in a single pass
-    let x = 0;
-    for (const column of columns) {
-      const colDef = getColumnDef(column, this.gridApi);
-      const width = Math.floor(column.width);
-      this.columnPreps.set(column.colId, prepColumn(this.ctx, column, colDef, this.theme));
-      this.columnPositions.set(column.colId, x);
-      x += width;
+    for (const column of this.getVisibleColumns()) {
+      this.columnPreps.set(
+        column.colId,
+        prepColumn(this.ctx, column, getColumnDef(column, this.gridApi), this.theme)
+      );
     }
   }
 
@@ -1035,10 +968,8 @@ export class CanvasRenderer<TData = any> {
       window.removeEventListener('resize', this.resizeListener);
     }
 
-    this.renderPending = false;
     this.nextRenderPending = false;
     this.animationFrameId = null;
-    this.blitState.reset();
     this.damageTracker.reset();
   }
 }

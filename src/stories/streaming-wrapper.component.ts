@@ -221,7 +221,7 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
   updateCount = 0;
   messageRate = 0;
   private lastUpdateCount = 0;
-  
+
   // Transaction throttling - buffer updates and apply in batches
   private pendingUpdates: Stock[] = [];
   private flushIntervalMs = 500; // Apply transactions at most every 500ms
@@ -392,11 +392,11 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
 
   private flushPendingUpdates(): void {
     if (!this.gridApi || this.pendingUpdates.length === 0) return;
-    
+
     // Apply all buffered updates in a single transaction
     const updatesToApply = [...this.pendingUpdates];
     this.pendingUpdates = [];
-    
+
     this.gridApi.applyTransaction({ update: updatesToApply });
   }
 

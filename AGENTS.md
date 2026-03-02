@@ -120,6 +120,36 @@ api.setFilterModel({
 api.setGridOption('floatingFilter', true);
 ```
 
+### Canvas Renderer Architecture & Invariants
+
+**CRITICAL — read before touching `canvas-renderer.ts` or `argent-grid.component.ts`:**
+
+#### Render Pipeline
+
+| Method | Behaviour | When to Use |
+|--------|-----------|-------------|
+| `renderFrame()` | Synchronous immediate paint. Bypasses damage gate. | Forced repaints only (tests, initial mount). |
+| `render()` | Calls `markAllDirty()` + `scheduleRender()`. | All event-driven repaints (`gridStateChanged$`, etc.). |
+| `scheduleRender()` | Queues one `requestAnimationFrame`. No-op if `!hasDamage()`. Uses `nextRenderPending` coalescing so concurrent calls queue at most one follow-up frame. | Called internally by `render()`. |
+
+#### Damage Gate
+
+`scheduleRender()` checks `damageTracker.hasDamage()` **before queuing any rAF**. `doRender()` also checks it as a secondary guard. If nothing is dirty, no frame is ever painted. Always call `markAllDirty()` (or `invalidateRow()`) before `scheduleRender()` if you want a repaint.
+
+#### applyTransaction Throttling — Client Responsibility
+
+The renderer does **not** throttle `applyTransaction`. High-frequency callers (e.g., streaming stories) must throttle upstream using RxJS (`throttleTime`, `bufferTime`, etc.). Do **not** re-introduce `renderThrottleMs` or any setTimeout delay inside the renderer.
+
+#### ResizeObserver Feedback Loop — NEVER set `canvas.style.width/height` in JS
+
+The canvas sits `position: sticky` inside an `overflow: auto` viewport div. If you assign `canvas.style.width` or `canvas.style.height` in JS, it changes the layout size of the canvas, which changes the scrollable content size of the viewport, which re-fires the ResizeObserver — **infinitely**. This produces a blank, ever-growing canvas.
+
+**Rule:** CSS owns the canvas layout size (`width: 100%; height: 100%; display: block` on `.argent-grid-canvas`). JS (`updateCanvasSize`) only sets the pixel buffer — `canvas.width` and `canvas.height` — for device pixel ratio scaling. Never touch `canvas.style.*` dimensions.
+
+#### blitState / setLastCanvas
+
+The `blitState.setLastCanvas()` call was removed from `doRender()`. Copying the entire canvas to an offscreen buffer every frame caused ~7 ms GC spikes at 60 fps. The blit/diff feature is not used by any current code path. Do not re-add `setLastCanvas()` inside the render loop.
+
 ### Agent Tooling & Verification
 
 Agents working on this repository should utilize the following tools for high-quality contributions:
@@ -147,6 +177,16 @@ Agents working on this repository should utilize the following tools for high-qu
 
 2. **Enterprise Row Models**
    - SSRM and Infinite Row Model support
+
+## Recent Changes (Phase VII Highlights)
+
+- **canvas-renderer** fix: eliminate ResizeObserver feedback loop — CSS now owns canvas layout size; JS only sets pixel buffer (`canvas.width/height`)
+- **canvas-renderer** fix: add damage gate in `scheduleRender()` — no rAF queued when nothing dirty, eliminating 60 fps idle CPU waste
+- **canvas-renderer** fix: add `nextRenderPending` coalescing flag — prevents dropped renders when `scheduleRender()` is called while a frame is already in-flight
+- **canvas-renderer** fix: remove `setLastCanvas()` from `doRender()` — was causing ~7 ms GC spike per frame
+- **canvas-renderer** refactor: remove `renderThrottleMs` / `setRenderThrottle()` entirely — clients throttle `applyTransaction` upstream via RxJS
+- **argent-grid.component** fix: remove redundant `renderFrame()` call from ResizeObserver callback (now handled by `setViewportDimensions` internally)
+- **streaming-wrapper** refactor: remove `renderThrottleMs` input binding
 
 ## Recent Changes (Phase VI Highlights)
 
