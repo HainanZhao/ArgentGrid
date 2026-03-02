@@ -218,10 +218,15 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
   private gridApi?: GridApi<Stock>;
   private intervalId: any;
   private rateIntervalId: any;
+  private flushIntervalId: any;
   isRunning = false;
   updateCount = 0;
   messageRate = 0;
   private lastUpdateCount = 0;
+  
+  // Transaction throttling - buffer updates and apply in batches
+  private pendingUpdates: Stock[] = [];
+  private flushIntervalMs = 500; // Apply transactions at most every 500ms
 
   ngOnInit(): void {
     this.rowData = this.generateInitialData();
@@ -247,6 +252,11 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
       this.updateStocks();
     }, this.updateFrequency);
 
+    // Flush pending updates every 500ms
+    this.flushIntervalId = setInterval(() => {
+      this.flushPendingUpdates();
+    }, this.flushIntervalMs);
+
     // Calculate message rate every second
     this.rateIntervalId = setInterval(() => {
       this.messageRate = this.updateCount - this.lastUpdateCount;
@@ -262,6 +272,11 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
     if (this.rateIntervalId) {
       clearInterval(this.rateIntervalId);
     }
+    if (this.flushIntervalId) {
+      clearInterval(this.flushIntervalId);
+    }
+    // Flush any remaining updates before stopping
+    this.flushPendingUpdates();
   }
 
   forceRender(): void {
@@ -372,9 +387,19 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
 
     this.rowData = newRowData;
 
-    // Apply updates to grid via transaction
-    this.gridApi.applyTransaction({ update: updates });
+    // Buffer updates for throttled applyTransaction
+    this.pendingUpdates.push(...updates);
     this.updateCount += updates.length;
+  }
+
+  private flushPendingUpdates(): void {
+    if (!this.gridApi || this.pendingUpdates.length === 0) return;
+    
+    // Apply all buffered updates in a single transaction
+    const updatesToApply = [...this.pendingUpdates];
+    this.pendingUpdates = [];
+    
+    this.gridApi.applyTransaction({ update: updatesToApply });
   }
 
   ngOnDestroy(): void {
