@@ -1,3 +1,4 @@
+import { moveItemInArray } from '@angular/cdk/drag-drop';
 import { Injectable } from '@angular/core';
 import { Workbook } from 'exceljs';
 import { Subject } from 'rxjs';
@@ -6,6 +7,7 @@ import {
   ColDef,
   ColGroupDef,
   Column,
+  ColumnGroup,
   CsvExportParams,
   ExcelExportParams,
   FilterModel,
@@ -17,12 +19,15 @@ import {
   IRowNode,
   RowDataTransaction,
   RowDataTransactionResult,
+  SortDirection,
   SortModelItem,
 } from '../types/ag-grid-types';
 
 @Injectable()
 export class GridService<TData = any> {
   private columns: Map<string, Column> = new Map();
+  private columnGroups: ColumnGroup[] = [];
+  private headerDepth = 1;
   private rowData: TData[] = [];
   private rowNodes: Map<string, IRowNode<TData>> = new Map();
   private displayedRowNodes: IRowNode<TData>[] = [];
@@ -62,7 +67,7 @@ export class GridService<TData = any> {
     this.gridOptions = gridOptions ? { ...gridOptions } : {};
     this.isPivotMode = !!this.gridOptions.pivotMode;
 
-    this.initializeColumns();
+    this.initializeColumns(true);
 
     // Trigger initial pipeline run
     this.applySorting();
@@ -89,16 +94,21 @@ export class GridService<TData = any> {
     return check(this.columnDefs);
   }
 
-  private initializeColumns(): void {
+  private initializeColumns(clearColumns: boolean = true): void {
     if (!this.columnDefs) {
       return;
     }
 
+    const existingColumns = clearColumns ? [] : Array.from(this.columns.values());
     this.columns.clear();
+    this.columnGroups = [];
+    this.headerDepth = 1;
 
     const groupColumns = this.getGroupColumns();
     const isGrouping = groupColumns.length > 0;
     const groupDisplayType = this.gridOptions?.groupDisplayType || 'singleColumn';
+
+    const topLevelColumns: (Column | ColumnGroup)[] = [];
 
     // 1. Handle Selection Column
     if (this.hasCheckboxSelection()) {
@@ -112,8 +122,10 @@ export class GridService<TData = any> {
         sort: null,
         checkboxSelection: true,
         headerCheckboxSelection: true,
+        colIndex: 0,
       };
       this.columns.set(selectionCol.colId, selectionCol);
+      topLevelColumns.push(selectionCol);
     }
 
     // 2. Handle Auto Group Column (for singleColumn display)
@@ -132,29 +144,376 @@ export class GridService<TData = any> {
         pinned: this.normalizePinned(autoGroupDef.pinned || 'left'),
         visible: true,
         sort: null,
+        colIndex: this.columns.size,
       };
       this.columns.set(autoGroupCol.colId, autoGroupCol);
+      topLevelColumns.push(autoGroupCol);
     }
 
-    // 2. Process regular columns
-    const columnsToProcess =
-      this.isPivotMode && this.pivotColumnDefs
-        ? [...this.columnDefs, ...this.pivotColumnDefs]
-        : this.columnDefs;
+    // 3. Process columns
+    let currentLeafIndex = topLevelColumns.length;
 
-    columnsToProcess.forEach((def, index) => {
-      if ('children' in def) {
-        // Column group
-        def.children.forEach((child, childIndex) => {
-          // Merge defaultColDef for nested columns too
-          const mergedChild = { ...this.gridOptions?.defaultColDef, ...child };
-          this.addColumn(mergedChild, index * 100 + childIndex, isGrouping);
-        });
-      } else {
-        const mergedDef = { ...this.gridOptions?.defaultColDef, ...def };
-        this.addColumn(mergedDef, index, isGrouping);
+    const processDefs = (
+      defs: (ColDef<TData> | ColGroupDef<TData>)[],
+      level: number,
+      parent?: ColumnGroup
+    ): (Column | ColumnGroup)[] => {
+      return defs.map((def, index) => {
+        if ('children' in def) {
+          const groupId = def.groupId || `group-${index}-${level}`;
+          const group: ColumnGroup = {
+            groupId,
+            headerName: def.headerName,
+            children: [],
+            displayedChildren: [],
+            visible: true,
+            expanded: !!def.openByDefault,
+            parent,
+            level,
+            pinned: false,
+            columnGroupShow: def.columnGroupShow,
+            marryChildren: !!def.marryChildren,
+            colIndex: 0,
+          };
+
+          const startIndex = currentLeafIndex;
+          group.children = processDefs(def.children, level + 1, group);
+          group.colIndex = startIndex;
+
+          const firstPinned = group.children.find((c) => 'pinned' in c && c.pinned)?.pinned;
+          group.pinned = firstPinned || false;
+
+          this.columnGroups.push(group);
+          return group;
+        } else {
+          const mergedDef = { ...this.gridOptions?.defaultColDef, ...def };
+          const colId = mergedDef.colId || mergedDef.field?.toString() || `col-${index}-${level}`;
+
+          // Preserve existing column if it exists to maintain width/order etc.
+          let column = existingColumns.find((c) => c.colId === colId);
+
+          let visible = !mergedDef.hide;
+          if (
+            isGrouping &&
+            mergedDef.rowGroup &&
+            visible &&
+            this.gridOptions?.groupHideOpenParents !== false
+          ) {
+            visible = false;
+          }
+
+          if (this.isPivotMode && mergedDef.pivot && visible) {
+            visible = false;
+          }
+
+          if (column) {
+            column.visible = visible;
+            column.parent = parent;
+            column.colIndex = currentLeafIndex++;
+            return column;
+          }
+
+          column = {
+            colId,
+            field: mergedDef.field?.toString(),
+            headerName: mergedDef.headerName,
+            width: mergedDef.width || 150,
+            minWidth: mergedDef.minWidth,
+            maxWidth: mergedDef.maxWidth,
+            pinned: this.normalizePinned(mergedDef.pinned),
+            visible: visible,
+            sort:
+              typeof mergedDef.sort === 'object' && mergedDef.sort !== null
+                ? (mergedDef.sort as any).sort
+                : mergedDef.sort || null,
+            sortIndex: mergedDef.sortIndex ?? undefined,
+            aggFunc: typeof mergedDef.aggFunc === 'string' ? mergedDef.aggFunc : null,
+            checkboxSelection: !!mergedDef.checkboxSelection,
+            headerCheckboxSelection: !!mergedDef.headerCheckboxSelection,
+            filter: mergedDef.filter,
+            parent,
+            columnGroupShow: mergedDef.columnGroupShow,
+            colIndex: currentLeafIndex++,
+          };
+
+          this.columns.set(colId, column);
+          return column;
+        }
+      });
+    };
+
+    const defsToProcess =
+      this.isPivotMode && this.pivotColumnDefs ? this.pivotColumnDefs : this.columnDefs || [];
+
+    topLevelColumns.push(...processDefs(defsToProcess, 0));
+
+    // 4. Add back any columns that were in existingColumns but not in defs
+    // (Only for normal columns, not internal Selection or AutoGroup columns
+    // which are handled in steps 1 and 2 above)
+    existingColumns.forEach((c) => {
+      if (
+        c.colId !== 'ag-Grid-SelectionColumn' &&
+        c.colId !== 'ag-Grid-AutoColumn' &&
+        !this.columns.has(c.colId)
+      ) {
+        this.columns.set(c.colId, c);
       }
     });
+
+    // 5. Calculate header depth
+    this.headerDepth = this.calculateHeaderDepth(topLevelColumns);
+  }
+
+  private calculateHeaderDepth(columns: (Column | ColumnGroup)[]): number {
+    let maxDepth = 0;
+    const walk = (items: (Column | ColumnGroup)[], depth: number) => {
+      maxDepth = Math.max(maxDepth, depth);
+      items.forEach((item) => {
+        if ('children' in item) {
+          walk(item.children, depth + 1);
+        }
+      });
+    };
+    walk(columns, 1);
+    return maxDepth;
+  }
+
+  public getHeaderRows(): (Column | ColumnGroup)[][] {
+    const rows: (Column | ColumnGroup)[][] = [];
+    for (let i = 0; i < this.headerDepth; i++) {
+      rows[i] = [];
+    }
+
+    const walk = (items: (Column | ColumnGroup)[], level: number) => {
+      items.forEach((item) => {
+        rows[level].push(item);
+        if ('children' in item) {
+          walk(item.children, level + 1);
+        }
+      });
+    };
+
+    const topItems: (Column | ColumnGroup)[] = [];
+
+    if (this.hasCheckboxSelection()) {
+      topItems.push(this.columns.get('ag-Grid-SelectionColumn')!);
+    }
+
+    const isGrouping = this.getGroupColumns().length > 0;
+    const groupDisplayType = this.gridOptions?.groupDisplayType || 'singleColumn';
+    if (
+      isGrouping &&
+      (groupDisplayType === 'singleColumn' || !this.gridOptions?.groupDisplayType)
+    ) {
+      topItems.push(this.columns.get('ag-Grid-AutoColumn')!);
+    }
+
+    const defsToProcess =
+      this.isPivotMode && this.pivotColumnDefs ? this.pivotColumnDefs : this.columnDefs || [];
+
+    const processTop = (
+      defs: (ColDef<TData> | ColGroupDef<TData>)[],
+      level: number
+    ): (Column | ColumnGroup)[] => {
+      return defs.map((def, index) => {
+        if ('children' in def) {
+          const groupId = def.groupId || `group-${index}-${level}`;
+          return this.columnGroups.find((g) => g.groupId === groupId)!;
+        } else {
+          const colId = def.colId || def.field?.toString() || `col-${index}-${level}`;
+          return this.columns.get(colId)!;
+        }
+      });
+    };
+
+    topItems.push(...processTop(defsToProcess, 0));
+
+    walk(topItems, 0);
+    return rows;
+  }
+
+  public toggleColumnGroup(groupId: string, expanded: boolean): void {
+    const group = this.columnGroups.find((g) => g.groupId === groupId);
+    if (group) {
+      group.expanded = expanded;
+      this.gridStateChanged$.next({ type: 'columnGroupExpanded', key: groupId, value: expanded });
+    }
+  }
+
+  public addRowGroupColumn(colId: string): void {
+    if (!this.columnDefs) return;
+
+    const updateDef = (defs: (ColDef<TData> | ColGroupDef<TData>)[]) => {
+      defs.forEach((def) => {
+        if ('children' in def) {
+          updateDef(def.children);
+        } else if (def.colId === colId || def.field === colId) {
+          def.rowGroup = true;
+        }
+      });
+    };
+
+    this.expandedGroups.clear();
+    updateDef(this.columnDefs);
+    this.initializeColumns(false);
+    this.applyFiltering();
+    this.gridStateChanged$.next({ type: 'columnsChanged' });
+  }
+
+  public removeRowGroupColumn(colId: string): void {
+    if (!this.columnDefs) return;
+
+    const updateDef = (defs: (ColDef<TData> | ColGroupDef<TData>)[]) => {
+      defs.forEach((def) => {
+        if ('children' in def) {
+          updateDef(def.children);
+        } else if (def.colId === colId || def.field === colId) {
+          def.rowGroup = false;
+        }
+      });
+    };
+
+    this.expandedGroups.clear();
+    updateDef(this.columnDefs);
+    this.initializeColumns(false);
+    this.applyFiltering();
+    this.gridStateChanged$.next({ type: 'columnsChanged' });
+  }
+
+  public setRowGroupColumns(colIds: string[]): void {
+    if (!this.columnDefs) return;
+
+    const updateDef = (defs: (ColDef<TData> | ColGroupDef<TData>)[]) => {
+      defs.forEach((def) => {
+        if ('children' in def) {
+          updateDef(def.children);
+        } else {
+          def.rowGroup = colIds.includes(def.colId || def.field?.toString() || '');
+        }
+      });
+    };
+
+    this.expandedGroups.clear();
+    updateDef(this.columnDefs);
+    this.initializeColumns(false);
+    this.applyFiltering();
+    this.gridStateChanged$.next({ type: 'columnsChanged' });
+  }
+
+  public setColumnPinned(col: string | Column, pinned: 'left' | 'right' | boolean): void {
+    const colId = typeof col === 'string' ? col : col.colId;
+    const column = this.columns.get(colId);
+    if (column) {
+      column.pinned = this.normalizePinned(pinned);
+
+      // Also update ColDef
+      if (this.columnDefs) {
+        const updateDef = (defs: (ColDef<TData> | ColGroupDef<TData>)[]) => {
+          defs.forEach((def) => {
+            if ('children' in def) updateDef(def.children);
+            else if (def.colId === colId || def.field === colId) {
+              def.pinned = column.pinned === false ? null : column.pinned;
+            }
+          });
+        };
+        updateDef(this.columnDefs);
+      }
+
+      this.initializeColumns(false);
+      this.gridStateChanged$.next({ type: 'columnsChanged' });
+    }
+  }
+
+  public moveColumn(col: string | Column, toIndex: number): void {
+    const colId = typeof col === 'string' ? col : col.colId;
+    const column = this.columns.get(colId);
+
+    if (column) {
+      const allCols = Array.from(this.columns.values());
+      const fromIdx = allCols.findIndex((c) => c.colId === colId);
+
+      // We want to find the target position relative to the section
+      const sectionCols = allCols.filter((c) => c.pinned === column.pinned);
+      const targetCol = sectionCols[toIndex];
+
+      let toIdx = -1;
+      if (targetCol) {
+        toIdx = allCols.findIndex((c) => c.colId === targetCol.colId);
+      } else {
+        // Drop at end of section
+        if (toIndex >= sectionCols.length) {
+          const lastInSection = sectionCols[sectionCols.length - 1];
+          if (lastInSection) {
+            toIdx = allCols.findIndex((c) => c.colId === lastInSection.colId);
+          }
+        } else {
+          const firstInSection = sectionCols[0];
+          if (firstInSection) {
+            toIdx = allCols.findIndex((c) => c.colId === firstInSection.colId);
+          }
+        }
+      }
+
+      if (toIdx !== -1 && fromIdx !== toIdx) {
+        moveItemInArray(allCols, fromIdx, toIdx);
+
+        // Also move in columnDefs if present
+        if (this.columnDefs) {
+          const fromDefIdx = this.columnDefs.findIndex(
+            (d) => !('children' in d) && (d.colId === colId || d.field?.toString() === colId)
+          );
+          if (fromDefIdx !== -1 && targetCol) {
+            const toDefIdx = this.columnDefs.findIndex(
+              (d) =>
+                !('children' in d) &&
+                (d.colId === targetCol.colId || d.field?.toString() === targetCol.colId)
+            );
+            if (toDefIdx !== -1) {
+              moveItemInArray(this.columnDefs, fromDefIdx, toDefIdx);
+            }
+          }
+        }
+
+        this.columns.clear();
+        allCols.forEach((c) => this.columns.set(c.colId, c));
+
+        this.initializeColumns(false);
+        this.gridStateChanged$.next({ type: 'columnsChanged' });
+      }
+    }
+  }
+
+  public setColumnVisible(col: string | Column, visible: boolean): void {
+    const colId = typeof col === 'string' ? col : col.colId;
+    const column = this.columns.get(colId);
+    if (column) {
+      column.visible = visible;
+      this.gridStateChanged$.next({ type: 'columnsChanged' });
+    }
+  }
+
+  public setColumnWidth(col: string | Column, width: number): void {
+    const colId = typeof col === 'string' ? col : col.colId;
+    const column = this.columns.get(colId);
+    if (column) {
+      column.width = Math.floor(width);
+      this.gridStateChanged$.next({ type: 'columnsChanged' });
+    }
+  }
+
+  public setColumnSort(col: string | Column, sort: SortDirection, multiSort?: boolean): void {
+    const colId = typeof col === 'string' ? col : col.colId;
+    const column = this.columns.get(colId);
+    if (column) {
+      column.sort = sort;
+      if (!multiSort) {
+        this.columns.forEach((c) => {
+          if (c.colId !== colId) c.sort = null;
+        });
+      }
+      this.applySorting();
+      this.gridStateChanged$.next({ type: 'sortChanged' });
+    }
   }
 
   private normalizePinned(
@@ -163,58 +522,6 @@ export class GridService<TData = any> {
     if (pinned === 'left' || pinned === true) return 'left';
     if (pinned === 'right') return 'right';
     return false;
-  }
-
-  private addColumn(def: ColDef<TData>, index: number, isGrouping: boolean): void {
-    const colId = def.colId || def.field?.toString() || `col-${index}`;
-
-    // Auto-hide columns that are being grouped (AG Grid default)
-    let visible = !def.hide;
-    if (isGrouping && def.rowGroup && visible && this.gridOptions?.groupHideOpenParents !== false) {
-      visible = false;
-    }
-
-    // Auto-hide columns that are being pivoted
-    if (this.isPivotMode && def.pivot && visible) {
-      visible = false;
-    }
-
-    // Auto-hide value columns if in pivot mode (they appear under pivot keys)
-    if (this.isPivotMode && def.aggFunc && visible && !colId.startsWith('pivot_')) {
-      visible = false;
-    }
-
-    // In pivot mode, hide columns that are not part of grouping or pivot results
-    if (
-      this.isPivotMode &&
-      visible &&
-      !def.rowGroup &&
-      !colId.startsWith('pivot_') &&
-      colId !== 'ag-Grid-AutoColumn'
-    ) {
-      visible = false;
-    }
-
-    const column: Column = {
-      colId,
-      field: def.field?.toString(),
-      headerName: def.headerName,
-      width: def.width || 150,
-      minWidth: def.minWidth,
-      maxWidth: def.maxWidth,
-      pinned: this.normalizePinned(def.pinned),
-      visible: visible,
-      sort:
-        typeof def.sort === 'object' && def.sort !== null
-          ? (def.sort as any).sort
-          : def.sort || null,
-      sortIndex: def.sortIndex ?? undefined,
-      aggFunc: typeof def.aggFunc === 'string' ? def.aggFunc : null,
-      checkboxSelection: !!def.checkboxSelection,
-      headerCheckboxSelection: !!def.headerCheckboxSelection,
-      filter: def.filter,
-    };
-    this.columns.set(colId, column);
   }
 
   private getRowId(data: TData, index: number): string {
@@ -237,7 +544,7 @@ export class GridService<TData = any> {
       setColumnDefs: (colDefs) => {
         this.columnDefs = colDefs;
         this.groupingDirty = true;
-        this.initializeColumns();
+        this.initializeColumns(true);
       },
       getColumn: (key) => {
         const colId = typeof key === 'string' ? key : key.colId;
@@ -247,6 +554,9 @@ export class GridService<TData = any> {
       getDisplayedRowAtIndex: (index) => {
         return this.displayedRowNodes[index] || null;
       },
+      getHeaderRows: () => this.getHeaderRows(),
+      getHeaderDepth: () => this.headerDepth,
+      getHeaderHeight: () => this.headerDepth * (this.gridOptions?.rowHeight || 32),
 
       // Row Data API
       getRowData: () => [...this.filteredRowData],
@@ -301,11 +611,7 @@ export class GridService<TData = any> {
         this.gridStateChanged$.next({ type: 'sortChanged' });
       },
       getSortModel: () => [...this.sortModel],
-      onSortChanged: () => {
-        this.applySorting();
-        this.applyFiltering(); // Re-filter and re-group after sort
-        this.gridStateChanged$.next({ type: 'sortChanged' });
-      },
+      // onSortChanged handled below
 
       // Pagination API
       paginationGetPageSize: () => 100,
@@ -392,6 +698,7 @@ export class GridService<TData = any> {
         if (!this.gridOptions) {
           this.gridOptions = {} as GridOptions<TData>;
         }
+        if (this.gridOptions[key] === value) return;
         this.gridOptions[key] = value;
         this.gridStateChanged$.next({ type: 'optionChanged', key: key as string, value });
       },
@@ -447,40 +754,6 @@ export class GridService<TData = any> {
       },
 
       // Column Operations
-      moveColumn: (column, toIndex) => {
-        // Basic implementation - reorder columns array
-        const cols = Array.from(this.columns.values());
-        const idx = cols.findIndex((c) => c.colId === column.colId);
-        if (idx !== -1) {
-          cols.splice(idx, 1);
-          cols.splice(toIndex, 0, column);
-          this.columns.clear();
-          cols.forEach((c) => {
-            this.columns.set(c.colId, c);
-          });
-        }
-      },
-      setColumnWidth: (column, width) => {
-        if (column) {
-          column.width = width;
-        }
-      },
-      setColumnPinned: (column, pinned) => {
-        if (column) {
-          column.pinned = pinned === true ? 'left' : pinned;
-        }
-      },
-      setColumnVisible: (column, visible) => {
-        if (column) {
-          column.visible = visible;
-        }
-      },
-      setColumnSort: (column, sort, multiSort) => {
-        if (column) {
-          column.sort = sort;
-          column.sortIndex = multiSort ? 0 : undefined;
-        }
-      },
       autoSizeColumns: (colKeys) => {
         // Basic implementation - set reasonable widths
         colKeys.forEach((key) => {
@@ -566,12 +839,20 @@ export class GridService<TData = any> {
       getValueColumns: () => {
         return [];
       },
-      getRowGroupColumns: () => {
-        return this.getGroupColumns();
-      },
+      toggleColumnGroup: (groupId, expanded) => this.toggleColumnGroup(groupId, expanded),
+      addRowGroupColumn: (colId) => this.addRowGroupColumn(colId),
+      removeRowGroupColumn: (colId) => this.removeRowGroupColumn(colId),
+      setRowGroupColumns: (colIds) => this.setRowGroupColumns(colIds),
+      getRowGroupColumns: () => this.getGroupColumns(),
       getGroupDisplayType: () => {
         return this.gridOptions?.groupDisplayType || 'singleColumn';
       },
+      setColumnPinned: (col, pinned) => this.setColumnPinned(col, pinned),
+      moveColumn: (col, toIndex) => this.moveColumn(col, toIndex),
+      setColumnVisible: (col, visible) => this.setColumnVisible(col, visible),
+      setColumnWidth: (col, width) => this.setColumnWidth(col, width),
+      setColumnSort: (col, sort, multiSort) => this.setColumnSort(col, sort, multiSort),
+      onSortChanged: () => this.applySorting(),
 
       // Tool Panels
       setSideBarVisible: (_visible) => {
@@ -1048,18 +1329,44 @@ export class GridService<TData = any> {
       }
 
       this.groupingDirty = false;
+
+      // Apply default expansion only on structural/data changes
+      const defaultExpanded = this.gridOptions?.groupDefaultExpanded ?? 0;
+      if (defaultExpanded !== 0) {
+        this.applyDefaultExpansion(this.cachedGroupedData, 0, defaultExpanded);
+      }
     }
 
-    // Re-initialize from cache (respects current expansion state)
-    this.updateExpansionStateInCache(this.cachedGroupedData);
+    // Re-initialize from cache (respects current expansion state in this.expandedGroups)
+    this.syncExpansionStateFromSet(this.cachedGroupedData);
     this.initializeRowNodesFromGroupedData();
   }
 
-  private updateExpansionStateInCache(groupedData: (TData | GroupRowNode<TData>)[]): void {
+  private applyDefaultExpansion(
+    groupedData: (TData | GroupRowNode<TData>)[],
+    level: number,
+    defaultExpanded: number
+  ): void {
+    const isDefaultExpanded = defaultExpanded === -1 || level < defaultExpanded;
+    if (!isDefaultExpanded) return;
+
+    for (const item of groupedData) {
+      if (this.isGroupRowNode(item)) {
+        this.expandedGroups.add(item.id);
+        if (item.children) {
+          this.applyDefaultExpansion(item.children, level + 1, defaultExpanded);
+        }
+      }
+    }
+  }
+
+  private syncExpansionStateFromSet(groupedData: (TData | GroupRowNode<TData>)[]): void {
     for (const item of groupedData) {
       if (this.isGroupRowNode(item)) {
         item.expanded = this.expandedGroups.has(item.id);
-        this.updateExpansionStateInCache(item.children);
+        if (item.children) {
+          this.syncExpansionStateFromSet(item.children);
+        }
       }
     }
   }

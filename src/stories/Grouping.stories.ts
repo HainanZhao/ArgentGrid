@@ -215,3 +215,42 @@ export const DragAndDropGrouping: Story = {
     },
   },
 };
+
+export const ColumnGroups: Story = {
+  args: {
+    columnDefs: [
+      {
+        headerName: 'Group A',
+        children: [
+          { field: 'id', headerName: 'ID', width: 80 },
+          { field: 'name', headerName: 'Name', width: 200 },
+        ],
+      },
+      {
+        headerName: 'Group B',
+        children: [
+          { field: 'department', headerName: 'Department', width: 180 },
+          {
+            headerName: 'Deep Group',
+            children: [
+              { field: 'role', headerName: 'Role', width: 250 },
+              { field: 'salary', headerName: 'Salary', width: 120 },
+            ],
+          },
+        ],
+      },
+      { field: 'location', headerName: 'Location', width: 150 },
+    ],
+    rowData: generateStaticData(50),
+    height: '500px',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: '**Nested column groups**. Demonstrates multiple levels of header grouping.',
+      },
+    },
+  },
+};

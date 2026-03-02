@@ -2000,4 +2000,80 @@ describe('GridService', () => {
       });
     });
   });
+
+  describe('Bug Fixes & Regression Protection', () => {
+    it('should only emit optionChanged if the value actually changed', () => {
+      const stateChangeSpy = vi.fn();
+      api.setGridOption('rowHeight', 40); // Initial set
+      service.gridStateChanged$.subscribe(stateChangeSpy);
+
+      api.setGridOption('rowHeight', 40); // Same value
+      expect(stateChangeSpy).not.toHaveBeenCalled();
+
+      api.setGridOption('rowHeight', 50); // Different value
+      expect(stateChangeSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'optionChanged',
+          key: 'rowHeight',
+          value: 50,
+        })
+      );
+    });
+
+    it('should respect groupDefaultExpanded option', () => {
+      const groupingApi = service.createApi(
+        [{ field: 'name', rowGroup: true }, { field: 'age' }],
+        testRowData,
+        { groupDefaultExpanded: 1 }
+      );
+
+      const rowCount = groupingApi.getDisplayedRowCount();
+      // 2 groups (John, Jane, Bob are unique in testRowData name field) + 3 rows = 6 rows total if all expanded
+      // Wait, testRowData has 3 unique names. So 3 groups + 3 rows = 6.
+      expect(rowCount).toBe(6);
+
+      const firstNode = groupingApi.getDisplayedRowAtIndex(0);
+      expect(firstNode?.group).toBe(true);
+      expect(firstNode?.expanded).toBe(true);
+    });
+
+    it('should allow collapsing a group even when groupDefaultExpanded is set', () => {
+      const groupingApi = service.createApi(
+        [{ field: 'name', rowGroup: true }, { field: 'age' }],
+        testRowData,
+        { groupDefaultExpanded: 1 }
+      );
+
+      expect(groupingApi.getDisplayedRowCount()).toBe(6);
+
+      const firstGroup = groupingApi.getDisplayedRowAtIndex(0);
+      expect(firstGroup?.group).toBe(true);
+      expect(firstGroup?.expanded).toBe(true);
+
+      // Collapse it
+      groupingApi.setRowNodeExpanded(firstGroup!, false);
+
+      expect(firstGroup?.expanded).toBe(false);
+      // 3 groups + 3 rows - 1 child of first group = 5
+      expect(groupingApi.getDisplayedRowCount()).toBe(5);
+    });
+
+    it('should remove ag-Grid-AutoColumn when grouping is disabled', () => {
+      api.addRowGroupColumn('name');
+      expect(api.getAllColumns().find((c) => c.colId === 'ag-Grid-AutoColumn')).toBeDefined();
+
+      api.removeRowGroupColumn('name');
+      expect(api.getAllColumns().find((c) => c.colId === 'ag-Grid-AutoColumn')).toBeUndefined();
+    });
+
+    it('should remove ag-Grid-SelectionColumn when checkbox selection is disabled', () => {
+      api.setColumnDefs([{ field: 'id', checkboxSelection: true }, { field: 'name' }]);
+      expect(api.getAllColumns().find((c) => c.colId === 'ag-Grid-SelectionColumn')).toBeDefined();
+
+      api.setColumnDefs([{ field: 'id', checkboxSelection: false }, { field: 'name' }]);
+      expect(
+        api.getAllColumns().find((c) => c.colId === 'ag-Grid-SelectionColumn')
+      ).toBeUndefined();
+    });
+  });
 });

@@ -349,6 +349,20 @@ export interface GridApi<TData = any> {
   getColumn(key: string | Column): Column | null;
   getAllColumns(): Column[];
   getDisplayedRowAtIndex(index: number): IRowNode<TData> | null;
+  getHeaderRows(): (Column | ColumnGroup)[][];
+  getHeaderDepth(): number;
+  getHeaderHeight(): number;
+  toggleColumnGroup(groupId: string, expanded: boolean): void;
+  addRowGroupColumn(colId: string): void;
+  removeRowGroupColumn(colId: string): void;
+  setRowGroupColumns(colIds: string[]): void;
+  getRowGroupColumns(): string[];
+  setColumnPinned(col: string | Column, pinned: 'left' | 'right' | boolean): void;
+  moveColumn(col: string | Column, toIndex: number): void;
+  setColumnVisible(col: string | Column, visible: boolean): void;
+  setColumnWidth(col: string | Column, width: number): void;
+  setColumnSort(col: string | Column, sort: SortDirection, multiSort?: boolean): void;
+  onSortChanged(): void;
 
   // === ROW DATA API ===
   getRowData(): TData[];
@@ -466,6 +480,25 @@ export interface Column {
   checkboxSelection?: boolean;
   headerCheckboxSelection?: boolean;
   filter?: any;
+  parent?: ColumnGroup;
+  columnGroupShow?: 'open' | 'closed' | 'all';
+  colIndex?: number;
+}
+
+export interface ColumnGroup {
+  groupId: string;
+  headerName?: string;
+  children: (Column | ColumnGroup)[];
+  displayedChildren: (Column | ColumnGroup)[];
+  visible: boolean;
+  expanded: boolean;
+  resizable?: boolean;
+  parent?: ColumnGroup;
+  pinned?: 'left' | 'right' | false;
+  level: number;
+  columnGroupShow?: 'open' | 'closed' | 'all';
+  marryChildren?: boolean;
+  colIndex?: number;
 }
 
 export interface IRowNode<TData = any> {

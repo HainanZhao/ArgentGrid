@@ -4,7 +4,29 @@
  * Helper functions for column management and definition lookup.
  */
 
-import { ColDef, Column, GridApi } from '../../types/ag-grid-types';
+import { ColDef, Column, ColumnGroup, GridApi } from '../../types/ag-grid-types';
+
+/**
+ * Check if a column or column group is visible, respecting columnGroupShow
+ */
+export function isColumnVisible(item: Column | ColumnGroup): boolean {
+  if (item.columnGroupShow) {
+    const parent = item.parent;
+    if (parent) {
+      if (item.columnGroupShow === 'open') {
+        return parent.expanded;
+      }
+      if (item.columnGroupShow === 'closed') {
+        return !parent.expanded;
+      }
+    }
+  }
+
+  if ('children' in item) {
+    return item.children.some((child) => isColumnVisible(child));
+  }
+  return item.visible;
+}
 
 /**
  * Find the Column Definition for a given Column
@@ -60,14 +82,14 @@ export function getColumnX(
 
   // Adjust for pinned columns and scroll position
   if (targetCol.pinned === 'left') {
-    return baseX;
+    return Math.floor(baseX);
   } else if (targetCol.pinned === 'right') {
     // When right-pinned, we need to know the offset from the right edge
     // Our positions are accumulated from left to right.
     // We need to find where the right-pinned section starts.
-    const rightPinnedStartX = viewportWidth - rightPinnedWidth;
-    return rightPinnedStartX + (baseX - (viewportWidth - rightPinnedWidth));
+    const rightPinnedStartX = Math.floor(viewportWidth - rightPinnedWidth);
+    return rightPinnedStartX + Math.floor(baseX - (viewportWidth - rightPinnedWidth));
   } else {
-    return leftPinnedWidth - scrollLeft + (baseX - leftPinnedWidth);
+    return Math.floor(leftPinnedWidth - scrollLeft + (baseX - leftPinnedWidth));
   }
 }

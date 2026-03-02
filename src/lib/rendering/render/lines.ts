@@ -107,7 +107,8 @@ export function drawColumnLines(
   startRow: number = 0,
   endRow: number = 0,
   rowHeight: number = 32,
-  api?: GridApi
+  api?: GridApi,
+  availableWidth?: number
 ): void {
   ctx.strokeStyle = theme.borderColor || theme.gridLineColor;
   ctx.lineWidth = 1;
@@ -117,7 +118,8 @@ export function drawColumnLines(
     scrollX,
     viewportWidth,
     leftPinnedWidth,
-    rightPinnedWidth
+    rightPinnedWidth,
+    availableWidth
   );
 
   // Calculate Y range for drawing
@@ -145,13 +147,16 @@ export function getColumnBorderPositions(
   scrollX: number,
   viewportWidth: number,
   leftPinnedWidth: number,
-  rightPinnedWidth: number
+  rightPinnedWidth: number,
+  availableWidth?: number
 ): number[] {
   const positions: number[] = [];
 
   const leftPinned = columns.filter((c) => c.pinned === 'left');
   const rightPinned = columns.filter((c) => c.pinned === 'right');
   const centerColumns = columns.filter((c) => !c.pinned);
+
+  const effectiveWidth = availableWidth ?? viewportWidth;
 
   // Left pinned column borders
   let x = 0;
@@ -162,16 +167,17 @@ export function getColumnBorderPositions(
 
   // Center column borders
   x = Math.floor(leftPinnedWidth) - scrollX;
+  const centerEndX = Math.floor(effectiveWidth - rightPinnedWidth);
   for (const col of centerColumns) {
     x += Math.floor(col.width);
-    // Only include if visible
-    if (x > leftPinnedWidth && x < viewportWidth - rightPinnedWidth) {
+    // Only include if visible in the center area
+    if (x > leftPinnedWidth && x < centerEndX) {
       positions.push(x);
     }
   }
 
   // Right pinned column borders
-  x = Math.floor(viewportWidth - rightPinnedWidth);
+  x = centerEndX;
   for (const col of rightPinned) {
     x += Math.floor(col.width);
     positions.push(x);
