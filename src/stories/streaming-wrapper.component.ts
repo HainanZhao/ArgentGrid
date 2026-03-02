@@ -48,7 +48,6 @@ interface Stock {
         [width]="width"
         [theme]="theme"
         [gridOptions]="gridOptions"
-        [renderThrottleMs]="renderThrottleMs"
         (gridReady)="onGridReady($event)"
       />
     </div>
@@ -150,7 +149,6 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
 
   @Input() updateFrequency = 200; // ms
   @Input() batchSize = 10;
-  @Input() renderThrottleMs = 16;
 
   columnDefs: ColDef<Stock>[] = [
     { field: 'symbol', headerName: 'Symbol', width: 100, pinned: 'left', sortable: true },

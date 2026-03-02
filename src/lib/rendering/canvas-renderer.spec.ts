@@ -315,7 +315,8 @@ describe('CanvasRenderer', () => {
     vi.spyOn(mockApi, 'getDisplayedRowAtIndex').mockReturnValue(mockRowNode);
     vi.spyOn(mockApi, 'getDisplayedRowCount').mockReturnValue(1);
 
-    // Force a render
+    // Mark dirty so doRender doesn't skip, then force a synchronous render
+    renderer.invalidateAll();
     renderer.renderFrame();
 
     // Verify strokeRect was called (for checkbox border)

@@ -69,8 +69,9 @@ export class CanvasRenderer<TData = any> {
 
   private animationFrameId: number | null = null;
   private renderPending = false;
-  private lastRenderTime = 0;
-  private renderThrottleMs = 16; // Default to ~60fps
+  // When a render is already in-flight and another is requested, coalesce it here
+  // so it fires immediately after the current frame completes rather than being dropped.
+  private nextRenderPending = false;
   private rowBuffer = 5;
   private viewportHeight = 0;
   private viewportWidth = 0;
@@ -347,10 +348,12 @@ export class CanvasRenderer<TData = any> {
     const width = this.viewportWidth || this.canvas.clientWidth;
     const height = this.viewportHeight || this.canvas.clientHeight || 600;
 
+    // Set pixel buffer dimensions only. CSS sizing is handled by the stylesheet
+    // (width: 100%; height: 100%) so we never touch canvas.style.width/height here.
+    // Modifying canvas style dimensions would change layout, re-fire the
+    // ResizeObserver and create an infinite grow loop.
     this.canvas.width = width * dpr;
     this.canvas.height = height * dpr;
-    this.canvas.style.width = `${width}px`;
-    this.canvas.style.height = `${height}px`;
 
     if (this.ctx) {
       if (typeof this.ctx.setTransform === 'function') {
@@ -373,50 +376,38 @@ export class CanvasRenderer<TData = any> {
     this.setViewportDimensions(rect.width, rect.height);
   }
 
-  /**
-   * Set render throttling interval
-   *
-   * @param ms - Minimum time between frames in milliseconds
-   */
-  setRenderThrottle(ms: number): void {
-    this.renderThrottleMs = Math.max(0, ms);
-  }
-
   render(): void {
     this.damageTracker.markAllDirty();
     this.scheduleRender();
   }
 
   /**
-   * Schedule a render with throttling
-   *
-   * Performance optimization: Batches multiple render requests into a single
-   * requestAnimationFrame call, and ensures we don't render more often than
-   * renderThrottleMs (defaults to 16ms / 60fps).
+   * Schedule a render on the next animation frame.
+   * Coalesces multiple calls: if a frame is already in-flight, sets a flag so
+   * exactly one more frame fires after it completes (no renders are dropped,
+   * no renders pile up).
+   * Skips scheduling entirely if nothing is marked dirty.
    */
   private scheduleRender(): void {
-    if (this.renderPending || this.animationFrameId !== null) return;
+    // Don't queue a rAF at all if there's nothing to paint.
+    if (!this.damageTracker.hasDamage()) return;
 
-    const now = performance.now();
-    const timeSinceLastRender = now - this.lastRenderTime;
-    const delay = Math.max(0, this.renderThrottleMs - timeSinceLastRender);
+    if (this.renderPending || this.animationFrameId !== null) {
+      this.nextRenderPending = true;
+      return;
+    }
 
     this.renderPending = true;
+    this.animationFrameId = requestAnimationFrame(() => {
+      this.doRender();
+      this.renderPending = false;
+      this.animationFrameId = null;
 
-    const executeRender = () => {
-      this.animationFrameId = requestAnimationFrame(() => {
-        this.doRender();
-        this.lastRenderTime = performance.now();
-        this.renderPending = false;
-        this.animationFrameId = null;
-      });
-    };
-
-    if (delay <= 0) {
-      executeRender();
-    } else {
-      setTimeout(executeRender, delay);
-    }
+      if (this.nextRenderPending) {
+        this.nextRenderPending = false;
+        this.scheduleRender();
+      }
+    });
   }
 
   getAllColumns(): Column[] {
@@ -457,6 +448,9 @@ export class CanvasRenderer<TData = any> {
   }
 
   private doRender(): void {
+    // Skip paint entirely if nothing has been marked dirty.
+    if (!this.damageTracker.hasDamage()) return;
+
     const startTime = performance.now();
     const width = this.viewportWidth || this.canvas.clientWidth;
     const height = this.viewportHeight || this.canvas.clientHeight;
@@ -532,9 +526,6 @@ export class CanvasRenderer<TData = any> {
 
     // Draw range selections
     this.drawRangeSelections(positionedColumns, leftWidth, rightWidth, width);
-
-    // Store current frame for blitting
-    this.blitState.setLastCanvas(this.canvas);
 
     // Clear damage
     this.damageTracker.clear();
@@ -1045,6 +1036,8 @@ export class CanvasRenderer<TData = any> {
     }
 
     this.renderPending = false;
+    this.nextRenderPending = false;
+    this.animationFrameId = null;
     this.blitState.reset();
     this.damageTracker.reset();
   }

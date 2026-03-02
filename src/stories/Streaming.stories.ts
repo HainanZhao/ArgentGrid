@@ -22,11 +22,10 @@ export const LiveStockFeed: Story = {
   args: {
     updateFrequency: 100,
     batchSize: 5,
-    renderThrottleMs: 100, // 10fps for data updates
   },
   render: (args) => ({
     props: args,
-    template: `<app-streaming-wrapper [updateFrequency]="updateFrequency" [batchSize]="batchSize" [renderThrottleMs]="renderThrottleMs" />`,
+    template: `<app-streaming-wrapper [updateFrequency]="updateFrequency" [batchSize]="batchSize" />`,
   }),
   parameters: {
     docs: {
@@ -42,11 +41,10 @@ export const HighFrequencyStream: Story = {
   args: {
     updateFrequency: 50,
     batchSize: 10,
-    renderThrottleMs: 32, // ~30fps for high frequency
   },
   render: (args) => ({
     props: args,
-    template: `<app-streaming-wrapper [updateFrequency]="updateFrequency" [batchSize]="batchSize" [renderThrottleMs]="renderThrottleMs" />`,
+    template: `<app-streaming-wrapper [updateFrequency]="updateFrequency" [batchSize]="batchSize" />`,
   }),
   parameters: {
     docs: {

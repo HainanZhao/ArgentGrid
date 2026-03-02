@@ -52,7 +52,6 @@ export class ArgentGridComponent<TData = any>
   @Input() height = '500px';
   @Input() width = '100%';
   @Input() rowHeight = 32;
-  @Input() renderThrottleMs = 16;
   @Input() rowSelection: RowSelectionOptions | 'single' | 'multiple' | undefined;
 
   @Output() gridReady = new EventEmitter<GridApi<TData>>();
@@ -153,7 +152,6 @@ export class ArgentGridComponent<TData = any>
   private gridService = new GridService<TData>();
   private horizontalScrollListener?: (e: Event) => void;
   private resizeObserver?: ResizeObserver;
-  private originalThrottleMs = 16;
 
   constructor(
     @Inject(ChangeDetectorRef) private _cdr: ChangeDetectorRef,
@@ -179,12 +177,6 @@ export class ArgentGridComponent<TData = any>
     // Handle gridOptions changes
     if (changes.gridOptions && !changes.gridOptions.firstChange) {
       this.onGridOptionsChanged(changes.gridOptions.currentValue);
-    }
-
-    // Handle renderThrottleMs changes
-    if (changes.renderThrottleMs && !changes.renderThrottleMs.firstChange) {
-      this.originalThrottleMs = changes.renderThrottleMs.currentValue;
-      this.canvasRenderer?.setRenderThrottle(changes.renderThrottleMs.currentValue);
     }
 
     // Handle rowSelection changes
@@ -228,9 +220,6 @@ export class ArgentGridComponent<TData = any>
         this.rowHeight,
         convertedTheme
       );
-      this.originalThrottleMs = this.renderThrottleMs;
-      this.canvasRenderer.setRenderThrottle(this.renderThrottleMs);
-
       // Wire up cell editing callback
       this.canvasRenderer.onCellDoubleClick = (rowIndex, colId) => {
         this.startEditing(rowIndex, colId);
@@ -344,7 +333,7 @@ export class ArgentGridComponent<TData = any>
             updateScrollbar();
 
             this.canvasRenderer?.setViewportDimensions(width, height, this.scrollbarWidth);
-            this.canvasRenderer?.renderFrame();
+            // setViewportDimensions → updateCanvasSize already schedules a render.
             this._cdr.detectChanges();
           }
         });
@@ -412,19 +401,21 @@ export class ArgentGridComponent<TData = any>
         this.updateRowGroupColumns();
         this.canvasRenderer?.render();
       } else if (event.type === 'transactionApplied') {
-        // Efficient rendering: only mark changed rows as dirty instead of full redraw
+        // Efficient rendering: only mark changed rows as dirty instead of full redraw.
+        // Callers are responsible for throttling applyTransaction frequency (e.g. via RxJS).
         const changedIndices = (event as any).changedRowIndices as number[] | undefined;
         if (changedIndices && changedIndices.length > 0 && this.canvasRenderer) {
-          // Only mark the specific changed rows as dirty (invalidateRow calls scheduleRender internally)
           for (const rowIndex of changedIndices) {
             this.canvasRenderer.invalidateRow(rowIndex);
           }
         } else {
-          // Fallback to full redraw if no specific rows provided
           this.canvasRenderer?.render();
         }
       } else {
-        this.canvasRenderer?.renderFrame();
+        // All other state changes (sort, filter, rangeSelection, etc.) go through the
+        // rAF-coalesced scheduler. Multiple rapid events (e.g. rangeSelectionChanged
+        // on every mousemove) collapse into at most one pending frame.
+        this.canvasRenderer?.render();
       }
       this._cdr.detectChanges();
     });
@@ -1462,9 +1453,6 @@ export class ArgentGridComponent<TData = any>
     this.resizeStartX = event.clientX;
     this.resizeStartWidth = this.getItemWidth(item);
 
-    // Disable throttling during resize for smooth interaction
-    this.canvasRenderer?.setRenderThrottle(0);
-
     const mouseMoveHandler = (e: MouseEvent) => this.onResizeMouseMove(e);
     const mouseUpHandler = () => {
       this.onResizeMouseUp();
@@ -1492,9 +1480,6 @@ export class ArgentGridComponent<TData = any>
   private onResizeMouseUp(): void {
     this.isResizing = false;
     this.resizeItem = null;
-
-    // Restore throttling
-    this.canvasRenderer?.setRenderThrottle(this.originalThrottleMs);
   }
 
   private applyResize(item: Column | ColumnGroup, newWidth: number): void {
