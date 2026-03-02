@@ -154,10 +154,13 @@ export function getVisibleRowRange(
 ): { startRow: number; endRow: number } {
   if (api) {
     const startRow = Math.max(0, Math.min(totalRowCount - 1, api.getRowAtY(scrollTop)) - buffer);
-    const endRow = Math.min(totalRowCount, api.getRowAtY(Math.max(0, scrollTop + viewportHeight)) + buffer + 1);
-    return { 
-      startRow: Math.max(0, startRow), 
-      endRow: Math.max(0, Math.min(totalRowCount, endRow)) 
+    const endRow = Math.min(
+      totalRowCount,
+      api.getRowAtY(Math.max(0, scrollTop + viewportHeight)) + buffer + 1
+    );
+    return {
+      startRow: Math.max(0, startRow),
+      endRow: Math.max(0, Math.min(totalRowCount, endRow)),
     };
   }
 

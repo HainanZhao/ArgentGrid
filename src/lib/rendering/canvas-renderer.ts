@@ -375,7 +375,7 @@ export class CanvasRenderer<TData = any> {
 
   /**
    * Set render throttling interval
-   * 
+   *
    * @param ms - Minimum time between frames in milliseconds
    */
   setRenderThrottle(ms: number): void {
@@ -389,7 +389,7 @@ export class CanvasRenderer<TData = any> {
 
   /**
    * Schedule a render with throttling
-   * 
+   *
    * Performance optimization: Batches multiple render requests into a single
    * requestAnimationFrame call, and ensures we don't render more often than
    * renderThrottleMs (defaults to 16ms / 60fps).
@@ -493,7 +493,7 @@ export class CanvasRenderer<TData = any> {
         viewport: { width, height },
         rows: { total: totalRows, start: startRow, end: endRow },
         scroll: { top: this.scrollTop, left: this.scrollLeft },
-        columns: allVisibleColumns.length
+        columns: allVisibleColumns.length,
       });
     }
 

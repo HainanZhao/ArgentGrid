@@ -335,14 +335,14 @@ export class ArgentGridComponent<TData = any>
           for (const entry of entries) {
             const { width, height } = entry.contentRect;
             if (Math.abs(width - lastWidth) < 1 && Math.abs(height - lastHeight) < 1) continue;
-            
+
             lastWidth = width;
             lastHeight = height;
             this.viewportHeight = height;
-            
+
             // Only update scrollbar if dimensions actually changed
             updateScrollbar();
-            
+
             this.canvasRenderer?.setViewportDimensions(width, height, this.scrollbarWidth);
             this.canvasRenderer?.renderFrame();
             this._cdr.detectChanges();
@@ -1484,7 +1484,7 @@ export class ArgentGridComponent<TData = any>
   private onResizeMouseUp(): void {
     this.isResizing = false;
     this.resizeItem = null;
-    
+
     // Restore throttling
     this.canvasRenderer?.setRenderThrottle(this.originalThrottleMs);
   }

@@ -288,14 +288,14 @@
   top: 0;
   bottom: 0;
   width: 6px;
-  cursor: col-resize !important;
+  cursor: col-resize;
   z-index: 100;
 }
 
 .argent-grid-header-resize-handle:hover,
 .argent-grid-header-resize-handle.resizing {
   background: #2196f3;
-  cursor: col-resize !important;
+  cursor: col-resize;
 }
 
 .argent-grid-side-bar {

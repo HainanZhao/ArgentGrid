@@ -155,43 +155,43 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
   columnDefs: ColDef<Stock>[] = [
     { field: 'symbol', headerName: 'Symbol', width: 100, pinned: 'left', sortable: true },
     { field: 'name', headerName: 'Name', width: 200, sortable: true },
-    { 
-      field: 'price', 
-      headerName: 'Price', 
-      width: 120, 
+    {
+      field: 'price',
+      headerName: 'Price',
+      width: 120,
       sortable: true,
-      valueFormatter: (params: any) => `$${params.value.toFixed(2)}`
+      valueFormatter: (params: any) => `$${params.value.toFixed(2)}`,
     },
-    { 
-      field: 'change', 
-      headerName: 'Change', 
+    {
+      field: 'change',
+      headerName: 'Change',
       width: 100,
       valueFormatter: (params: any) => {
         const val = params.value;
         const sign = val >= 0 ? '+' : '';
         return `${sign}${val.toFixed(2)}`;
-      }
+      },
     },
-    { 
-      field: 'changePct', 
-      headerName: '% Change', 
+    {
+      field: 'changePct',
+      headerName: '% Change',
       width: 100,
       valueFormatter: (params: any) => {
         const val = params.value;
         const sign = val >= 0 ? '+' : '';
         return `${sign}${val.toFixed(2)}%`;
-      }
+      },
     },
-    { 
-      field: 'volume', 
-      headerName: 'Volume', 
-      width: 140, 
+    {
+      field: 'volume',
+      headerName: 'Volume',
+      width: 140,
       sortable: true,
-      valueFormatter: (params: any) => params.value.toLocaleString()
+      valueFormatter: (params: any) => params.value.toLocaleString(),
     },
-    { 
-      field: 'marketCap', 
-      headerName: 'Mkt Cap', 
+    {
+      field: 'marketCap',
+      headerName: 'Mkt Cap',
       width: 140,
       sortable: true,
       cellRenderer: (params: any) => {
@@ -199,8 +199,8 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
         if (val >= 1e12) return `$${(val / 1e12).toFixed(2)}T`;
         if (val >= 1e9) return `$${(val / 1e9).toFixed(1)}B`;
         return `$${(val / 1e6).toFixed(1)}M`;
-      }
-    }
+      },
+    },
   ];
 
   rowData: Stock[] = [];
@@ -305,12 +305,12 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
     // Expand to 100 stocks for more activity
     const allStocks: Stock[] = [];
     for (let i = 0; i < 5; i++) {
-      symbols.forEach(sym => {
+      symbols.forEach((sym) => {
         const symbol = i === 0 ? sym.s : `${sym.s}_${i}`;
         const name = i === 0 ? sym.n : `${sym.n} Class ${i}`;
         const price = sym.p * (0.8 + Math.random() * 0.4);
         const history = Array.from({ length: 20 }, () => price * (0.95 + Math.random() * 0.1));
-        
+
         allStocks.push({
           id: symbol,
           symbol,
@@ -320,7 +320,7 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
           changePct: 0,
           history,
           volume: Math.floor(Math.random() * 10000000) + 1000000,
-          marketCap: sym.m * (0.8 + Math.random() * 0.4)
+          marketCap: sym.m * (0.8 + Math.random() * 0.4),
         });
       });
     }
@@ -333,7 +333,7 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
 
     const updates: Stock[] = [];
     const indicesToUpdate = new Set<number>();
-    
+
     // Pick unique random stocks to update
     while (indicesToUpdate.size < Math.min(this.batchSize, this.rowData.length)) {
       indicesToUpdate.add(Math.floor(Math.random() * this.rowData.length));
@@ -342,30 +342,30 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
     // Create a NEW array for rowData to ensure OnPush detects change
     const newRowData = [...this.rowData];
 
-    indicesToUpdate.forEach(idx => {
+    indicesToUpdate.forEach((idx) => {
       const stock = newRowData[idx];
-      
+
       // Realistic price movement (Random Walk with slight mean reversion)
       const volatility = 0.002; // 0.2% per update
       const drift = 0.00001; // slight upward drift
       const change = stock.price * (volatility * (Math.random() - 0.5) + drift);
-      
+
       const newPrice = Math.max(0.01, stock.price + change);
       const dayChange = newPrice - (stock.price - stock.change);
       const dayChangePct = (dayChange / (newPrice - dayChange)) * 100;
-      
+
       // Update history
       const newHistory = [...stock.history.slice(1), newPrice];
-      
+
       const updatedStock = {
         ...stock,
         price: newPrice,
         change: dayChange,
         changePct: dayChangePct,
         history: newHistory,
-        volume: stock.volume + Math.floor(Math.random() * 1000)
+        volume: stock.volume + Math.floor(Math.random() * 1000),
       };
-      
+
       newRowData[idx] = updatedStock;
       updates.push(updatedStock);
     });
