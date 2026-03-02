@@ -23,6 +23,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "paths": {
+      "exceljs": ["node_modules/exceljs/index.d.ts"],
       "argent-grid": ["dist"],
       "argent-grid/*": ["dist/*"]
     }

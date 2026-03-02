@@ -69,6 +69,8 @@ export class CanvasRenderer<TData = any> {
 
   private animationFrameId: number | null = null;
   private renderPending = false;
+  private lastRenderTime = 0;
+  private renderThrottleMs = 16; // Default to ~60fps
   private rowBuffer = 5;
   private viewportHeight = 0;
   private viewportWidth = 0;
@@ -325,6 +327,13 @@ export class CanvasRenderer<TData = any> {
   }
 
   setViewportDimensions(width: number, height: number, scrollbarWidth: number = 0): void {
+    if (
+      Math.abs(this.viewportWidth - width) < 1 &&
+      Math.abs(this.viewportHeight - height) < 1 &&
+      this.scrollbarWidth === scrollbarWidth
+    ) {
+      return;
+    }
     this.viewportWidth = width;
     this.viewportHeight = height;
     this.scrollbarWidth = scrollbarWidth;
@@ -361,10 +370,16 @@ export class CanvasRenderer<TData = any> {
     if (!container) return;
 
     const rect = container.getBoundingClientRect();
-    this.viewportWidth = rect.width;
-    this.viewportHeight = rect.height;
+    this.setViewportDimensions(rect.width, rect.height);
+  }
 
-    this.updateCanvasSize();
+  /**
+   * Set render throttling interval
+   * 
+   * @param ms - Minimum time between frames in milliseconds
+   */
+  setRenderThrottle(ms: number): void {
+    this.renderThrottleMs = Math.max(0, ms);
   }
 
   render(): void {
@@ -372,15 +387,36 @@ export class CanvasRenderer<TData = any> {
     this.scheduleRender();
   }
 
+  /**
+   * Schedule a render with throttling
+   * 
+   * Performance optimization: Batches multiple render requests into a single
+   * requestAnimationFrame call, and ensures we don't render more often than
+   * renderThrottleMs (defaults to 16ms / 60fps).
+   */
   private scheduleRender(): void {
     if (this.renderPending || this.animationFrameId !== null) return;
 
+    const now = performance.now();
+    const timeSinceLastRender = now - this.lastRenderTime;
+    const delay = Math.max(0, this.renderThrottleMs - timeSinceLastRender);
+
     this.renderPending = true;
-    this.animationFrameId = requestAnimationFrame(() => {
-      this.doRender();
-      this.renderPending = false;
-      this.animationFrameId = null;
-    });
+
+    const executeRender = () => {
+      this.animationFrameId = requestAnimationFrame(() => {
+        this.doRender();
+        this.lastRenderTime = performance.now();
+        this.renderPending = false;
+        this.animationFrameId = null;
+      });
+    };
+
+    if (delay <= 0) {
+      executeRender();
+    } else {
+      setTimeout(executeRender, delay);
+    }
   }
 
   getAllColumns(): Column[] {
@@ -450,6 +486,16 @@ export class CanvasRenderer<TData = any> {
       this.rowBuffer,
       this.gridApi
     );
+
+    // Log state periodically (not every frame to avoid flood)
+    if (Math.random() < 0.01) {
+      console.log('[ArgentGrid] doRender', {
+        viewport: { width, height },
+        rows: { total: totalRows, start: startRow, end: endRow },
+        scroll: { top: this.scrollTop, left: this.scrollLeft },
+        columns: allVisibleColumns.length
+      });
+    }
 
     // Prepare columns (sets font, caches colDef)
     this.prepareColumns();

@@ -153,9 +153,12 @@ export function getVisibleRowRange(
   api?: GridApi
 ): { startRow: number; endRow: number } {
   if (api) {
-    const startRow = Math.max(0, api.getRowAtY(scrollTop) - buffer);
-    const endRow = Math.min(totalRowCount, api.getRowAtY(scrollTop + viewportHeight) + buffer + 1);
-    return { startRow, endRow };
+    const startRow = Math.max(0, Math.min(totalRowCount - 1, api.getRowAtY(scrollTop)) - buffer);
+    const endRow = Math.min(totalRowCount, api.getRowAtY(Math.max(0, scrollTop + viewportHeight)) + buffer + 1);
+    return { 
+      startRow: Math.max(0, startRow), 
+      endRow: Math.max(0, Math.min(totalRowCount, endRow)) 
+    };
   }
 
   const startRow = Math.max(0, Math.floor(scrollTop / rowHeight) - buffer);

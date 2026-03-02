@@ -78,11 +78,17 @@
   padding: 8px 12px;
   border-right: 1px solid #babed1;
   min-width: 50px;
-  cursor: grab;
+  cursor: default;
   background: white;
   user-select: none;
   display: flex;
   align-items: center;
+  position: relative;
+  overflow: visible;
+}
+
+.argent-grid-header-cell.sortable {
+  cursor: pointer;
 }
 
 .argent-grid-header-content {
@@ -278,17 +284,18 @@
 
 .argent-grid-header-resize-handle {
   position: absolute;
-  right: 0;
+  right: -3px;
   top: 0;
   bottom: 0;
-  width: 4px;
-  cursor: col-resize;
-  z-index: 3;
+  width: 6px;
+  cursor: col-resize !important;
+  z-index: 100;
 }
 
 .argent-grid-header-resize-handle:hover,
 .argent-grid-header-resize-handle.resizing {
   background: #2196f3;
+  cursor: col-resize !important;
 }
 
 .argent-grid-side-bar {

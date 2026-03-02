@@ -52,6 +52,7 @@ export class ArgentGridComponent<TData = any>
   @Input() height = '500px';
   @Input() width = '100%';
   @Input() rowHeight = 32;
+  @Input() renderThrottleMs = 16;
   @Input() rowSelection: RowSelectionOptions | 'single' | 'multiple' | undefined;
 
   @Output() gridReady = new EventEmitter<GridApi<TData>>();
@@ -152,6 +153,7 @@ export class ArgentGridComponent<TData = any>
   private gridService = new GridService<TData>();
   private horizontalScrollListener?: (e: Event) => void;
   private resizeObserver?: ResizeObserver;
+  private originalThrottleMs = 16;
 
   constructor(
     @Inject(ChangeDetectorRef) private _cdr: ChangeDetectorRef,
@@ -177,6 +179,12 @@ export class ArgentGridComponent<TData = any>
     // Handle gridOptions changes
     if (changes.gridOptions && !changes.gridOptions.firstChange) {
       this.onGridOptionsChanged(changes.gridOptions.currentValue);
+    }
+
+    // Handle renderThrottleMs changes
+    if (changes.renderThrottleMs && !changes.renderThrottleMs.firstChange) {
+      this.originalThrottleMs = changes.renderThrottleMs.currentValue;
+      this.canvasRenderer?.setRenderThrottle(changes.renderThrottleMs.currentValue);
     }
 
     // Handle rowSelection changes
@@ -220,6 +228,8 @@ export class ArgentGridComponent<TData = any>
         this.rowHeight,
         convertedTheme
       );
+      this.originalThrottleMs = this.renderThrottleMs;
+      this.canvasRenderer.setRenderThrottle(this.renderThrottleMs);
 
       // Wire up cell editing callback
       this.canvasRenderer.onCellDoubleClick = (rowIndex, colId) => {
@@ -319,13 +329,22 @@ export class ArgentGridComponent<TData = any>
 
       // Add ResizeObserver to handle sidebar toggling and other size changes
       if (typeof ResizeObserver !== 'undefined') {
+        let lastWidth = 0;
+        let lastHeight = 0;
         this.resizeObserver = new ResizeObserver((entries) => {
-          updateScrollbar();
           for (const entry of entries) {
             const { width, height } = entry.contentRect;
+            if (Math.abs(width - lastWidth) < 1 && Math.abs(height - lastHeight) < 1) continue;
+            
+            lastWidth = width;
+            lastHeight = height;
             this.viewportHeight = height;
+            
+            // Only update scrollbar if dimensions actually changed
+            updateScrollbar();
+            
             this.canvasRenderer?.setViewportDimensions(width, height, this.scrollbarWidth);
-            this.canvasRenderer?.render();
+            this.canvasRenderer?.renderFrame();
             this._cdr.detectChanges();
           }
         });
@@ -333,7 +352,12 @@ export class ArgentGridComponent<TData = any>
       }
 
       // Initial calculation
-      setTimeout(() => updateScrollbar());
+      setTimeout(() => {
+        updateScrollbar();
+        if (this.canvasRenderer) {
+          this.canvasRenderer.render();
+        }
+      });
     }
   }
 
@@ -387,6 +411,10 @@ export class ArgentGridComponent<TData = any>
       } else if (event.type === 'columnsChanged' || event.type === 'columnGroupExpanded') {
         this.updateRowGroupColumns();
         this.canvasRenderer?.render();
+      } else if (event.type === 'transactionApplied') {
+        // Use render() to ensure all rows are marked dirty and redrawn
+        // until we have more granular damage tracking from the service
+        this.canvasRenderer?.render();
       } else {
         this.canvasRenderer?.renderFrame();
       }
@@ -419,7 +447,9 @@ export class ArgentGridComponent<TData = any>
 
     if (this.gridApi) {
       this.gridApi.setRowData(newData || []);
-      this.canvasRenderer?.render();
+      if (this.canvasRenderer) {
+        this.canvasRenderer.render();
+      }
     }
 
     this.showOverlay = !newData || newData.length === 0;
@@ -1424,6 +1454,9 @@ export class ArgentGridComponent<TData = any>
     this.resizeStartX = event.clientX;
     this.resizeStartWidth = this.getItemWidth(item);
 
+    // Disable throttling during resize for smooth interaction
+    this.canvasRenderer?.setRenderThrottle(0);
+
     const mouseMoveHandler = (e: MouseEvent) => this.onResizeMouseMove(e);
     const mouseUpHandler = () => {
       this.onResizeMouseUp();
@@ -1451,6 +1484,9 @@ export class ArgentGridComponent<TData = any>
   private onResizeMouseUp(): void {
     this.isResizing = false;
     this.resizeItem = null;
+    
+    // Restore throttling
+    this.canvasRenderer?.setRenderThrottle(this.originalThrottleMs);
   }
 
   private applyResize(item: Column | ColumnGroup, newWidth: number): void {
