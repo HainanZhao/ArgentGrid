@@ -86,6 +86,12 @@ export class GridService<TData = any> {
   }
 
   private hasCheckboxSelection(): boolean {
+    const rowSelection = this.gridOptions?.rowSelection;
+    const isMultiMode =
+      rowSelection === 'multiple' ||
+      (typeof rowSelection === 'object' && rowSelection.mode === 'multiRow');
+
+    if (isMultiMode) return true;
     if (this.gridOptions?.selectionColumnDef?.checkboxes) return true;
     if (!this.columnDefs) return false;
 
@@ -561,7 +567,10 @@ export class GridService<TData = any> {
       },
       getHeaderRows: () => this.getHeaderRows(),
       getHeaderDepth: () => this.headerDepth,
-      getHeaderHeight: () => this.headerDepth * (this.gridOptions?.rowHeight || 32),
+      getHeaderHeight: () => {
+        const headerHeight = this.gridOptions?.headerHeight || this.gridOptions?.rowHeight || 32;
+        return this.headerDepth * headerHeight;
+      },
 
       // Row Data API
       getRowData: () => [...this.filteredRowData],
@@ -705,6 +714,11 @@ export class GridService<TData = any> {
         }
         if (this.gridOptions[key] === value) return;
         this.gridOptions[key] = value;
+
+        if (key === 'rowHeight' || key === 'detailRowHeight') {
+          this.updateRowHeightCache();
+        }
+
         this.gridStateChanged$.next({ type: 'optionChanged', key: key as string, value });
       },
 

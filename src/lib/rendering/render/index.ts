@@ -26,6 +26,7 @@ export {
   drawCellBackground,
   drawCellContent,
   drawGroupIndicators,
+  getCellValue,
   getFormattedValue,
   getValueByPath,
   measureText,
@@ -54,7 +55,15 @@ export {
   getColumnBorderPositions,
 } from './lines';
 // Rendering primitives
-export { drawCheckbox, drawGroupIndicator, drawSparkline } from './primitives';
+export {
+  drawBadge,
+  drawButton,
+  drawCheckbox,
+  drawGroupIndicator,
+  drawProgressBar,
+  drawRating,
+  drawSparkline,
+} from './primitives';
 // Theme (re-export the DEFAULT_THEME and utilities)
 export {
   createTheme,

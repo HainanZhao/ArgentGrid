@@ -101,3 +101,201 @@ describe('ArgentGridComponent - Regression Protection', () => {
     expect(component.rowGroupColumns[0].colId).toBe('id');
   });
 });
+
+// ─── Header Filter Button ──────────────────────────────────────────────────
+
+describe('ArgentGridComponent - Header Filter Button', () => {
+  let component: ArgentGridComponent<any>;
+
+  beforeEach(() => {
+    HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
+      measureText: vi.fn().mockReturnValue({ width: 50 }),
+    } as any);
+
+    const mockCdr = { detectChanges: vi.fn(), markForCheck: vi.fn() };
+    const mockElementRef = {
+      nativeElement: {
+        getBoundingClientRect: () => ({ left: 0, top: 0 }),
+        offsetWidth: 1000,
+        offsetHeight: 800,
+        style: {},
+      },
+    };
+
+    component = new ArgentGridComponent(mockCdr as any, mockElementRef as any);
+    component.columnDefs = [
+      { field: 'name', filter: 'text' },
+      { field: 'dept', filter: 'set' },
+      { field: 'salary', filter: 'number', floatingFilter: true },
+      { field: 'id' }, // no filter
+      { field: 'status', filter: 'text', suppressHeaderFilterButton: true },
+    ];
+    component.rowData = [{ name: 'Alice', dept: 'Eng', salary: 100, id: 1, status: 'active' }];
+    component.ngOnInit();
+  });
+
+  describe('hasHeaderFilterButton', () => {
+    it('should return true for column with filter and no floatingFilter', () => {
+      const col = component
+        .getApi()
+        .getAllColumns()
+        .find((c) => c.field === 'name')!;
+      expect(component.hasHeaderFilterButton(col)).toBe(true);
+    });
+
+    it('should return true for set-filter column', () => {
+      const col = component
+        .getApi()
+        .getAllColumns()
+        .find((c) => c.field === 'dept')!;
+      expect(component.hasHeaderFilterButton(col)).toBe(true);
+    });
+
+    it('should return false when floatingFilter is enabled', () => {
+      const col = component
+        .getApi()
+        .getAllColumns()
+        .find((c) => c.field === 'salary')!;
+      expect(component.hasHeaderFilterButton(col)).toBe(false);
+    });
+
+    it('should return false when no filter configured', () => {
+      const col = component
+        .getApi()
+        .getAllColumns()
+        .find((c) => c.field === 'id')!;
+      expect(component.hasHeaderFilterButton(col)).toBe(false);
+    });
+
+    it('should return false when suppressHeaderFilterButton is true', () => {
+      const col = component
+        .getApi()
+        .getAllColumns()
+        .find((c) => c.field === 'status')!;
+      expect(component.hasHeaderFilterButton(col)).toBe(false);
+    });
+
+    it('should return false for the selection column', () => {
+      const fakeSelCol = { colId: 'ag-Grid-SelectionColumn' } as any;
+      expect(component.hasHeaderFilterButton(fakeSelCol)).toBe(false);
+    });
+  });
+
+  describe('isColumnFiltered', () => {
+    it('should return false when no filter is applied', () => {
+      const col = component
+        .getApi()
+        .getAllColumns()
+        .find((c) => c.field === 'name')!;
+      expect(component.isColumnFiltered(col)).toBe(false);
+    });
+
+    it('should return true when a filter is active on the column', () => {
+      component
+        .getApi()
+        .setFilterModel({ name: { filterType: 'text', type: 'contains', filter: 'Alice' } });
+      const col = component
+        .getApi()
+        .getAllColumns()
+        .find((c) => c.field === 'name')!;
+      expect(component.isColumnFiltered(col)).toBe(true);
+    });
+
+    it('should return false for a different column when only one filtered', () => {
+      component
+        .getApi()
+        .setFilterModel({ name: { filterType: 'text', type: 'contains', filter: 'Alice' } });
+      const col = component
+        .getApi()
+        .getAllColumns()
+        .find((c) => c.field === 'dept')!;
+      expect(component.isColumnFiltered(col)).toBe(false);
+    });
+  });
+
+  describe('openColumnsPanel', () => {
+    it('should make sideBarVisible true', () => {
+      component.sideBarVisible = false;
+      component.openColumnsPanel();
+      expect(component.sideBarVisible).toBe(true);
+    });
+
+    it('should set activeToolPanel to columns', () => {
+      component.activeToolPanel = null;
+      component.openColumnsPanel();
+      expect(component.activeToolPanel).toBe('columns');
+    });
+
+    it('should close any open header menu', () => {
+      const col = component.getApi().getAllColumns()[0];
+      component.activeHeaderMenu = col;
+      component.openColumnsPanel();
+      expect(component.activeHeaderMenu).toBeNull();
+    });
+  });
+});
+
+// ─── openSetFilter restores selected values ─────────────────────────────────
+
+describe('ArgentGridComponent - openSetFilter restores filter state', () => {
+  let component: ArgentGridComponent<any>;
+
+  beforeEach(() => {
+    HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
+      measureText: vi.fn().mockReturnValue({ width: 50 }),
+    } as any);
+
+    const mockCdr = { detectChanges: vi.fn(), markForCheck: vi.fn() };
+    const mockElementRef = {
+      nativeElement: {
+        getBoundingClientRect: () => ({ left: 0, top: 0 }),
+        offsetWidth: 1000,
+        offsetHeight: 800,
+        style: {},
+      },
+    };
+
+    component = new ArgentGridComponent(mockCdr as any, mockElementRef as any);
+    component.columnDefs = [{ field: 'dept', filter: 'set' }];
+    component.rowData = [{ dept: 'Engineering' }, { dept: 'Sales' }, { dept: 'Marketing' }];
+    component.ngOnInit();
+  });
+
+  it('should set setFilterSelectedValues to null when no existing filter', () => {
+    const col = component.getApi().getAllColumns()[0];
+    component.openSetFilter(null, col, { x: 0, y: 0 });
+    expect(component.setFilterSelectedValues).toBeNull();
+  });
+
+  it('should restore previously selected values from the filter model', () => {
+    component.getApi().setFilterModel({
+      dept: { filterType: 'set', values: ['Engineering', 'Sales'] },
+    });
+
+    const col = component.getApi().getAllColumns()[0];
+    component.openSetFilter(null, col, { x: 0, y: 0 });
+
+    expect(component.setFilterSelectedValues).toEqual(['Engineering', 'Sales']);
+  });
+
+  it('should set setFilterSelectedValues to null for non-set filter models', () => {
+    // Manually set a text filter (wrong type) under the dept colId
+    component.getApi().setFilterModel({
+      dept: { filterType: 'text', type: 'contains', filter: 'Eng' },
+    });
+
+    const col = component.getApi().getAllColumns()[0];
+    component.openSetFilter(null, col, { x: 0, y: 0 });
+
+    expect(component.setFilterSelectedValues).toBeNull();
+  });
+
+  it('should populate setFilterValues with all unique values for the column', () => {
+    const col = component.getApi().getAllColumns()[0];
+    component.openSetFilter(null, col, { x: 0, y: 0 });
+
+    expect(component.setFilterValues).toContain('Engineering');
+    expect(component.setFilterValues).toContain('Sales');
+    expect(component.setFilterValues).toContain('Marketing');
+  });
+});

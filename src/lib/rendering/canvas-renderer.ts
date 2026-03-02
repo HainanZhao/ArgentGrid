@@ -5,15 +5,14 @@ import {
   ColumnPrepResult,
   // Theme
   DEFAULT_THEME,
-  drawCheckbox,
+  drawCell,
   drawColumnLines,
-  drawGroupIndicator,
   drawRangeSelectionBorder,
   // Lines
   drawRowLines,
-  drawSparkline,
   // Types
   GridTheme,
+  getCellValue,
   getCenterColumnOffset,
   getColumnAtX,
   getColumnDef,
@@ -29,8 +28,6 @@ import {
   PositionedColumn,
   performHitTest,
   prepColumn,
-  // Cells
-  truncateText,
   walkRows,
 } from './render';
 import { DamageTracker } from './utils/damage-tracker';
@@ -53,7 +50,6 @@ export class CanvasRenderer<TData = any> {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private gridApi: GridApi<TData>;
-  private rowHeight: number;
   private scrollTop = 0;
   private scrollLeft = 0;
 
@@ -96,6 +92,7 @@ export class CanvasRenderer<TData = any> {
   private resizeListener?: () => void;
   private mousedownListener?: (e: MouseEvent) => void;
   private mousemoveListener?: (e: MouseEvent) => void;
+  private mouseleaveListener?: (e: MouseEvent) => void;
   private clickListener?: (e: MouseEvent) => void;
   private dblclickListener?: (e: MouseEvent) => void;
   private mouseupListener?: (e: MouseEvent) => void;
@@ -116,7 +113,6 @@ export class CanvasRenderer<TData = any> {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.gridApi = gridApi;
-    this.rowHeight = rowHeight;
     this.theme = mergeTheme(DEFAULT_THEME, { rowHeight }, theme || {});
     this.liveDataHandler = new LiveDataHandler(gridApi);
 
@@ -128,7 +124,7 @@ export class CanvasRenderer<TData = any> {
    * Update the theme
    */
   setTheme(theme: Partial<GridTheme>): void {
-    this.theme = mergeTheme(DEFAULT_THEME, { rowHeight: this.rowHeight }, theme);
+    this.theme = mergeTheme(DEFAULT_THEME, { rowHeight: this.theme.rowHeight }, theme);
     this.damageTracker.markAllDirty();
     this.scheduleRender();
   }
@@ -198,7 +194,7 @@ export class CanvasRenderer<TData = any> {
    * @performance O(1) - Constant time, regardless of total row count
    */
   getRowAtY(y: number): number {
-    return getRowAtY(y, this.rowHeight, this.scrollTop);
+    return getRowAtY(y, this.theme.rowHeight, this.scrollTop);
   }
 
   /**
@@ -270,6 +266,10 @@ export class CanvasRenderer<TData = any> {
 
     this.canvas.addEventListener('mousedown', this.mousedownListener);
     this.canvas.addEventListener('mousemove', this.mousemoveListener);
+    this.mouseleaveListener = () => {
+      this.canvas.style.cursor = '';
+    };
+    this.canvas.addEventListener('mouseleave', this.mouseleaveListener);
     this.canvas.addEventListener('click', this.clickListener);
     this.canvas.addEventListener('dblclick', this.dblclickListener);
     this.canvas.addEventListener('mouseup', this.mouseupListener);
@@ -408,7 +408,7 @@ export class CanvasRenderer<TData = any> {
     const { startRow, endRow } = getVisibleRowRange(
       this.scrollTop,
       height,
-      this.rowHeight,
+      this.theme.rowHeight,
       totalRows,
       this.rowBuffer,
       this.gridApi
@@ -445,7 +445,7 @@ export class CanvasRenderer<TData = any> {
       startRow,
       endRow,
       this.scrollTop,
-      this.rowHeight,
+      this.theme.rowHeight,
       (rowIndex) => this.gridApi.getDisplayedRowAtIndex(rowIndex),
       (rowIndex, y, _rowHeight, rowNode) => {
         if (!rowNode) return;
@@ -477,8 +477,8 @@ export class CanvasRenderer<TData = any> {
 
     for (const range of ranges) {
       // Calculate Y boundaries
-      const startY = range.startRow * this.rowHeight - this.scrollTop;
-      const endY = (range.endRow + 1) * this.rowHeight - this.scrollTop;
+      const startY = range.startRow * this.theme.rowHeight - this.scrollTop;
+      const endY = (range.endRow + 1) * this.theme.rowHeight - this.scrollTop;
 
       let minX = Infinity;
       let maxX = -Infinity;
@@ -523,7 +523,7 @@ export class CanvasRenderer<TData = any> {
     }
 
     const isEvenRow = rowIndex % 2 === 0;
-    const rowHeight = rowNode.rowHeight || this.rowHeight;
+    const rowHeight = rowNode.rowHeight || this.theme.rowHeight;
 
     // Draw row background
     let bgColor = isEvenRow ? this.theme.bgCellEven : this.theme.bgCell;
@@ -577,69 +577,33 @@ export class CanvasRenderer<TData = any> {
     const prep = this.columnPreps.get(column.colId);
     if (!prep) return;
 
-    const cellValue = column.field ? getValueByPath(rowNode.data, column.field) : undefined;
-
-    let textX = x + this.theme.cellPadding;
-
-    const isSelectionColumn = column.colId === 'ag-Grid-SelectionColumn';
-
-    // Check for checkbox selection
-    if (isSelectionColumn) {
-      const checkboxSize = 14;
-      const checkboxY = Math.floor(y + (this.rowHeight - checkboxSize) / 2);
-      const checkboxX = Math.floor(x + (width - checkboxSize) / 2);
-
-      drawCheckbox(this.ctx, checkboxX, checkboxY, checkboxSize, rowNode.selected, this.theme);
-      return; // Dedicated column only shows checkbox
-    }
-
-    // Check for sparkline
-    if (prep.colDef?.sparklineOptions) {
-      drawSparkline(this.ctx, cellValue, x, y, width, this.rowHeight, prep.colDef.sparklineOptions);
-      return;
-    }
-
+    const value = getCellValue(column, prep.colDef, rowNode, this.gridApi);
     const formattedValue = getFormattedValue(
-      cellValue,
+      value,
       prep.colDef,
       rowNode.data,
       rowNode,
       this.gridApi
     );
 
-    if (!formattedValue) return;
-
-    this.ctx.fillStyle = this.theme.textCell;
-
-    // Handle group indentation
-    const isAutoGroupCol = column.colId === 'ag-Grid-AutoColumn';
-    const isFirstColIfNoAutoGroup =
-      !positionedColumns.some((pc) => pc.column.colId === 'ag-Grid-AutoColumn') &&
-      column === positionedColumns[0]?.column;
-
-    if (
-      (isAutoGroupCol || isFirstColIfNoAutoGroup) &&
-      (rowNode.group || rowNode.master || rowNode.level > 0)
-    ) {
-      const indent = rowNode.level * this.theme.groupIndentWidth;
-      textX += indent;
-
-      // Draw expand/collapse indicator
-      if (rowNode.group || rowNode.master) {
-        drawGroupIndicator(this.ctx, textX, y, this.rowHeight, rowNode.expanded, this.theme);
-        textX += this.theme.groupIndicatorSize + 3;
-      }
-    }
-
-    const truncatedText = truncateText(
-      this.ctx,
+    drawCell(this.ctx, prep, {
+      ctx: this.ctx,
+      theme: this.theme,
+      column,
+      colDef: prep.colDef,
+      rowNode,
+      rowIndex: rowNode.displayedRowIndex,
+      x,
+      y,
+      width,
+      height: rowNode.rowHeight || this.theme.rowHeight,
+      value,
       formattedValue,
-      width - (textX - x) - this.theme.cellPadding
-    );
-
-    if (truncatedText) {
-      this.ctx.fillText(truncatedText, Math.floor(textX), Math.floor(y + this.rowHeight / 2));
-    }
+      isSelected: rowNode.selected,
+      isHovered: false, // TODO: Implement hover
+      isEvenRow: rowNode.displayedRowIndex % 2 === 0,
+      api: this.gridApi,
+    });
   }
 
   private drawGridLines(
@@ -656,7 +620,7 @@ export class CanvasRenderer<TData = any> {
       this.ctx,
       startRow,
       endRow,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       viewportWidth - this.scrollbarWidth,
       this.theme,
@@ -676,7 +640,7 @@ export class CanvasRenderer<TData = any> {
       this.theme,
       startRow,
       endRow,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.gridApi,
       viewportWidth - this.scrollbarWidth
     );
@@ -691,7 +655,7 @@ export class CanvasRenderer<TData = any> {
     const { rowIndex, columnIndex } = performHitTest(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
@@ -715,7 +679,7 @@ export class CanvasRenderer<TData = any> {
     const { rowIndex, columnIndex } = performHitTest(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
@@ -724,6 +688,10 @@ export class CanvasRenderer<TData = any> {
     );
     const columns = this.getVisibleColumns();
     const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
+
+    // Update cursor: pointer for button cells, default otherwise
+    const hoveredColDef = colId ? this.columnPreps.get(colId)?.colDef : null;
+    this.canvas.style.cursor = hoveredColDef?.buttonOptions ? 'pointer' : '';
 
     if (this.onMouseMove) {
       this.onMouseMove(event, rowIndex, colId);
@@ -736,7 +704,7 @@ export class CanvasRenderer<TData = any> {
     const { rowIndex, columnIndex } = performHitTest(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
@@ -756,7 +724,7 @@ export class CanvasRenderer<TData = any> {
     const { rowIndex, columnIndex } = performHitTest(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
@@ -766,12 +734,33 @@ export class CanvasRenderer<TData = any> {
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
 
-    // Handle selection column
+    // Handle selection column or explicit checkbox renderer
     const columns = this.getVisibleColumns();
     const clickedCol = columnIndex !== -1 ? columns[columnIndex] : null;
-    if (clickedCol?.colId === 'ag-Grid-SelectionColumn') {
+    const clickedColDef = clickedCol ? this.columnPreps.get(clickedCol.colId)?.colDef : null;
+
+    if (
+      clickedCol?.colId === 'ag-Grid-SelectionColumn' ||
+      clickedColDef?.cellRenderer === 'checkbox'
+    ) {
       rowNode.setSelected(!rowNode.selected);
       return;
+    }
+
+    // Handle button cell — fire onClick and stop propagation to row click
+    if (clickedCol) {
+      const colDef = this.columnPreps.get(clickedCol.colId)?.colDef;
+      if (colDef?.buttonOptions?.onClick) {
+        colDef.buttonOptions.onClick({
+          value: clickedCol.field ? getValueByPath(rowNode.data, clickedCol.field) : undefined,
+          data: rowNode.data,
+          node: rowNode,
+          colDef,
+          api: this.gridApi,
+          event,
+        });
+        return;
+      }
     }
 
     // Handle expand/collapse
@@ -829,7 +818,7 @@ export class CanvasRenderer<TData = any> {
     const { rowIndex, columnIndex } = performHitTest(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
@@ -854,7 +843,7 @@ export class CanvasRenderer<TData = any> {
     return performHitTest(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
@@ -870,7 +859,7 @@ export class CanvasRenderer<TData = any> {
     const container = this.canvas.parentElement;
     if (!container) return;
 
-    const targetPosition = rowIndex * this.rowHeight;
+    const targetPosition = rowIndex * this.theme.rowHeight;
     container.scrollTop = targetPosition;
     this.scrollTop = targetPosition;
     this.damageTracker.markAllDirty();
@@ -942,7 +931,7 @@ export class CanvasRenderer<TData = any> {
   getRowAtPosition(y: number): number {
     const scrollTop = this.scrollTop || 0;
     const rowY = y + scrollTop;
-    return Math.floor(rowY / this.rowHeight);
+    return Math.floor(rowY / this.theme.rowHeight);
   }
 
   destroy(): void {
@@ -960,6 +949,8 @@ export class CanvasRenderer<TData = any> {
       this.canvas.removeEventListener('mousedown', this.mousedownListener);
     if (this.mousemoveListener)
       this.canvas.removeEventListener('mousemove', this.mousemoveListener);
+    if (this.mouseleaveListener)
+      this.canvas.removeEventListener('mouseleave', this.mouseleaveListener);
     if (this.clickListener) this.canvas.removeEventListener('click', this.clickListener);
     if (this.dblclickListener) this.canvas.removeEventListener('dblclick', this.dblclickListener);
     if (this.mouseupListener) this.canvas.removeEventListener('mouseup', this.mouseupListener);

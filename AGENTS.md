@@ -152,11 +152,13 @@ The `blitState.setLastCanvas()` call was removed from `doRender()`. Copying the 
 
 ### Agent Tooling & Verification
 
-Agents working on this repository should utilize the following tools for high-quality contributions:
+Agents working on this repository MUST follow these verification steps to ensure stability and code quality:
 
-1.  **Playwright Skill**: Used for running the root-level E2E suite (`npm run test:e2e`) against Storybook stories.
-2.  **Computer Use (Browser Automation)**: Highly recommended for visual verification of Canvas rendering. Always verify menu positioning, scrolling alignment, and interactive states (like editing) in a live browser before concluding a task.
-3.  **TS Strict Mode**: The library is verified against a strict TypeScript configuration. Ensure all property accesses (especially dynamic ones in tests) are type-safe.
+1.  **Mandatory Tests**: Run `npm run test` (Vitest) to verify core logic and `npm run test:e2e` (Playwright) for visual/interactive verification.
+2.  **Linting**: Run `npm run lint:fix` before concluding a task to ensure consistent code style and fix automated issues.
+3.  **Finalization**: Before completing a significant feature or fix, run `npm run build-storybook`. **Note:** This command is slow; only execute it once everything is finalized to ensure the full production build of stories succeeds.
+4.  **Computer Use (Browser Automation)**: Highly recommended for visual verification of Canvas rendering. Always verify menu positioning, scrolling alignment, and interactive states (like editing) in a live browser.
+5.  **TS Strict Mode**: The library is verified against a strict TypeScript configuration. Ensure all property accesses (especially dynamic ones in tests) are type-safe.
 
 ## Known Issues / TODOs
 

@@ -92,7 +92,7 @@ test.describe('Cell Renderers Stories', () => {
   });
 
   test('should load Custom Cell Renderer story', async ({ page }) => {
-    await page.goto('/iframe.html?id=features-cellrenderers--custom-cell-renderer');
+    await page.goto('/iframe.html?id=features-cellrenderers--progress-bar');
     await page.waitForSelector('argent-grid', { timeout: 15000 });
 
     const grid = page.locator('argent-grid').first();

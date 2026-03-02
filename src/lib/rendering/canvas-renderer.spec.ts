@@ -297,6 +297,7 @@ describe('CanvasRenderer', () => {
       width: 50,
       visible: true,
       pinned: 'left',
+      checkboxSelection: true,
     } as any;
 
     const mockRowNode = {
@@ -312,6 +313,7 @@ describe('CanvasRenderer', () => {
     } as any;
 
     vi.spyOn(mockApi, 'getAllColumns').mockReturnValue([mockColumn]);
+    vi.spyOn(mockApi, 'getColumnDefs').mockReturnValue([mockColumn]);
     vi.spyOn(mockApi, 'getDisplayedRowAtIndex').mockReturnValue(mockRowNode);
     vi.spyOn(mockApi, 'getDisplayedRowCount').mockReturnValue(1);
 
@@ -471,6 +473,7 @@ describe('CanvasRenderer', () => {
       width: 50,
       visible: true,
       pinned: 'left',
+      checkboxSelection: true,
     } as any;
 
     const mockRowNode = {
@@ -489,6 +492,7 @@ describe('CanvasRenderer', () => {
     } as any;
 
     vi.spyOn(mockApi, 'getAllColumns').mockReturnValue([mockColumn]);
+    vi.spyOn(mockApi, 'getColumnDefs').mockReturnValue([mockColumn]);
     vi.spyOn(mockApi, 'getDisplayedRowAtIndex').mockReturnValue(mockRowNode);
     vi.spyOn(mockApi, 'getDisplayedRowCount').mockReturnValue(1);
 

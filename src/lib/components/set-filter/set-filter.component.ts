@@ -218,6 +218,8 @@ import {
 export class SetFilterComponent<T = any> implements OnInit {
   @Input() values: T[] = [];
   @Input() valueFormatter?: (value: T) => string;
+  /** When provided, only these values will be pre-checked (restores existing filter state) */
+  @Input() initialSelectedValues: T[] | null = null;
   @Output() filterChanged = new EventEmitter<T[]>();
 
   searchText = '';
@@ -248,14 +250,16 @@ export class SetFilterComponent<T = any> implements OnInit {
     });
 
     // Build value list with counts
+    // If initialSelectedValues provided, pre-check only those; otherwise check all
+    const preSelected = this.initialSelectedValues;
     this.allValues = Array.from(valueCounts.entries()).map(([value, count]) => ({
       value,
       displayValue: this.valueFormatter ? this.valueFormatter(value) : String(value),
       count,
-      selected: true, // All selected by default
+      selected: preSelected ? preSelected.includes(value) : true,
     }));
 
-    this.selectedValues = this.values.filter((v, i, arr) => arr.indexOf(v) === i);
+    this.selectedValues = this.allValues.filter((v) => v.selected).map((v) => v.value);
   }
 
   onSearchChanged(): void {
@@ -296,6 +300,7 @@ export class SetFilterComponent<T = any> implements OnInit {
 
   resetFilter(): void {
     this.searchText = '';
+    this.initialSelectedValues = null; // Reset to all-selected state
     this.initializeValues();
     this.filterChanged.emit(this.selectedValues);
   }

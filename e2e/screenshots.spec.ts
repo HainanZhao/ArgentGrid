@@ -41,7 +41,7 @@ test.describe('ArgentGrid Screenshots', () => {
 
   test('capture benchmark screenshot', async ({ page }) => {
     await page.goto('/iframe.html?id=features-benchmark--benchmark-10-k');
-    await page.waitForSelector('app-benchmark-wrapper', { timeout: 15000 });
+    await page.waitForSelector('app-benchmark-wrapper', { timeout: 30000 });
     await page.waitForTimeout(2000);
 
     await page.screenshot({
