@@ -182,20 +182,6 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
         return `${sign}${val.toFixed(2)}%`;
       }
     },
-    {
-      field: 'history',
-      headerName: 'Last 20 Ticks',
-      width: 200,
-      cellRenderer: 'sparkline',
-      sparklineOptions: {
-        type: 'area',
-        area: {
-          fill: 'rgba(59, 130, 246, 0.1)',
-          stroke: '#3b82f6',
-          strokeWidth: 2,
-        },
-      }
-    },
     { 
       field: 'volume', 
       headerName: 'Volume', 

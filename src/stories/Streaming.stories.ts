@@ -32,7 +32,7 @@ export const LiveStockFeed: Story = {
     docs: {
       description: {
         story:
-          'Simulates a live stock market feed with 5 updates per second. Demonstrates high-performance row updates and real-time sparkline rendering using the canvas engine.',
+          'Simulates a live stock market feed with 5 updates per second. Demonstrates high-performance row updates and real-time transaction processing using the canvas engine.',
       },
     },
   },
