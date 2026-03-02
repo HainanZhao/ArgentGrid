@@ -412,9 +412,17 @@ export class ArgentGridComponent<TData = any>
         this.updateRowGroupColumns();
         this.canvasRenderer?.render();
       } else if (event.type === 'transactionApplied') {
-        // Use render() to ensure all rows are marked dirty and redrawn
-        // until we have more granular damage tracking from the service
-        this.canvasRenderer?.render();
+        // Efficient rendering: only mark changed rows as dirty instead of full redraw
+        const changedIndices = (event as any).changedRowIndices as number[] | undefined;
+        if (changedIndices && changedIndices.length > 0 && this.canvasRenderer) {
+          // Only mark the specific changed rows as dirty (invalidateRow calls scheduleRender internally)
+          for (const rowIndex of changedIndices) {
+            this.canvasRenderer.invalidateRow(rowIndex);
+          }
+        } else {
+          // Fallback to full redraw if no specific rows provided
+          this.canvasRenderer?.render();
+        }
       } else {
         this.canvasRenderer?.renderFrame();
       }
