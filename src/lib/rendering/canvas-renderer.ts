@@ -5,7 +5,6 @@ import {
   // Blitting
   BlitState,
   ColumnPrepResult,
-  PositionedColumn,
   calculateBlit,
   // Theme
   DEFAULT_THEME,
@@ -21,18 +20,18 @@ import {
   getCenterColumnOffset,
   getColumnAtX,
   getColumnDef,
-  getColumnX,
   getFontFromTheme,
   getFormattedValue,
   getPinnedWidths,
+  getPositionedColumns,
   getRowAtY,
   getValueByPath,
   getVisibleRowRange,
   isColumnVisible,
   mergeTheme,
+  PositionedColumn,
   performHitTest,
   prepColumn,
-  getPositionedColumns,
   // Cells
   truncateText,
   walkRows,

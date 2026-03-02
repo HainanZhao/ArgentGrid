@@ -190,7 +190,7 @@ export class GridService<TData = any> {
           const colId = mergedDef.colId || mergedDef.field?.toString() || `col-${index}-${level}`;
 
           // Preserve existing column if it exists to maintain width/order etc.
-          let column = existingColumns.find(c => c.colId === colId);
+          let column = existingColumns.find((c) => c.colId === colId);
 
           let visible = !mergedDef.hide;
           if (
@@ -353,6 +353,7 @@ export class GridService<TData = any> {
       });
     };
 
+    this.expandedGroups.clear();
     updateDef(this.columnDefs);
     this.initializeColumns(false);
     this.applyFiltering();
@@ -372,6 +373,7 @@ export class GridService<TData = any> {
       });
     };
 
+    this.expandedGroups.clear();
     updateDef(this.columnDefs);
     this.initializeColumns(false);
     this.applyFiltering();
@@ -391,6 +393,7 @@ export class GridService<TData = any> {
       });
     };
 
+    this.expandedGroups.clear();
     updateDef(this.columnDefs);
     this.initializeColumns(false);
     this.applyFiltering();
@@ -427,41 +430,43 @@ export class GridService<TData = any> {
 
     if (column) {
       const allCols = Array.from(this.columns.values());
-      const fromIdx = allCols.findIndex(c => c.colId === colId);
-      
+      const fromIdx = allCols.findIndex((c) => c.colId === colId);
+
       // We want to find the target position relative to the section
-      const sectionCols = allCols.filter(c => c.pinned === column.pinned);
+      const sectionCols = allCols.filter((c) => c.pinned === column.pinned);
       const targetCol = sectionCols[toIndex];
-      
+
       let toIdx = -1;
       if (targetCol) {
-        toIdx = allCols.findIndex(c => c.colId === targetCol.colId);
+        toIdx = allCols.findIndex((c) => c.colId === targetCol.colId);
       } else {
         // Drop at end of section
         if (toIndex >= sectionCols.length) {
           const lastInSection = sectionCols[sectionCols.length - 1];
           if (lastInSection) {
-            toIdx = allCols.findIndex(c => c.colId === lastInSection.colId);
+            toIdx = allCols.findIndex((c) => c.colId === lastInSection.colId);
           }
         } else {
           const firstInSection = sectionCols[0];
           if (firstInSection) {
-            toIdx = allCols.findIndex(c => c.colId === firstInSection.colId);
+            toIdx = allCols.findIndex((c) => c.colId === firstInSection.colId);
           }
         }
       }
-      
+
       if (toIdx !== -1 && fromIdx !== toIdx) {
         moveItemInArray(allCols, fromIdx, toIdx);
-        
+
         // Also move in columnDefs if present
         if (this.columnDefs) {
-          const fromDefIdx = this.columnDefs.findIndex(d => 
-            !('children' in d) && (d.colId === colId || d.field?.toString() === colId)
+          const fromDefIdx = this.columnDefs.findIndex(
+            (d) => !('children' in d) && (d.colId === colId || d.field?.toString() === colId)
           );
           if (fromDefIdx !== -1 && targetCol) {
-            const toDefIdx = this.columnDefs.findIndex(d => 
-              !('children' in d) && (d.colId === targetCol.colId || d.field?.toString() === targetCol.colId)
+            const toDefIdx = this.columnDefs.findIndex(
+              (d) =>
+                !('children' in d) &&
+                (d.colId === targetCol.colId || d.field?.toString() === targetCol.colId)
             );
             if (toDefIdx !== -1) {
               moveItemInArray(this.columnDefs, fromDefIdx, toDefIdx);
@@ -470,8 +475,8 @@ export class GridService<TData = any> {
         }
 
         this.columns.clear();
-        allCols.forEach(c => this.columns.set(c.colId, c));
-        
+        allCols.forEach((c) => this.columns.set(c.colId, c));
+
         this.initializeColumns(false);
         this.gridStateChanged$.next({ type: 'columnsChanged' });
       }
@@ -1324,35 +1329,43 @@ export class GridService<TData = any> {
       }
 
       this.groupingDirty = false;
+
+      // Apply default expansion only on structural/data changes
+      const defaultExpanded = this.gridOptions?.groupDefaultExpanded ?? 0;
+      if (defaultExpanded !== 0) {
+        this.applyDefaultExpansion(this.cachedGroupedData, 0, defaultExpanded);
+      }
     }
 
-    // Re-initialize from cache (respects current expansion state)
-    const defaultExpanded = this.gridOptions?.groupDefaultExpanded ?? 0;
-    this.updateExpansionStateInCache(this.cachedGroupedData, 0, defaultExpanded);
+    // Re-initialize from cache (respects current expansion state in this.expandedGroups)
+    this.syncExpansionStateFromSet(this.cachedGroupedData);
     this.initializeRowNodesFromGroupedData();
   }
 
-  private updateExpansionStateInCache(
+  private applyDefaultExpansion(
     groupedData: (TData | GroupRowNode<TData>)[],
     level: number,
     defaultExpanded: number
   ): void {
     const isDefaultExpanded = defaultExpanded === -1 || level < defaultExpanded;
+    if (!isDefaultExpanded) return;
 
     for (const item of groupedData) {
       if (this.isGroupRowNode(item)) {
-        // If it's already in the set, respect that. Otherwise use default.
-        if (this.expandedGroups.has(item.id)) {
-          item.expanded = true;
-        } else if (isDefaultExpanded) {
-          item.expanded = true;
-          this.expandedGroups.add(item.id); // Also sync back to the set
-        } else {
-          item.expanded = false;
-        }
-
+        this.expandedGroups.add(item.id);
         if (item.children) {
-          this.updateExpansionStateInCache(item.children, level + 1, defaultExpanded);
+          this.applyDefaultExpansion(item.children, level + 1, defaultExpanded);
+        }
+      }
+    }
+  }
+
+  private syncExpansionStateFromSet(groupedData: (TData | GroupRowNode<TData>)[]): void {
+    for (const item of groupedData) {
+      if (this.isGroupRowNode(item)) {
+        item.expanded = this.expandedGroups.has(item.id);
+        if (item.children) {
+          this.syncExpansionStateFromSet(item.children);
         }
       }
     }

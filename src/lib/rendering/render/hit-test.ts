@@ -5,8 +5,8 @@
  */
 
 import { Column } from '../../types/ag-grid-types';
-import { getColumnAtX, getRowAtY } from './walk';
 import { HitTestResult } from './types';
+import { getColumnAtX, getRowAtY } from './walk';
 
 /**
  * Perform a hit test on the grid
@@ -32,7 +32,7 @@ export function performHitTest(
     columnIndex: result.index,
     column: result.column,
     rowNode: null, // Should be populated by caller if needed
-    hitArea: result.column ? 'cell' : 'empty'
+    hitArea: result.column ? 'cell' : 'empty',
   };
 }
 

@@ -282,7 +282,11 @@ export class ArgentGridComponent<TData = any>
     if (this.viewportRef) {
       const rect = this.viewportRef.nativeElement.getBoundingClientRect();
       this.viewportHeight = rect.height || 500;
-      this.canvasRenderer?.setViewportDimensions(rect.width, this.viewportHeight, this.scrollbarWidth);
+      this.canvasRenderer?.setViewportDimensions(
+        rect.width,
+        this.viewportHeight,
+        this.scrollbarWidth
+      );
 
       const updateScrollbar = () => {
         const viewport = this.viewportRef?.nativeElement;
@@ -608,7 +612,9 @@ export class ArgentGridComponent<TData = any>
       return;
     }
     const groupColIds = this.gridApi.getRowGroupColumns();
-    this.rowGroupColumns = this.gridApi.getAllColumns().filter((col) => groupColIds.includes(col.colId));
+    this.rowGroupColumns = this.gridApi
+      .getAllColumns()
+      .filter((col) => groupColIds.includes(col.colId));
   }
 
   getRowGroupColumns(): Column[] {
@@ -617,7 +623,7 @@ export class ArgentGridComponent<TData = any>
 
   onRowGroupDropped(event: CdkDragDrop<any[]>): void {
     const col = event.item.data as Column;
-    if (col && col.colId && col.colId !== 'ag-Grid-SelectionColumn') {
+    if (col?.colId && col.colId !== 'ag-Grid-SelectionColumn') {
       this.gridApi.addRowGroupColumn(col.colId);
     }
   }
@@ -748,7 +754,7 @@ export class ArgentGridComponent<TData = any>
     const containerRect = this._elementRef.nativeElement.getBoundingClientRect();
 
     // Align left edge of menu with left edge of icon
-    let x = rect.left - containerRect.left; 
+    let x = rect.left - containerRect.left;
     let y = rect.bottom - containerRect.top + 4;
 
     // Prevent menu from going off-container bounds
@@ -1155,9 +1161,9 @@ export class ArgentGridComponent<TData = any>
     } else if (event) {
       const rect = (event.target as HTMLElement).getBoundingClientRect();
       const containerRect = this._elementRef.nativeElement.getBoundingClientRect();
-      this.filterPopupPosition = { 
-        x: rect.left - containerRect.left, 
-        y: rect.bottom - containerRect.top + 5 
+      this.filterPopupPosition = {
+        x: rect.left - containerRect.left,
+        y: rect.bottom - containerRect.top + 5,
       };
     }
 
@@ -1383,7 +1389,7 @@ export class ArgentGridComponent<TData = any>
   onColumnDropped(event: CdkDragDrop<any>, pinned: 'left' | 'right' | 'none'): void {
     const col = event.item.data as Column;
     if (!col) return;
-    
+
     const targetPinned = pinned === 'none' ? false : pinned;
 
     if (col.pinned !== targetPinned) {

@@ -186,7 +186,6 @@ export function getColumnBorderPositions(
   return positions;
 }
 
-
 /**
  * Draw grid lines for a region
  */
