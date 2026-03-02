@@ -18,6 +18,25 @@ const meta: Meta<BenchmarkWrapperComponent> = {
 export default meta;
 type Story = StoryObj<BenchmarkWrapperComponent>;
 
+export const Benchmark10K: Story = {
+  args: {},
+  render: (args) => ({
+    props: {
+      ...args,
+      rowCount: 10000,
+    } as any,
+    template: `<app-benchmark-wrapper [rowCount]="10000" />`,
+  }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Benchmark with ~10,000 rows. Quick sanity check for virtual scrolling and canvas rendering.',
+      },
+    },
+  },
+};
+
 export const Benchmark100K: Story = {
   args: {},
   render: (args) => ({
