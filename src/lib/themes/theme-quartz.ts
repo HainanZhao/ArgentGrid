@@ -22,8 +22,8 @@ const QUARTZ_DEFAULTS: ThemeParameters = {
 
   // Spacing
   spacing: 8,
-  rowHeight: 48,
-  headerHeight: 48,
+  rowHeight: 40,
+  headerHeight: 40,
   cellPadding: 12,
 
   // Borders

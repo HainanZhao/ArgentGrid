@@ -5,6 +5,14 @@
  */
 
 import { ColDef, Column, GridApi, IRowNode } from '../../types/ag-grid-types';
+import {
+  drawBadge,
+  drawButton,
+  drawCheckbox,
+  drawProgressBar,
+  drawRating,
+  drawSparkline,
+} from './primitives';
 import { getFontFromTheme } from './theme';
 import { CellDrawContext, ColumnPrepResult, GridTheme } from './types';
 
@@ -109,23 +117,92 @@ export function drawCellBackground<TData = any>(
 }
 
 /**
- * Draw cell content (text)
+ * Draw cell content (text or specialized renderer)
  */
 export function drawCellContent<TData = any>(
   ctx: CanvasRenderingContext2D,
   _prep: ColumnPrepResult<TData>,
   context: CellDrawContext<TData>
 ): void {
-  const { x, y, width, height, formattedValue, theme } = context;
+  const { x, y, width, height, value, formattedValue, theme, colDef, rowNode, api } = context;
 
+  // 1. Check for dedicated checkbox renderer or internal selection column
+  if (colDef?.cellRenderer === 'checkbox' || context.column.colId === 'ag-Grid-SelectionColumn') {
+    const isChecked = colDef?.cellRenderer === 'checkbox' ? !!value : !!rowNode?.selected;
+    const size = 14;
+    const bx = Math.floor(x + (width - size) / 2);
+    const by = Math.floor(y + (height - size) / 2);
+
+    drawCheckbox(ctx, bx, by, size, isChecked, theme);
+    return; // Dedicated checkbox column only shows checkbox
+  }
+
+  // 2. Check for sparkline
+  if (colDef?.sparklineOptions) {
+    drawSparkline(ctx, value, x, y, width, height, colDef.sparklineOptions);
+    return;
+  }
+
+  // 3. Check for progress bar
+  if (colDef?.progressOptions) {
+    drawProgressBar(ctx, Number(value), x, y, width, height, colDef.progressOptions);
+    return;
+  }
+
+  // 4. Check for badge
+  if (colDef?.badgeOptions) {
+    drawBadge(ctx, String(value ?? ''), x, y, width, height, colDef.badgeOptions);
+    return;
+  }
+
+  // 5. Check for button
+  if (colDef?.buttonOptions) {
+    const opts = colDef.buttonOptions;
+    const label =
+      typeof opts.label === 'function'
+        ? opts.label({
+            value,
+            data: rowNode?.data,
+            node: rowNode!,
+            colDef: colDef!,
+            api: api!,
+          })
+        : opts.label;
+    drawButton(ctx, label, x, y, width, height, opts);
+    return;
+  }
+
+  // 6. Check for rating
+  if (colDef?.cellRenderer === 'rating' || colDef?.ratingOptions) {
+    drawRating(ctx, Number(value), x, y, width, height, colDef?.ratingOptions);
+    return;
+  }
+
+  // 7. Default: Text rendering
   if (!formattedValue) return;
 
   // Calculate text position with padding
   const textX = x + theme.cellPadding;
   const textY = y + height / 2; // Centered vertically
 
+  // Handle cellStyle color
+  let textColor = theme.textCell;
+  if (colDef?.cellStyle) {
+    const style =
+      typeof colDef.cellStyle === 'function'
+        ? colDef.cellStyle({
+            value,
+            data: rowNode?.data,
+            node: rowNode!,
+            column: context.column,
+            api: api!,
+          })
+        : colDef.cellStyle;
+    if (style?.color) textColor = style.color;
+  }
+
   // Set text properties
-  ctx.fillStyle = theme.textCell;
+  ctx.fillStyle = textColor;
   ctx.textBaseline = 'middle';
 
   // Truncate text if needed
@@ -282,7 +359,10 @@ export function calculateColumnWidth<TData = any>(
  */
 export function stripHtmlTags(html: string): string {
   if (!html) return '';
-  return html.replace(/<[^>]*>/g, '');
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function getFormattedValue<TData = any>(
@@ -340,6 +420,42 @@ export function getFormattedValue<TData = any>(
 // ============================================================================
 
 /**
+ * Get the value for a cell, respecting valueGetter if present
+ */
+export function getCellValue<TData = any>(
+  column: Column,
+  colDef: ColDef<TData> | null,
+  rowNode: IRowNode<TData>,
+  api: GridApi<TData>
+): any {
+  // 1. Prioritize valueGetter
+  if (colDef?.valueGetter) {
+    if (typeof colDef.valueGetter === 'function') {
+      try {
+        return colDef.valueGetter({
+          data: rowNode.data,
+          node: rowNode,
+          colDef,
+          api,
+          column,
+          context: api.getGridOption('context'),
+        } as any);
+      } catch (e) {
+        console.warn('Value getter error:', e);
+      }
+    }
+    // Note: String expressions for valueGetter are not supported in the canvas renderer yet
+  }
+
+  // 2. Fallback to field
+  if (column.field) {
+    return getValueByPath(rowNode.data, column.field);
+  }
+
+  return undefined;
+}
+
+/**
  * Render all cells in a row
  */
 export function renderRow<TData = any>(
@@ -365,7 +481,7 @@ export function renderRow<TData = any>(
     if (!prep) continue;
 
     const x = getCellX(column);
-    const value = column.field ? getValueByPath(rowNode.data, column.field) : undefined;
+    const value = getCellValue(column, prep.colDef, rowNode, api);
     const formattedValue = getFormattedValue(value, prep.colDef, rowNode.data, rowNode, api);
 
     const context: CellDrawContext<TData> = {
@@ -384,6 +500,7 @@ export function renderRow<TData = any>(
       isSelected: options.isSelected || rowNode.selected,
       isHovered: options.isHovered || false,
       isEvenRow,
+      api,
     };
 
     drawCell(ctx, prep, context);

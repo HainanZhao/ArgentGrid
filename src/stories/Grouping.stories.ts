@@ -2,6 +2,14 @@ import { BrowserModule } from '@angular/platform-browser';
 import type { Meta, StoryObj } from '@storybook/angular';
 import { moduleMetadata } from '@storybook/angular';
 import { ArgentGridComponent, ArgentGridModule, themeQuartz } from '../public-api';
+import {
+  departmentValueFormatter,
+  locationValueFormatter,
+  roleValueFormatter,
+  STORY_DEPARTMENTS,
+  STORY_LOCATIONS,
+  STORY_ROLES,
+} from './story-utils';
 
 interface Employee {
   id: number;
@@ -29,9 +37,9 @@ export default meta;
 type Story = StoryObj<ArgentGridComponent<Employee>>;
 
 function generateStaticData(count: number): Employee[] {
-  const departments = ['Engineering', 'Sales', 'Marketing', 'HR', 'Finance'];
-  const roles = ['Engineer', 'Manager', 'Director', 'VP', 'Intern'];
-  const locations = ['New York', 'San Francisco', 'London', 'Singapore', 'Remote'];
+  const departments = STORY_DEPARTMENTS;
+  const roles = STORY_ROLES;
+  const locations = STORY_LOCATIONS;
 
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
@@ -54,13 +62,19 @@ export const RowGrouping: Story = {
         width: 180,
         rowGroup: true,
         headerComponentParams: { groupIcon: '📁' },
+        valueFormatter: departmentValueFormatter,
       },
-      { field: 'role', headerName: 'Role', width: 250 },
+      { field: 'role', headerName: 'Role', width: 250, valueFormatter: roleValueFormatter },
       { field: 'salary', headerName: 'Salary', width: 120 },
-      { field: 'location', headerName: 'Location', width: 150 },
+      {
+        field: 'location',
+        headerName: 'Location',
+        width: 150,
+        valueFormatter: locationValueFormatter,
+      },
     ],
     rowData: generateStaticData(100),
-    height: '500px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
     gridOptions: {
@@ -93,6 +107,7 @@ export const MultiLevelGrouping: Story = {
         width: 150,
         rowGroup: true,
         headerComponentParams: { groupIcon: '📁' },
+        valueFormatter: departmentValueFormatter,
       },
       {
         field: 'location',
@@ -100,12 +115,13 @@ export const MultiLevelGrouping: Story = {
         width: 150,
         rowGroup: true,
         headerComponentParams: { groupIcon: '📁' },
+        valueFormatter: locationValueFormatter,
       },
-      { field: 'role', headerName: 'Role', width: 250 },
+      { field: 'role', headerName: 'Role', width: 250, valueFormatter: roleValueFormatter },
       { field: 'salary', headerName: 'Salary', width: 120 },
     ],
     rowData: generateStaticData(100),
-    height: '500px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
     gridOptions: {
@@ -138,18 +154,24 @@ export const GroupingWithAggregation: Story = {
         width: 180,
         rowGroup: true,
         headerComponentParams: { groupIcon: '📁' },
+        valueFormatter: departmentValueFormatter,
       },
-      { field: 'role', headerName: 'Role', width: 250 },
+      { field: 'role', headerName: 'Role', width: 250, valueFormatter: roleValueFormatter },
       {
         field: 'salary',
         headerName: 'Salary 💰',
         width: 120,
         aggFunc: 'sum', // Show sum in group rows
       },
-      { field: 'location', headerName: 'Location', width: 150 },
+      {
+        field: 'location',
+        headerName: 'Location',
+        width: 150,
+        valueFormatter: locationValueFormatter,
+      },
     ],
     rowData: generateStaticData(100),
-    height: '500px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
     gridOptions: {
@@ -182,6 +204,7 @@ export const DragAndDropGrouping: Story = {
         width: 180,
         rowGroup: false, // Not pre-grouped - user can drag
         headerComponentParams: { draggable: true },
+        valueFormatter: departmentValueFormatter,
       },
       {
         field: 'location',
@@ -189,12 +212,13 @@ export const DragAndDropGrouping: Story = {
         width: 150,
         rowGroup: false,
         headerComponentParams: { draggable: true },
+        valueFormatter: locationValueFormatter,
       },
-      { field: 'role', headerName: 'Role', width: 250 },
+      { field: 'role', headerName: 'Role', width: 250, valueFormatter: roleValueFormatter },
       { field: 'salary', headerName: 'Salary', width: 120 },
     ],
     rowData: generateStaticData(100),
-    height: '500px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
     gridOptions: {
@@ -229,20 +253,30 @@ export const ColumnGroups: Story = {
       {
         headerName: 'Group B',
         children: [
-          { field: 'department', headerName: 'Department', width: 180 },
+          {
+            field: 'department',
+            headerName: 'Department',
+            width: 180,
+            valueFormatter: departmentValueFormatter,
+          },
           {
             headerName: 'Deep Group',
             children: [
-              { field: 'role', headerName: 'Role', width: 250 },
+              { field: 'role', headerName: 'Role', width: 250, valueFormatter: roleValueFormatter },
               { field: 'salary', headerName: 'Salary', width: 120 },
             ],
           },
         ],
       },
-      { field: 'location', headerName: 'Location', width: 150 },
+      {
+        field: 'location',
+        headerName: 'Location',
+        width: 150,
+        valueFormatter: locationValueFormatter,
+      },
     ],
     rowData: generateStaticData(50),
-    height: '500px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
   },

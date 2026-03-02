@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Benchmark Stories', () => {
-  test('should load Benchmark 10K story', async ({ page }) => {
-    await page.goto('/iframe.html?id=features-benchmark--benchmark-10-k');
+  test('should load Benchmark 100K story', async ({ page }) => {
+    await page.goto('/iframe.html?id=features-benchmark--benchmark-100-k');
     await page.waitForSelector('app-benchmark-wrapper', { timeout: 15000 });
 
     const wrapper = page.locator('app-benchmark-wrapper').first();
@@ -16,16 +16,16 @@ test.describe('Benchmark Stories', () => {
     await expect(reloadButton).toBeVisible();
   });
 
-  test('should load Benchmark 50K story', async ({ page }) => {
-    await page.goto('/iframe.html?id=features-benchmark--benchmark-50-k');
+  test('should load Benchmark 500K story', async ({ page }) => {
+    await page.goto('/iframe.html?id=features-benchmark--benchmark-500-k');
     await page.waitForSelector('app-benchmark-wrapper', { timeout: 15000 });
 
     const wrapper = page.locator('app-benchmark-wrapper').first();
     await expect(wrapper).toBeVisible({ timeout: 10000 });
   });
 
-  test('should load Benchmark 100K story', async ({ page }) => {
-    await page.goto('/iframe.html?id=features-benchmark--benchmark-100-k');
+  test('should load Benchmark 1M story', async ({ page }) => {
+    await page.goto('/iframe.html?id=features-benchmark--benchmark-1-m');
     await page.waitForSelector('app-benchmark-wrapper', { timeout: 15000 });
 
     const wrapper = page.locator('app-benchmark-wrapper').first();
@@ -33,7 +33,7 @@ test.describe('Benchmark Stories', () => {
   });
 
   test('should run benchmark and display results', async ({ page }) => {
-    await page.goto('/iframe.html?id=features-benchmark--benchmark-10-k');
+    await page.goto('/iframe.html?id=features-benchmark--benchmark-100-k');
     await page.waitForSelector('app-benchmark-wrapper', { timeout: 15000 });
 
     // Click Run Benchmark

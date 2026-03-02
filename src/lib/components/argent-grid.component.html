@@ -25,7 +25,7 @@
           <div class="argent-grid-header-pinned-left-container"
                *ngIf="getLeftPinnedColumns().length > 0"
                [style.display]="'grid'"
-               [style.grid-template-rows]="'repeat(' + gridApi.getHeaderDepth() + ', ' + rowHeight + 'px)'"
+               [style.grid-template-rows]="'repeat(' + gridApi.getHeaderDepth() + ', ' + effectiveHeaderHeight + 'px)'"
                [style.grid-template-columns]="getGridTemplateColumns('left')"
                cdkDropList
                id="left-pinned-list"
@@ -41,7 +41,7 @@
                 [style.grid-column]="getLeftPinnedColIndex(entry.item) + ' / span ' + getItemColSpan(entry.item)"
                 [style.grid-row]="(entry.rowIndex + 1) + ' / span ' + getItemRowSpan(entry.item, entry.rowIndex)"
                 [style.width.px]="getItemWidth(entry.item)"
-                [style.height.px]="getItemRowSpan(entry.item, entry.rowIndex) * rowHeight"
+                [style.height.px]="getItemRowSpan(entry.item, entry.rowIndex) * effectiveHeaderHeight"
                 [class.sortable]="!isColumnGroup(entry.item) && isSortable(entry.item)"
                 (click)="!isColumnGroup(entry.item) && onHeaderClick(entry.item)"
                 cdkDrag
@@ -61,6 +61,13 @@
                   </span>
                   <span class="sort-indicator" *ngIf="!isColumnGroup(entry.item) && getSortIndicator(entry.item)">{{ getSortIndicator(entry.item) }}</span>
                 </div>
+                <div class="argent-grid-header-filter-icon"
+                     [class.active]="isColumnFiltered(entry.item)"
+                     (click)="onHeaderFilterClick($event, entry.item)"
+                     *ngIf="!isColumnGroup(entry.item) && hasHeaderFilterButton(entry.item)"
+                     title="Filter">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M0.5 1.5h9L6 6V9H4V6Z"/></svg>
+                </div>
                 <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, entry.item)" *ngIf="!isColumnGroup(entry.item) && hasHeaderMenu(entry.item)">
                   &#8942;
                 </div>
@@ -77,7 +84,7 @@
           <div class="argent-grid-header-scrollable" #headerScrollable>
             <div class="argent-grid-header-scrollable-content"
                  [style.display]="'grid'"
-                 [style.grid-template-rows]="'repeat(' + gridApi.getHeaderDepth() + ', ' + rowHeight + 'px)'"
+                 [style.grid-template-rows]="'repeat(' + gridApi.getHeaderDepth() + ', ' + effectiveHeaderHeight + 'px)'"
                  [style.grid-template-columns]="getGridTemplateColumns('none')"
                  [style.width.px]="getScrollableHeaderWidth()"
                  cdkDropList
@@ -93,7 +100,7 @@
                   [style.grid-column]="getScrollableColIndex(entry.item) + ' / span ' + getItemColSpan(entry.item)"
                   [style.grid-row]="(entry.rowIndex + 1) + ' / span ' + getItemRowSpan(entry.item, entry.rowIndex)"
                   [style.width.px]="getItemWidth(entry.item)"
-                  [style.height.px]="getItemRowSpan(entry.item, entry.rowIndex) * rowHeight"
+                  [style.height.px]="getItemRowSpan(entry.item, entry.rowIndex) * effectiveHeaderHeight"
                   [class.sortable]="!isColumnGroup(entry.item) && isSortable(entry.item)"
                   (click)="!isColumnGroup(entry.item) && onHeaderClick(entry.item)"
                   cdkDrag
@@ -105,6 +112,13 @@
                        {{ entry.item.expanded ? '−' : '+' }}
                     </span>
                     <span class="sort-indicator" *ngIf="!isColumnGroup(entry.item) && getSortIndicator(entry.item)">{{ getSortIndicator(entry.item) }}</span>
+                  </div>
+                  <div class="argent-grid-header-filter-icon"
+                       [class.active]="isColumnFiltered(entry.item)"
+                       (click)="onHeaderFilterClick($event, entry.item)"
+                       *ngIf="!isColumnGroup(entry.item) && hasHeaderFilterButton(entry.item)"
+                       title="Filter">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M0.5 1.5h9L6 6V9H4V6Z"/></svg>
                   </div>
                   <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, entry.item)" *ngIf="!isColumnGroup(entry.item) && hasHeaderMenu(entry.item)">
                     &#8942;
@@ -123,7 +137,7 @@
           <div class="argent-grid-header-pinned-right-container"
                *ngIf="getRightPinnedColumns().length > 0"
                [style.display]="'grid'"
-               [style.grid-template-rows]="'repeat(' + gridApi.getHeaderDepth() + ', ' + rowHeight + 'px)'"
+               [style.grid-template-rows]="'repeat(' + gridApi.getHeaderDepth() + ', ' + effectiveHeaderHeight + 'px)'"
                [style.grid-template-columns]="getGridTemplateColumns('right')"
                cdkDropList
                id="right-pinned-list"
@@ -138,7 +152,7 @@
                 [style.grid-column]="getRightPinnedColIndex(entry.item) + ' / span ' + getItemColSpan(entry.item)"
                 [style.grid-row]="(entry.rowIndex + 1) + ' / span ' + getItemRowSpan(entry.item, entry.rowIndex)"
                 [style.width.px]="getItemWidth(entry.item)"
-                [style.height.px]="getItemRowSpan(entry.item, entry.rowIndex) * rowHeight"
+                [style.height.px]="getItemRowSpan(entry.item, entry.rowIndex) * effectiveHeaderHeight"
                 [class.sortable]="!isColumnGroup(entry.item) && isSortable(entry.item)"
                 (click)="!isColumnGroup(entry.item) && onHeaderClick(entry.item)"
                 cdkDrag
@@ -150,6 +164,13 @@
                      {{ entry.item.expanded ? '−' : '+' }}
                   </span>
                   <span class="sort-indicator" *ngIf="!isColumnGroup(entry.item) && getSortIndicator(entry.item)">{{ getSortIndicator(entry.item) }}</span>
+                </div>
+                <div class="argent-grid-header-filter-icon"
+                     [class.active]="isColumnFiltered(entry.item)"
+                     (click)="onHeaderFilterClick($event, entry.item)"
+                     *ngIf="!isColumnGroup(entry.item) && hasHeaderFilterButton(entry.item)"
+                     title="Filter">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M0.5 1.5h9L6 6V9H4V6Z"/></svg>
                 </div>
                 <div class="argent-grid-header-menu-icon" (click)="onHeaderMenuClick($event, entry.item)" *ngIf="!isColumnGroup(entry.item) && hasHeaderMenu(entry.item)">
                   &#8942;
@@ -255,7 +276,10 @@
       <!-- Canvas Layer for Data Viewport -->
       <div class="argent-grid-viewport" #viewport>
         <div class="argent-grid-scroll-spacer" [style.height.px]="totalHeight" [style.width.px]="totalWidth"></div>
-        <canvas #gridCanvas class="argent-grid-canvas" (contextmenu)="onCanvasContextMenu($event)"></canvas>
+        <canvas #gridCanvas class="argent-grid-canvas"
+                (contextmenu)="onCanvasContextMenu($event)"
+                (mousemove)="onCanvasMouseMove($event)"
+                (mouseleave)="onCanvasMouseLeave()"></canvas>
         
         <!-- Cell Editor Overlay -->
         <div class="argent-grid-cell-editor" 
@@ -283,9 +307,10 @@
         <div class="side-bar-button" [class.active]="activeToolPanel === 'columns'" (click)="toggleToolPanel('columns')">
           Columns
         </div>
-        <div class="side-bar-button" [class.active]="activeToolPanel === 'filters'" (click)="toggleToolPanel('filters')">
+        <!-- Hide Filters tool panel for now as it is not functional yet -->
+        <!-- <div class="side-bar-button" [class.active]="activeToolPanel === 'filters'" (click)="toggleToolPanel('filters')">
           Filters
-        </div>
+        </div> -->
       </div>
       
       <div class="tool-panel-content" *ngIf="activeToolPanel">
@@ -321,19 +346,33 @@
 
   <!-- Set Filter Popup -->
   <div *ngIf="activeSetFilter" class="set-filter-popup" [style.left.px]="setFilterPosition.x" [style.top.px]="setFilterPosition.y" (clickOutside)="closeSetFilter()" clickOutside>
-    <argent-set-filter [values]="setFilterValues" [valueFormatter]="setFilterValueFormatter" (filterChanged)="onSetFilterChanged($event)"></argent-set-filter>
+    <argent-set-filter [values]="setFilterValues" [initialSelectedValues]="setFilterSelectedValues" [valueFormatter]="setFilterValueFormatter" (filterChanged)="onSetFilterChanged($event)"></argent-set-filter>
   </div>
 
   <!-- Context Menu -->
   <div class="context-menu-popup" *ngIf="activeContextMenu" [style.top.px]="contextMenuPosition.y" [style.left.px]="contextMenuPosition.x" (click)="$event.stopPropagation()">
     <ng-container *ngFor="let item of contextMenuItems">
       <div *ngIf="item.separator" class="menu-divider"></div>
-      <div *ngIf="!item.separator" class="menu-item" [class.disabled]="item.disabled" (click)="!item.disabled && item.action(); !item.subMenu && closeContextMenu()">
+      <div *ngIf="!item.separator" class="menu-item" [class.disabled]="item.disabled" [class.has-submenu]="item.subMenu"
+           (click)="!item.disabled && !item.subMenu && item.action(); !item.subMenu && closeContextMenu()">
         <span class="menu-icon" *ngIf="item.icon">{{ item.icon }}</span>
         <span class="menu-text">{{ item.name }}</span>
+        <span class="menu-chevron" *ngIf="item.subMenu">&#9654;</span>
+        <div class="sub-menu" *ngIf="item.subMenu">
+          <div *ngFor="let sub of item.subMenu" class="menu-item"
+               (click)="!sub.disabled && sub.action(); closeContextMenu(); $event.stopPropagation()">
+            <span class="menu-icon" *ngIf="sub.icon">{{ sub.icon }}</span>
+            <span class="menu-text">{{ sub.name }}</span>
+          </div>
+        </div>
       </div>
     </ng-container>
   </div>
+
+  <!-- Tooltip -->
+  <div class="ag-tooltip" *ngIf="tooltipVisible"
+       [style.left.px]="tooltipPosition.x"
+       [style.top.px]="tooltipPosition.y">{{ tooltipText }}</div>
 
   <!-- Filter Popup -->
   <div *ngIf="activeFilterPopup" class="filter-popup" [style.left.px]="filterPopupPosition.x" [style.top.px]="filterPopupPosition.y" (clickOutside)="closeFilterPopup()" clickOutside (click)="$event.stopPropagation()">

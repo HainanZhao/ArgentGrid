@@ -40,7 +40,12 @@ export class GridService<TData = any> {
   private cellRanges: CellRange[] = [];
   private gridId: string = '';
   private gridOptions: GridOptions<TData> | null = null;
-  public gridStateChanged$ = new Subject<{ type: string; key?: string; value?: any }>();
+  public gridStateChanged$ = new Subject<{
+    type: string;
+    key?: string;
+    value?: any;
+    changedRowIndices?: number[];
+  }>();
 
   // Row height cache
   private cumulativeRowHeights: number[] = [];
@@ -81,6 +86,12 @@ export class GridService<TData = any> {
   }
 
   private hasCheckboxSelection(): boolean {
+    const rowSelection = this.gridOptions?.rowSelection;
+    const isMultiMode =
+      rowSelection === 'multiple' ||
+      (typeof rowSelection === 'object' && rowSelection.mode === 'multiRow');
+
+    if (isMultiMode) return true;
     if (this.gridOptions?.selectionColumnDef?.checkboxes) return true;
     if (!this.columnDefs) return false;
 
@@ -556,7 +567,10 @@ export class GridService<TData = any> {
       },
       getHeaderRows: () => this.getHeaderRows(),
       getHeaderDepth: () => this.headerDepth,
-      getHeaderHeight: () => this.headerDepth * (this.gridOptions?.rowHeight || 32),
+      getHeaderHeight: () => {
+        const headerHeight = this.gridOptions?.headerHeight || this.gridOptions?.rowHeight || 32;
+        return this.headerDepth * headerHeight;
+      },
 
       // Row Data API
       getRowData: () => [...this.filteredRowData],
@@ -700,6 +714,11 @@ export class GridService<TData = any> {
         }
         if (this.gridOptions[key] === value) return;
         this.gridOptions[key] = value;
+
+        if (key === 'rowHeight' || key === 'detailRowHeight') {
+          this.updateRowHeightCache();
+        }
+
         this.gridStateChanged$.next({ type: 'optionChanged', key: key as string, value });
       },
 
@@ -1041,12 +1060,16 @@ export class GridService<TData = any> {
     };
 
     let dataChanged = false;
+    // Track changed row indices for efficient rendering
+    const changedRowIndices: number[] = [];
 
     if (transaction.add) {
+      const startIndex = this.rowData.length;
       transaction.add.forEach((data, index) => {
         const _id = this.getRowId(data, this.rowData.length + index);
         this.rowData.push(data);
         dataChanged = true;
+        changedRowIndices.push(startIndex + index);
 
         // We'll create the actual node during the pipeline re-run
         // but we can return a placeholder result for now as AG Grid does
@@ -1060,6 +1083,7 @@ export class GridService<TData = any> {
         if (index !== -1) {
           this.rowData[index] = data;
           dataChanged = true;
+          changedRowIndices.push(index);
 
           const existingNode = this.rowNodes.get(id);
           if (existingNode) {
@@ -1080,6 +1104,8 @@ export class GridService<TData = any> {
         if (index !== -1) {
           const _removedData = this.rowData.splice(index, 1)[0];
           dataChanged = true;
+          // For removes, we mark the row as changed but it's being deleted
+          // The component will handle this appropriately
 
           const node = this.rowNodes.get(id);
           if (node) {
@@ -1104,7 +1130,11 @@ export class GridService<TData = any> {
         });
       }
 
-      this.gridStateChanged$.next({ type: 'transactionApplied' });
+      // Emit transactionApplied with changed row indices for efficient rendering
+      this.gridStateChanged$.next({
+        type: 'transactionApplied',
+        changedRowIndices,
+      });
     }
 
     return result;

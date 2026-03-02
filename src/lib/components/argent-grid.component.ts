@@ -51,8 +51,7 @@ export class ArgentGridComponent<TData = any>
   @Input() theme: any;
   @Input() height = '500px';
   @Input() width = '100%';
-  @Input() rowHeight = 32;
-  @Input() renderThrottleMs = 16;
+  @Input() rowHeight?: number;
   @Input() rowSelection: RowSelectionOptions | 'single' | 'multiple' | undefined;
 
   @Output() gridReady = new EventEmitter<GridApi<TData>>();
@@ -69,9 +68,23 @@ export class ArgentGridComponent<TData = any>
   showOverlay = false;
   private viewportHeight = 500;
 
+  /**
+   * Returns the current effective row height, prioritizing grid options, then the input property, and defaulting to 32.
+   */
+  get effectiveRowHeight(): number {
+    return this.gridApi?.getGridOption('rowHeight') || this.rowHeight || 32;
+  }
+
+  /**
+   * Returns the current effective header height, prioritizing grid options, then defaulting to effectiveRowHeight.
+   */
+  get effectiveHeaderHeight(): number {
+    return this.gridApi?.getGridOption('headerHeight') || this.effectiveRowHeight;
+  }
+
   get totalHeight(): number {
     if (this.gridApi) return this.gridApi.getTotalHeight();
-    return (this.rowData?.length || 0) * this.rowHeight;
+    return (this.rowData?.length || 0) * (this.rowHeight || 32);
   }
 
   get totalWidth(): number {
@@ -136,10 +149,17 @@ export class ArgentGridComponent<TData = any>
   contextMenuItems: MenuItemDef[] = [];
   private contextMenuCell: { rowNode: IRowNode<TData>; column: Column } | null = null;
 
+  // Tooltip state
+  tooltipVisible = false;
+  tooltipText = '';
+  tooltipPosition = { x: 0, y: 0 };
+  private _tooltipTimer: any = null;
+
   // Set Filter
   activeSetFilter = false;
   setFilterPosition = { x: 0, y: 0 };
   setFilterValues: any[] = [];
+  setFilterSelectedValues: any[] | null = null;
   setFilterValueFormatter?: (value: any) => string;
   private activeSetFilterColumn: Column | null = null;
   private initialColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
@@ -153,7 +173,6 @@ export class ArgentGridComponent<TData = any>
   private gridService = new GridService<TData>();
   private horizontalScrollListener?: (e: Event) => void;
   private resizeObserver?: ResizeObserver;
-  private originalThrottleMs = 16;
 
   constructor(
     @Inject(ChangeDetectorRef) private _cdr: ChangeDetectorRef,
@@ -181,12 +200,6 @@ export class ArgentGridComponent<TData = any>
       this.onGridOptionsChanged(changes.gridOptions.currentValue);
     }
 
-    // Handle renderThrottleMs changes
-    if (changes.renderThrottleMs && !changes.renderThrottleMs.firstChange) {
-      this.originalThrottleMs = changes.renderThrottleMs.currentValue;
-      this.canvasRenderer?.setRenderThrottle(changes.renderThrottleMs.currentValue);
-    }
-
     // Handle rowSelection changes
     if (changes.rowSelection && !changes.rowSelection.firstChange) {
       if (this.gridApi) {
@@ -207,6 +220,16 @@ export class ArgentGridComponent<TData = any>
           ? convertThemeToGridTheme(changes.theme.currentValue)
           : undefined;
         this.canvasRenderer.setTheme(convertedTheme);
+
+        // Sync rowHeight and headerHeight to GridApi if provided by theme and NOT explicitly overridden by user
+        if (this.gridApi) {
+          if (convertedTheme?.rowHeight && this.rowHeight === undefined) {
+            this.gridApi.setGridOption('rowHeight', convertedTheme.rowHeight);
+          }
+          if (convertedTheme?.headerHeight) {
+            this.gridApi.setGridOption('headerHeight', convertedTheme.headerHeight);
+          }
+        }
       }
     }
   }
@@ -225,12 +248,9 @@ export class ArgentGridComponent<TData = any>
       this.canvasRenderer = new CanvasRenderer(
         this.canvasRef.nativeElement,
         this.gridApi,
-        this.rowHeight,
+        this.effectiveRowHeight,
         convertedTheme
       );
-      this.originalThrottleMs = this.renderThrottleMs;
-      this.canvasRenderer.setRenderThrottle(this.renderThrottleMs);
-
       // Wire up cell editing callback
       this.canvasRenderer.onCellDoubleClick = (rowIndex, colId) => {
         this.startEditing(rowIndex, colId);
@@ -344,7 +364,7 @@ export class ArgentGridComponent<TData = any>
             updateScrollbar();
 
             this.canvasRenderer?.setViewportDimensions(width, height, this.scrollbarWidth);
-            this.canvasRenderer?.renderFrame();
+            // setViewportDimensions → updateCanvasSize already schedules a render.
             this._cdr.detectChanges();
           }
         });
@@ -376,6 +396,7 @@ export class ArgentGridComponent<TData = any>
 
     this.gridApi?.destroy();
     this.canvasRenderer?.destroy();
+    this.onCanvasMouseLeave();
   }
 
   private initializeGrid(): void {
@@ -383,6 +404,20 @@ export class ArgentGridComponent<TData = any>
     const options = { ...this.gridOptions };
     if (this.rowSelection) {
       options.rowSelection = this.rowSelection;
+    }
+
+    // Prioritize explicit rowHeight input if provided
+    if (this.rowHeight !== undefined) {
+      options.rowHeight = this.rowHeight;
+    } else if (this.theme) {
+      // If no explicit rowHeight, but theme is provided, use theme's rowHeight
+      const convertedTheme = convertThemeToGridTheme(this.theme);
+      if (convertedTheme.rowHeight) {
+        options.rowHeight = convertedTheme.rowHeight;
+      }
+      if (convertedTheme.headerHeight && options.headerHeight === undefined) {
+        options.headerHeight = convertedTheme.headerHeight;
+      }
     }
 
     // Initialize grid API
@@ -412,11 +447,21 @@ export class ArgentGridComponent<TData = any>
         this.updateRowGroupColumns();
         this.canvasRenderer?.render();
       } else if (event.type === 'transactionApplied') {
-        // Use render() to ensure all rows are marked dirty and redrawn
-        // until we have more granular damage tracking from the service
-        this.canvasRenderer?.render();
+        // Efficient rendering: only mark changed rows as dirty instead of full redraw.
+        // Callers are responsible for throttling applyTransaction frequency (e.g. via RxJS).
+        const changedIndices = (event as any).changedRowIndices as number[] | undefined;
+        if (changedIndices && changedIndices.length > 0 && this.canvasRenderer) {
+          for (const rowIndex of changedIndices) {
+            this.canvasRenderer.invalidateRow(rowIndex);
+          }
+        } else {
+          this.canvasRenderer?.render();
+        }
       } else {
-        this.canvasRenderer?.renderFrame();
+        // All other state changes (sort, filter, rangeSelection, etc.) go through the
+        // rAF-coalesced scheduler. Multiple rapid events (e.g. rangeSelectionChanged
+        // on every mousemove) collapse into at most one pending frame.
+        this.canvasRenderer?.render();
       }
       this._cdr.detectChanges();
     });
@@ -767,6 +812,46 @@ export class ArgentGridComponent<TData = any>
     return colDef && this.isColDef(colDef) ? colDef.suppressHeaderMenuButton !== true : true;
   }
 
+  hasHeaderFilterButton(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
+    if ((col as any).colId === 'ag-Grid-SelectionColumn') return false;
+    if ('children' in col) return false;
+    const colDef = this.getColumnDefForColumn(col as any);
+    if (!colDef || !this.isColDef(colDef)) return false;
+    if (!colDef.filter || colDef.suppressHeaderFilterButton === true) return false;
+    // Don't show when floating filters are active — they already provide quick access
+    if (colDef.floatingFilter) return false;
+    return true;
+  }
+
+  isColumnFiltered(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
+    if (!this.gridApi) return false;
+    const column = col as Column;
+    const field = column.field || column.colId;
+    if (!field) return false;
+    const filterModel = this.gridApi.getFilterModel();
+    return !!(filterModel as any)[field];
+  }
+
+  onHeaderFilterClick(event: MouseEvent, col: Column | ColDef<TData> | ColGroupDef<TData>): void {
+    event.stopPropagation();
+    const column = col as Column;
+    const target = event.target as HTMLElement;
+    // Use closest ancestor that has a bounding rect useful for positioning
+    const iconEl = (target.closest('.argent-grid-header-filter-icon') as HTMLElement) ?? target;
+    const rect = iconEl.getBoundingClientRect();
+    const containerRect = this._elementRef.nativeElement.getBoundingClientRect();
+    const position = {
+      x: rect.left - containerRect.left,
+      y: rect.bottom - containerRect.top + 4,
+    };
+    const colDef = this.getColumnDefForColumn(column);
+    if (colDef && this.isColDef(colDef) && colDef.filter === 'set') {
+      this.openSetFilter(null, column, position);
+    } else {
+      this.openFilterPopup(null, column, position);
+    }
+  }
+
   onHeaderMenuClick(event: MouseEvent, col: Column | ColDef<TData> | ColGroupDef<TData>): void {
     event.stopPropagation();
 
@@ -884,6 +969,15 @@ export class ArgentGridComponent<TData = any>
       action: () => this.hideColumnMenu(),
     });
 
+    items.push({ name: '', action: () => {}, separator: true });
+
+    // 5. Columns panel (open sidebar)
+    items.push({
+      name: 'Columns',
+      icon: '☰',
+      action: () => this.openColumnsPanel(),
+    });
+
     return items;
   }
 
@@ -952,8 +1046,6 @@ export class ArgentGridComponent<TData = any>
         'copyWithHeaders',
         'separator',
         'export',
-        'separator',
-        'resetColumns',
       ]);
     }
 
@@ -1027,6 +1119,87 @@ export class ArgentGridComponent<TData = any>
     }
   }
 
+  // ============================================================================
+  // TOOLTIP
+  // ============================================================================
+
+  onCanvasMouseMove(event: MouseEvent): void {
+    // Cancel any pending show and hide the current tooltip on every move
+    if (this._tooltipTimer) {
+      clearTimeout(this._tooltipTimer);
+      this._tooltipTimer = null;
+    }
+    this.tooltipVisible = false;
+
+    if (!this.canvasRenderer) return;
+
+    const hit = this.canvasRenderer.getHitTestResult(event);
+    const { rowIndex, columnIndex } = hit;
+    if (rowIndex < 0 || columnIndex < 0) return;
+
+    const columns = this.canvasRenderer.getAllColumns();
+    const column = columns[columnIndex];
+    if (!column) return;
+
+    const text = this.computeTooltipText(rowIndex, column);
+    if (!text) return;
+
+    this._tooltipTimer = setTimeout(() => {
+      const containerRect = this._elementRef.nativeElement.getBoundingClientRect();
+      let tx = event.clientX - containerRect.left + 14;
+      let ty = event.clientY - containerRect.top + 14;
+      // Keep within container bounds
+      const cw = this._elementRef.nativeElement.offsetWidth;
+      const ch = this._elementRef.nativeElement.offsetHeight;
+      if (tx + 220 > cw) tx = Math.max(0, tx - 234);
+      if (ty + 56 > ch) ty = Math.max(0, ty - 70);
+      this.tooltipText = text;
+      this.tooltipPosition = { x: tx, y: ty };
+      this.tooltipVisible = true;
+      this._cdr.detectChanges();
+    }, 500);
+  }
+
+  onCanvasMouseLeave(): void {
+    if (this._tooltipTimer) {
+      clearTimeout(this._tooltipTimer);
+      this._tooltipTimer = null;
+    }
+    if (this.tooltipVisible) {
+      this.tooltipVisible = false;
+      this._cdr.detectChanges();
+    }
+  }
+
+  private computeTooltipText(rowIndex: number, column: Column): string | null {
+    const colDef = this.getColumnDefForColumn(column) as ColDef<TData> | null;
+    if (!colDef || !this.isColDef(colDef)) return null;
+
+    const rowNode = this.gridApi?.getDisplayedRowAtIndex(rowIndex);
+    if (!rowNode?.data) return null;
+
+    // tooltipValueGetter takes priority (AG Grid parity)
+    if (typeof colDef.tooltipValueGetter === 'function') {
+      const val = colDef.field ? (rowNode.data as any)[colDef.field as string] : undefined;
+      return (
+        colDef.tooltipValueGetter({
+          value: val,
+          data: rowNode.data as TData,
+          node: rowNode,
+          column,
+        }) ?? null
+      );
+    }
+
+    // tooltipField — show the value of that field
+    if (colDef.tooltipField) {
+      const val = (rowNode.data as any)[colDef.tooltipField as string];
+      return val != null ? String(val) : null;
+    }
+
+    return null;
+  }
+
   closeContextMenu(): void {
     this.activeContextMenu = false;
     this.contextMenuCell = null;
@@ -1056,6 +1229,14 @@ export class ArgentGridComponent<TData = any>
     if (!field || !this.gridApi) return;
 
     this.setFilterValues = this.gridService.getUniqueValues(field as string);
+
+    // Restore previously selected values from the current filter model
+    const existingFilter = this.gridApi.getFilterModel()[field as string] as any;
+    this.setFilterSelectedValues =
+      existingFilter?.filterType === 'set' && Array.isArray(existingFilter.values)
+        ? existingFilter.values
+        : null;
+
     const colDef = 'field' in col ? (col as ColDef<TData>) : null;
     this.setFilterValueFormatter = colDef?.valueFormatter
       ? (colDef.valueFormatter as any)
@@ -1266,6 +1447,13 @@ export class ArgentGridComponent<TData = any>
     this._cdr.detectChanges();
   }
 
+  openColumnsPanel(): void {
+    this.sideBarVisible = true;
+    this.activeToolPanel = 'columns';
+    this.closeHeaderMenu();
+    this._cdr.detectChanges();
+  }
+
   toggleColumnVisibility(col: Column): void {
     const colDef = this.getColumnDefForColumn(col);
     if (colDef && this.isColDef(colDef)) {
@@ -1454,9 +1642,6 @@ export class ArgentGridComponent<TData = any>
     this.resizeStartX = event.clientX;
     this.resizeStartWidth = this.getItemWidth(item);
 
-    // Disable throttling during resize for smooth interaction
-    this.canvasRenderer?.setRenderThrottle(0);
-
     const mouseMoveHandler = (e: MouseEvent) => this.onResizeMouseMove(e);
     const mouseUpHandler = () => {
       this.onResizeMouseUp();
@@ -1484,9 +1669,6 @@ export class ArgentGridComponent<TData = any>
   private onResizeMouseUp(): void {
     this.isResizing = false;
     this.resizeItem = null;
-
-    // Restore throttling
-    this.canvasRenderer?.setRenderThrottle(this.originalThrottleMs);
   }
 
   private applyResize(item: Column | ColumnGroup, newWidth: number): void {
@@ -1674,9 +1856,9 @@ export class ArgentGridComponent<TData = any>
 
     this.editorPosition = {
       x: x - this.canvasRenderer.currentScrollLeft,
-      y: rowIndex * this.rowHeight - this.canvasRenderer.currentScrollTop,
+      y: rowIndex * this.effectiveRowHeight - this.canvasRenderer.currentScrollTop,
       width: Math.floor(column.width),
-      height: this.rowHeight,
+      height: this.effectiveRowHeight,
     };
 
     this.isEditing = true;

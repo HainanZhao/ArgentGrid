@@ -4,7 +4,7 @@
  * Shared type definitions used across the rendering modules.
  */
 
-import { ColDef, Column, IRowNode } from '../../types/ag-grid-types';
+import { ColDef, Column, GridApi, IRowNode } from '../../types/ag-grid-types';
 
 // ============================================================================
 // CORE RENDERING TYPES
@@ -116,6 +116,7 @@ export interface CellDrawContext<TData = any> {
   isSelected: boolean;
   isHovered: boolean;
   isEvenRow: boolean;
+  api: GridApi<TData>;
 }
 
 /**

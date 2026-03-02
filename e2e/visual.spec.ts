@@ -74,6 +74,24 @@ test.describe('ArgentGrid Visual Regression', () => {
     await expect(page.locator('argent-grid')).toHaveScreenshot('grid-scroll-borders.png');
   });
 
+  test('column group headers should show horizontal border', async ({ page }) => {
+    await page.goto('/iframe.html?id=features-grouping--column-groups');
+    await page.waitForSelector('argent-grid', { state: 'visible' });
+    await page.waitForTimeout(2000);
+
+    // Verify the group header cells have a bottom border via the group-cell class
+    const groupCell = page.locator('.argent-grid-header-group-cell').first();
+    await expect(groupCell).toBeVisible();
+
+    // The bottom border should be drawn — verify via computed style
+    const borderBottom = await groupCell.evaluate(
+      (el) => getComputedStyle(el).borderBottomWidth
+    );
+    expect(borderBottom).toBe('1px');
+
+    await expect(page.locator('argent-grid')).toHaveScreenshot('grid-column-group-headers.png');
+  });
+
   test('sidebar buttons should be visible and not blocked by header', async ({ page }) => {
     await page.goto('/iframe.html?id=features-advanced--side-bar');
     await page.waitForSelector('argent-grid', { state: 'visible' });

@@ -1,6 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, Input, OnDestroy, ViewChild } from '@angular/core';
 import { ArgentGridComponent, ArgentGridModule, ColDef, GridApi, themeQuartz } from '../public-api';
+import {
+  departmentValueFormatter,
+  locationValueFormatter,
+  roleValueFormatter,
+  STORY_DEPARTMENTS,
+  STORY_LOCATIONS,
+  STORY_ROLES,
+} from './story-utils';
 
 interface Employee {
   id: number;
@@ -25,24 +33,35 @@ interface Employee {
         <span class="row-count">{{ rowCount | number }} rows</span>
       </div>
 
+      <div class="benchmark-info">
+        <strong>What does this benchmark measure?</strong>
+        <ul>
+          <li><b>Initial Render</b> — time to paint the first visible frame of the grid</li>
+          <li><b>Selection Update</b> — time to select and deselect all {{ rowCount | number }} rows</li>
+          <li><b>Grouping Toggle</b> — time to enable then revert row grouping on the Department column</li>
+          <li><b>Avg Scroll Frame</b> — average canvas render time across 30 scroll frames (100 px each)</li>
+          <li><b>Total</b> — total wall-clock time for the entire benchmark run</li>
+        </ul>
+      </div>
+
       <div class="results" *ngIf="results">
-        <div class="result-item">
+        <div class="result-item" title="Time to paint the first visible frame of the grid">
           <span class="label">Initial Render:</span>
           <span class="value">{{ results.initialRender }}ms</span>
         </div>
-        <div class="result-item">
+        <div class="result-item" title="Time to select and deselect all rows">
           <span class="label">Selection Update:</span>
           <span class="value">{{ results.selectionUpdateTime }}ms</span>
         </div>
-        <div class="result-item">
+        <div class="result-item" title="Time to toggle row grouping on the Department column">
           <span class="label">Grouping Toggle:</span>
           <span class="value">{{ results.groupingUpdateTime }}ms</span>
         </div>
-        <div class="result-item">
+        <div class="result-item" title="Average canvas render time per scroll frame (30 frames, 100px each)">
           <span class="label">Avg Scroll Frame:</span>
           <span class="value">{{ results.scrollFrameAverage }}ms</span>
         </div>
-        <div class="result-item total">
+        <div class="result-item total" title="Total wall-clock time for the full benchmark run">
           <span class="label">Total:</span>
           <span class="value">{{ results.totalTime }}ms</span>
         </div>
@@ -118,25 +137,62 @@ interface Employee {
     .result-item.total .value {
       color: #059669;
     }
+    .benchmark-info {
+      padding: 10px 14px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #1e40af;
+    }
+    .benchmark-info strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+    .benchmark-info ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+    .benchmark-info li {
+      margin-bottom: 3px;
+    }
   `,
   ],
 })
 export class BenchmarkWrapperComponent implements AfterViewInit, OnDestroy {
   @ViewChild('grid') gridComponent!: ArgentGridComponent;
 
-  @Input() rowCount = 10000;
+  @Input() rowCount = 100000;
 
   columnDefs: ColDef<Employee>[] = [
     { field: 'id', headerName: 'ID', width: 80, sortable: true },
     { field: 'name', headerName: 'Name', width: 200, sortable: true },
-    { field: 'department', headerName: 'Department', width: 180, sortable: true },
-    { field: 'role', headerName: 'Role', width: 250, filter: true },
+    {
+      field: 'department',
+      headerName: 'Department',
+      width: 180,
+      sortable: true,
+      valueFormatter: departmentValueFormatter,
+    },
+    {
+      field: 'role',
+      headerName: 'Role',
+      width: 250,
+      filter: true,
+      valueFormatter: roleValueFormatter,
+    },
     { field: 'salary', headerName: 'Salary', width: 120, sortable: true, filter: 'number' },
-    { field: 'location', headerName: 'Location', width: 150, filter: true },
+    {
+      field: 'location',
+      headerName: 'Location',
+      width: 150,
+      filter: true,
+      valueFormatter: locationValueFormatter,
+    },
   ];
 
   rowData: Employee[] = [];
-  height = '500px';
+  height = 'calc(100vh - 60px)';
   width = '100%';
   theme = themeQuartz;
 
@@ -167,25 +223,9 @@ export class BenchmarkWrapperComponent implements AfterViewInit, OnDestroy {
   }
 
   generateData(count: number): Employee[] {
-    const departments = [
-      'Engineering',
-      'Sales',
-      'Marketing',
-      'HR',
-      'Finance',
-      'Operations',
-      'Support',
-    ];
-    const roles = ['Software Engineer', 'Manager', 'Director', 'VP', 'Intern', 'Analyst', 'Lead'];
-    const locations = [
-      'New York',
-      'San Francisco',
-      'London',
-      'Singapore',
-      'Remote',
-      'Berlin',
-      'Tokyo',
-    ];
+    const departments = STORY_DEPARTMENTS;
+    const roles = STORY_ROLES;
+    const locations = STORY_LOCATIONS;
 
     return Array.from({ length: count }, (_, i) => ({
       id: i + 1,

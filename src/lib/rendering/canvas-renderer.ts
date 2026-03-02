@@ -2,21 +2,17 @@ import { Column, GridApi, IRowNode } from '../types/ag-grid-types';
 import { LiveDataHandler } from './live-data-handler';
 // Import new rendering modules from the index
 import {
-  // Blitting
-  BlitState,
   ColumnPrepResult,
-  calculateBlit,
   // Theme
   DEFAULT_THEME,
-  drawCheckbox,
+  drawCell,
   drawColumnLines,
-  drawGroupIndicator,
   drawRangeSelectionBorder,
   // Lines
   drawRowLines,
-  drawSparkline,
   // Types
   GridTheme,
+  getCellValue,
   getCenterColumnOffset,
   getColumnAtX,
   getColumnDef,
@@ -32,8 +28,6 @@ import {
   PositionedColumn,
   performHitTest,
   prepColumn,
-  // Cells
-  truncateText,
   walkRows,
 } from './render';
 import { DamageTracker } from './utils/damage-tracker';
@@ -56,7 +50,6 @@ export class CanvasRenderer<TData = any> {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private gridApi: GridApi<TData>;
-  private rowHeight: number;
   private scrollTop = 0;
   private scrollLeft = 0;
 
@@ -68,9 +61,9 @@ export class CanvasRenderer<TData = any> {
   }
 
   private animationFrameId: number | null = null;
-  private renderPending = false;
-  private lastRenderTime = 0;
-  private renderThrottleMs = 16; // Default to ~60fps
+  // When a render is already in-flight and another is requested, coalesce it here
+  // so it fires immediately after the current frame completes rather than being dropped.
+  private nextRenderPending = false;
   private rowBuffer = 5;
   private viewportHeight = 0;
   private viewportWidth = 0;
@@ -88,25 +81,18 @@ export class CanvasRenderer<TData = any> {
   // Damage tracking
   private damageTracker = new DamageTracker();
 
-  // Blitting state
-  private blitState = new BlitState();
-
   // Live data handling
   private liveDataHandler: LiveDataHandler<TData>;
 
   // Column prep results cache
   private columnPreps: Map<string, ColumnPrepResult<TData>> = new Map();
 
-  /**
-   * Column positions cache for O(1) lookup
-   */
-  private columnPositions: Map<string, number> = new Map();
-
   // Event listener references for cleanup
   private scrollListener?: (e: Event) => void;
   private resizeListener?: () => void;
   private mousedownListener?: (e: MouseEvent) => void;
   private mousemoveListener?: (e: MouseEvent) => void;
+  private mouseleaveListener?: (e: MouseEvent) => void;
   private clickListener?: (e: MouseEvent) => void;
   private dblclickListener?: (e: MouseEvent) => void;
   private mouseupListener?: (e: MouseEvent) => void;
@@ -127,7 +113,6 @@ export class CanvasRenderer<TData = any> {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     this.gridApi = gridApi;
-    this.rowHeight = rowHeight;
     this.theme = mergeTheme(DEFAULT_THEME, { rowHeight }, theme || {});
     this.liveDataHandler = new LiveDataHandler(gridApi);
 
@@ -139,7 +124,7 @@ export class CanvasRenderer<TData = any> {
    * Update the theme
    */
   setTheme(theme: Partial<GridTheme>): void {
-    this.theme = mergeTheme(DEFAULT_THEME, { rowHeight: this.rowHeight }, theme);
+    this.theme = mergeTheme(DEFAULT_THEME, { rowHeight: this.theme.rowHeight }, theme);
     this.damageTracker.markAllDirty();
     this.scheduleRender();
   }
@@ -209,7 +194,7 @@ export class CanvasRenderer<TData = any> {
    * @performance O(1) - Constant time, regardless of total row count
    */
   getRowAtY(y: number): number {
-    return getRowAtY(y, this.rowHeight, this.scrollTop);
+    return getRowAtY(y, this.theme.rowHeight, this.scrollTop);
   }
 
   /**
@@ -281,6 +266,10 @@ export class CanvasRenderer<TData = any> {
 
     this.canvas.addEventListener('mousedown', this.mousedownListener);
     this.canvas.addEventListener('mousemove', this.mousemoveListener);
+    this.mouseleaveListener = () => {
+      this.canvas.style.cursor = '';
+    };
+    this.canvas.addEventListener('mouseleave', this.mouseleaveListener);
     this.canvas.addEventListener('click', this.clickListener);
     this.canvas.addEventListener('dblclick', this.dblclickListener);
     this.canvas.addEventListener('mouseup', this.mouseupListener);
@@ -297,32 +286,9 @@ export class CanvasRenderer<TData = any> {
     const container = this.canvas.parentElement;
     if (!container) return;
 
-    const _oldScrollTop = this.scrollTop;
-    const _oldScrollLeft = this.scrollLeft;
-
     this.scrollTop = container.scrollTop;
     this.scrollLeft = container.scrollLeft;
-
-    // Update blit state
-    const lastScroll = this.blitState.updateScroll(this.scrollLeft, this.scrollTop);
-
-    // Check if we should blit
-    const { left, right } = getPinnedWidths(this.getVisibleColumns());
-    const blitResult = calculateBlit(
-      { x: this.scrollLeft, y: this.scrollTop },
-      lastScroll,
-      { width: this.viewportWidth, height: this.viewportHeight },
-      { left, right }
-    );
-
-    if (blitResult.canBlit && this.blitState.hasLastFrame()) {
-      // Blitting is possible - the render will copy from last frame
-      this.damageTracker.markAllDirty(); // For now, still do full redraw but with blit
-    } else {
-      // Full redraw needed
-      this.damageTracker.markAllDirty();
-    }
-
+    this.damageTracker.markAllDirty();
     this.scheduleRender();
   }
 
@@ -347,21 +313,13 @@ export class CanvasRenderer<TData = any> {
     const width = this.viewportWidth || this.canvas.clientWidth;
     const height = this.viewportHeight || this.canvas.clientHeight || 600;
 
+    // Set pixel buffer dimensions only. CSS sizing is handled by the stylesheet
+    // (width: 100%; height: 100%) so we never touch canvas.style.width/height here.
+    // Modifying canvas style dimensions would change layout, re-fire the
+    // ResizeObserver and create an infinite grow loop.
     this.canvas.width = width * dpr;
     this.canvas.height = height * dpr;
-    this.canvas.style.width = `${width}px`;
-    this.canvas.style.height = `${height}px`;
-
-    if (this.ctx) {
-      if (typeof this.ctx.setTransform === 'function') {
-        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      } else {
-        (this.ctx as any).scale(dpr, dpr);
-      }
-    }
-
-    // Reset blit state on resize
-    this.blitState.reset();
+    this.ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.scheduleRender();
   }
 
@@ -373,50 +331,34 @@ export class CanvasRenderer<TData = any> {
     this.setViewportDimensions(rect.width, rect.height);
   }
 
-  /**
-   * Set render throttling interval
-   *
-   * @param ms - Minimum time between frames in milliseconds
-   */
-  setRenderThrottle(ms: number): void {
-    this.renderThrottleMs = Math.max(0, ms);
-  }
-
   render(): void {
     this.damageTracker.markAllDirty();
     this.scheduleRender();
   }
 
   /**
-   * Schedule a render with throttling
-   *
-   * Performance optimization: Batches multiple render requests into a single
-   * requestAnimationFrame call, and ensures we don't render more often than
-   * renderThrottleMs (defaults to 16ms / 60fps).
+   * Schedule a render on the next animation frame.
+   * Coalesces: if a frame is already in-flight, marks a follow-up so the next
+   * frame fires immediately after (no renders dropped, no pile-up).
+   * No-op if nothing is dirty.
    */
   private scheduleRender(): void {
-    if (this.renderPending || this.animationFrameId !== null) return;
+    if (!this.damageTracker.hasDamage()) return;
 
-    const now = performance.now();
-    const timeSinceLastRender = now - this.lastRenderTime;
-    const delay = Math.max(0, this.renderThrottleMs - timeSinceLastRender);
-
-    this.renderPending = true;
-
-    const executeRender = () => {
-      this.animationFrameId = requestAnimationFrame(() => {
-        this.doRender();
-        this.lastRenderTime = performance.now();
-        this.renderPending = false;
-        this.animationFrameId = null;
-      });
-    };
-
-    if (delay <= 0) {
-      executeRender();
-    } else {
-      setTimeout(executeRender, delay);
+    if (this.animationFrameId !== null) {
+      this.nextRenderPending = true;
+      return;
     }
+
+    this.animationFrameId = requestAnimationFrame(() => {
+      this.doRender();
+      this.animationFrameId = null;
+
+      if (this.nextRenderPending) {
+        this.nextRenderPending = false;
+        this.scheduleRender();
+      }
+    });
   }
 
   getAllColumns(): Column[] {
@@ -427,36 +369,21 @@ export class CanvasRenderer<TData = any> {
     return this.gridApi.getAllColumns().filter((col) => isColumnVisible(col));
   }
 
-  /**
-   * Prepare columns for rendering
-   *
-   * Caches column definitions and X positions for efficient cell rendering.
-   * This is called once per render frame before rendering visible rows.
-   *
-   * Performance optimizations:
-   * 1. Column definition caching - Avoids repeated getColumnDef() calls
-   * 2. Column position caching - Enables O(1) column X lookup instead of O(n)
-   *
-   * @see columnPreps - Cached column definitions
-   * @see columnPositions - Cached column X positions
-   */
+  /** Build the per-column prep cache once per frame before rendering visible rows. */
   private prepareColumns(): void {
-    const columns = this.getVisibleColumns();
     this.columnPreps.clear();
-    this.columnPositions.clear();
-
-    // Cache column definitions and X positions in a single pass
-    let x = 0;
-    for (const column of columns) {
-      const colDef = getColumnDef(column, this.gridApi);
-      const width = Math.floor(column.width);
-      this.columnPreps.set(column.colId, prepColumn(this.ctx, column, colDef, this.theme));
-      this.columnPositions.set(column.colId, x);
-      x += width;
+    for (const column of this.getVisibleColumns()) {
+      this.columnPreps.set(
+        column.colId,
+        prepColumn(this.ctx, column, getColumnDef(column, this.gridApi), this.theme)
+      );
     }
   }
 
   private doRender(): void {
+    // Skip paint entirely if nothing has been marked dirty.
+    if (!this.damageTracker.hasDamage()) return;
+
     const startTime = performance.now();
     const width = this.viewportWidth || this.canvas.clientWidth;
     const height = this.viewportHeight || this.canvas.clientHeight;
@@ -481,7 +408,7 @@ export class CanvasRenderer<TData = any> {
     const { startRow, endRow } = getVisibleRowRange(
       this.scrollTop,
       height,
-      this.rowHeight,
+      this.theme.rowHeight,
       totalRows,
       this.rowBuffer,
       this.gridApi
@@ -518,7 +445,7 @@ export class CanvasRenderer<TData = any> {
       startRow,
       endRow,
       this.scrollTop,
-      this.rowHeight,
+      this.theme.rowHeight,
       (rowIndex) => this.gridApi.getDisplayedRowAtIndex(rowIndex),
       (rowIndex, y, _rowHeight, rowNode) => {
         if (!rowNode) return;
@@ -532,9 +459,6 @@ export class CanvasRenderer<TData = any> {
 
     // Draw range selections
     this.drawRangeSelections(positionedColumns, leftWidth, rightWidth, width);
-
-    // Store current frame for blitting
-    this.blitState.setLastCanvas(this.canvas);
 
     // Clear damage
     this.damageTracker.clear();
@@ -553,8 +477,8 @@ export class CanvasRenderer<TData = any> {
 
     for (const range of ranges) {
       // Calculate Y boundaries
-      const startY = range.startRow * this.rowHeight - this.scrollTop;
-      const endY = (range.endRow + 1) * this.rowHeight - this.scrollTop;
+      const startY = range.startRow * this.theme.rowHeight - this.scrollTop;
+      const endY = (range.endRow + 1) * this.theme.rowHeight - this.scrollTop;
 
       let minX = Infinity;
       let maxX = -Infinity;
@@ -599,7 +523,7 @@ export class CanvasRenderer<TData = any> {
     }
 
     const isEvenRow = rowIndex % 2 === 0;
-    const rowHeight = rowNode.rowHeight || this.rowHeight;
+    const rowHeight = rowNode.rowHeight || this.theme.rowHeight;
 
     // Draw row background
     let bgColor = isEvenRow ? this.theme.bgCellEven : this.theme.bgCell;
@@ -653,69 +577,33 @@ export class CanvasRenderer<TData = any> {
     const prep = this.columnPreps.get(column.colId);
     if (!prep) return;
 
-    const cellValue = column.field ? getValueByPath(rowNode.data, column.field) : undefined;
-
-    let textX = x + this.theme.cellPadding;
-
-    const isSelectionColumn = column.colId === 'ag-Grid-SelectionColumn';
-
-    // Check for checkbox selection
-    if (isSelectionColumn) {
-      const checkboxSize = 14;
-      const checkboxY = Math.floor(y + (this.rowHeight - checkboxSize) / 2);
-      const checkboxX = Math.floor(x + (width - checkboxSize) / 2);
-
-      drawCheckbox(this.ctx, checkboxX, checkboxY, checkboxSize, rowNode.selected, this.theme);
-      return; // Dedicated column only shows checkbox
-    }
-
-    // Check for sparkline
-    if (prep.colDef?.sparklineOptions) {
-      drawSparkline(this.ctx, cellValue, x, y, width, this.rowHeight, prep.colDef.sparklineOptions);
-      return;
-    }
-
+    const value = getCellValue(column, prep.colDef, rowNode, this.gridApi);
     const formattedValue = getFormattedValue(
-      cellValue,
+      value,
       prep.colDef,
       rowNode.data,
       rowNode,
       this.gridApi
     );
 
-    if (!formattedValue) return;
-
-    this.ctx.fillStyle = this.theme.textCell;
-
-    // Handle group indentation
-    const isAutoGroupCol = column.colId === 'ag-Grid-AutoColumn';
-    const isFirstColIfNoAutoGroup =
-      !positionedColumns.some((pc) => pc.column.colId === 'ag-Grid-AutoColumn') &&
-      column === positionedColumns[0]?.column;
-
-    if (
-      (isAutoGroupCol || isFirstColIfNoAutoGroup) &&
-      (rowNode.group || rowNode.master || rowNode.level > 0)
-    ) {
-      const indent = rowNode.level * this.theme.groupIndentWidth;
-      textX += indent;
-
-      // Draw expand/collapse indicator
-      if (rowNode.group || rowNode.master) {
-        drawGroupIndicator(this.ctx, textX, y, this.rowHeight, rowNode.expanded, this.theme);
-        textX += this.theme.groupIndicatorSize + 3;
-      }
-    }
-
-    const truncatedText = truncateText(
-      this.ctx,
+    drawCell(this.ctx, prep, {
+      ctx: this.ctx,
+      theme: this.theme,
+      column,
+      colDef: prep.colDef,
+      rowNode,
+      rowIndex: rowNode.displayedRowIndex,
+      x,
+      y,
+      width,
+      height: rowNode.rowHeight || this.theme.rowHeight,
+      value,
       formattedValue,
-      width - (textX - x) - this.theme.cellPadding
-    );
-
-    if (truncatedText) {
-      this.ctx.fillText(truncatedText, Math.floor(textX), Math.floor(y + this.rowHeight / 2));
-    }
+      isSelected: rowNode.selected,
+      isHovered: false, // TODO: Implement hover
+      isEvenRow: rowNode.displayedRowIndex % 2 === 0,
+      api: this.gridApi,
+    });
   }
 
   private drawGridLines(
@@ -732,7 +620,7 @@ export class CanvasRenderer<TData = any> {
       this.ctx,
       startRow,
       endRow,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       viewportWidth - this.scrollbarWidth,
       this.theme,
@@ -752,7 +640,7 @@ export class CanvasRenderer<TData = any> {
       this.theme,
       startRow,
       endRow,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.gridApi,
       viewportWidth - this.scrollbarWidth
     );
@@ -767,7 +655,7 @@ export class CanvasRenderer<TData = any> {
     const { rowIndex, columnIndex } = performHitTest(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
@@ -791,7 +679,7 @@ export class CanvasRenderer<TData = any> {
     const { rowIndex, columnIndex } = performHitTest(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
@@ -800,6 +688,10 @@ export class CanvasRenderer<TData = any> {
     );
     const columns = this.getVisibleColumns();
     const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
+
+    // Update cursor: pointer for button cells, default otherwise
+    const hoveredColDef = colId ? this.columnPreps.get(colId)?.colDef : null;
+    this.canvas.style.cursor = hoveredColDef?.buttonOptions ? 'pointer' : '';
 
     if (this.onMouseMove) {
       this.onMouseMove(event, rowIndex, colId);
@@ -812,7 +704,7 @@ export class CanvasRenderer<TData = any> {
     const { rowIndex, columnIndex } = performHitTest(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
@@ -832,7 +724,7 @@ export class CanvasRenderer<TData = any> {
     const { rowIndex, columnIndex } = performHitTest(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
@@ -842,12 +734,33 @@ export class CanvasRenderer<TData = any> {
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
 
-    // Handle selection column
+    // Handle selection column or explicit checkbox renderer
     const columns = this.getVisibleColumns();
     const clickedCol = columnIndex !== -1 ? columns[columnIndex] : null;
-    if (clickedCol?.colId === 'ag-Grid-SelectionColumn') {
+    const clickedColDef = clickedCol ? this.columnPreps.get(clickedCol.colId)?.colDef : null;
+
+    if (
+      clickedCol?.colId === 'ag-Grid-SelectionColumn' ||
+      clickedColDef?.cellRenderer === 'checkbox'
+    ) {
       rowNode.setSelected(!rowNode.selected);
       return;
+    }
+
+    // Handle button cell — fire onClick and stop propagation to row click
+    if (clickedCol) {
+      const colDef = this.columnPreps.get(clickedCol.colId)?.colDef;
+      if (colDef?.buttonOptions?.onClick) {
+        colDef.buttonOptions.onClick({
+          value: clickedCol.field ? getValueByPath(rowNode.data, clickedCol.field) : undefined,
+          data: rowNode.data,
+          node: rowNode,
+          colDef,
+          api: this.gridApi,
+          event,
+        });
+        return;
+      }
     }
 
     // Handle expand/collapse
@@ -905,7 +818,7 @@ export class CanvasRenderer<TData = any> {
     const { rowIndex, columnIndex } = performHitTest(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
@@ -930,7 +843,7 @@ export class CanvasRenderer<TData = any> {
     return performHitTest(
       event.clientX - rect.left,
       event.clientY - rect.top,
-      this.rowHeight,
+      this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
@@ -946,7 +859,7 @@ export class CanvasRenderer<TData = any> {
     const container = this.canvas.parentElement;
     if (!container) return;
 
-    const targetPosition = rowIndex * this.rowHeight;
+    const targetPosition = rowIndex * this.theme.rowHeight;
     container.scrollTop = targetPosition;
     this.scrollTop = targetPosition;
     this.damageTracker.markAllDirty();
@@ -1018,7 +931,7 @@ export class CanvasRenderer<TData = any> {
   getRowAtPosition(y: number): number {
     const scrollTop = this.scrollTop || 0;
     const rowY = y + scrollTop;
-    return Math.floor(rowY / this.rowHeight);
+    return Math.floor(rowY / this.theme.rowHeight);
   }
 
   destroy(): void {
@@ -1036,6 +949,8 @@ export class CanvasRenderer<TData = any> {
       this.canvas.removeEventListener('mousedown', this.mousedownListener);
     if (this.mousemoveListener)
       this.canvas.removeEventListener('mousemove', this.mousemoveListener);
+    if (this.mouseleaveListener)
+      this.canvas.removeEventListener('mouseleave', this.mouseleaveListener);
     if (this.clickListener) this.canvas.removeEventListener('click', this.clickListener);
     if (this.dblclickListener) this.canvas.removeEventListener('dblclick', this.dblclickListener);
     if (this.mouseupListener) this.canvas.removeEventListener('mouseup', this.mouseupListener);
@@ -1044,8 +959,8 @@ export class CanvasRenderer<TData = any> {
       window.removeEventListener('resize', this.resizeListener);
     }
 
-    this.renderPending = false;
-    this.blitState.reset();
+    this.nextRenderPending = false;
+    this.animationFrameId = null;
     this.damageTracker.reset();
   }
 }

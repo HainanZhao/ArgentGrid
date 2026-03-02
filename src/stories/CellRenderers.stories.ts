@@ -2,6 +2,7 @@ import { BrowserModule } from '@angular/platform-browser';
 import type { Meta, StoryObj } from '@storybook/angular';
 import { moduleMetadata } from '@storybook/angular';
 import { ArgentGridComponent, ArgentGridModule, themeQuartz } from '../public-api';
+import { STORY_LOCATIONS } from './story-utils';
 
 interface Employee {
   id: number;
@@ -34,7 +35,7 @@ type Story = StoryObj<ArgentGridComponent<Employee>>;
 function generateStaticData(count: number): Employee[] {
   const departments = ['Engineering', 'Sales', 'Marketing', 'HR', 'Finance'];
   const roles = ['Engineer', 'Manager', 'Director', 'VP', 'Intern'];
-  const locations = ['New York', 'San Francisco', 'London', 'Singapore', 'Remote'];
+  const locations = STORY_LOCATIONS;
   const statuses = ['Active', 'On Leave', 'Remote', 'Travel'];
 
   return Array.from({ length: count }, (_, i) => ({
@@ -45,8 +46,9 @@ function generateStaticData(count: number): Employee[] {
     salary: 50000 + i * 1000,
     salaryTrend: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((v) => (v + i * 5) % 100),
     location: locations[i % locations.length],
-    performance: 60 + (i % 40),
-    status: statuses[i % statuses.length],
+    // Use deterministic "semi-random" patterns based on index for stable E2E screenshots
+    performance: 60 + ((i * 7) % 40),
+    status: statuses[(i * 3) % statuses.length],
   }));
 }
 
@@ -72,7 +74,7 @@ export const SparklineArea: Story = {
       },
     ],
     rowData: generateStaticData(50),
-    height: '400px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
   },
@@ -106,7 +108,7 @@ export const SparklineLine: Story = {
       },
     ],
     rowData: generateStaticData(50),
-    height: '400px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
   },
@@ -119,7 +121,41 @@ export const SparklineLine: Story = {
   },
 };
 
-export const CustomCellRenderer: Story = {
+export const SparklineBar: Story = {
+  args: {
+    columnDefs: [
+      { field: 'id', headerName: 'ID', width: 80 },
+      { field: 'name', headerName: 'Name', width: 200 },
+      { field: 'department', headerName: 'Department', width: 180 },
+      {
+        field: 'salaryTrend',
+        headerName: 'Salary Trend',
+        width: 200,
+        cellRenderer: 'sparkline',
+        sparklineOptions: {
+          type: 'bar',
+          bar: {
+            fill: '#6366f1',
+            strokeWidth: 0,
+          },
+        },
+      },
+    ],
+    rowData: generateStaticData(50),
+    height: 'calc(100vh - 60px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Bar sparkline showing salary trend data as a series of vertical bars.',
+      },
+    },
+  },
+};
+
+export const ProgressBar: Story = {
   args: {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
@@ -128,28 +164,25 @@ export const CustomCellRenderer: Story = {
       {
         field: 'performance',
         headerName: 'Performance',
-        width: 150,
-        cellRenderer: (params: any) => {
-          const value = params.value;
-          const color = value >= 80 ? '#22c55e' : value >= 60 ? '#eab308' : '#ef4444';
-          return `<div style="display: flex; align-items: center; gap: 8px;">
-            <div style="flex: 1; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
-              <div style="width: ${value}%; height: 100%; background: ${color}; border-radius: 4px;"></div>
-            </div>
-            <span style="color: ${color}; font-weight: 600; min-width: 40px;">${value}%</span>
-          </div>`;
+        width: 180,
+        progressOptions: {
+          min: 0,
+          max: 100,
+          fill: (value: number) => (value >= 80 ? '#22c55e' : value >= 60 ? '#eab308' : '#ef4444'),
+          showLabel: true,
         },
       },
     ],
     rowData: generateStaticData(50),
-    height: '400px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
   },
   parameters: {
     docs: {
       description: {
-        story: 'Custom cell renderer showing performance as a progress bar with color coding.',
+        story:
+          'Built-in progress bar cell renderer with traffic-light color coding (green ≥ 80, yellow ≥ 60, red < 60).',
       },
     },
   },
@@ -165,29 +198,86 @@ export const StatusBadge: Story = {
         field: 'status',
         headerName: 'Status',
         width: 120,
-        cellRenderer: (params: any) => {
-          const status = params.value;
-          const colors: Record<string, { bg: string; text: string }> = {
-            Active: { bg: '#dcfce7', text: '#16a34a' },
-            'On Leave': { bg: '#fef3c7', text: '#d97706' },
-            Remote: { bg: '#dbeafe', text: '#2563eb' },
-            Travel: { bg: '#f3e8ff', text: '#9333ea' },
-          };
-          const { bg, text } = colors[status] || { bg: '#f3f4f6', text: '#6b7280' };
-          return `<span style="padding: 4px 12px; background: ${bg}; color: ${text}; border-radius: 9999px; font-size: 12px; font-weight: 500;">${status}</span>`;
+        badgeOptions: {
+          colorMap: {
+            Active: { fill: '#dcfce7', text: '#16a34a' },
+            'On Leave': { fill: '#fef3c7', text: '#d97706' },
+            Remote: { fill: '#dbeafe', text: '#2563eb' },
+            Travel: { fill: '#f3e8ff', text: '#9333ea' },
+          },
+          defaultColors: { fill: '#f3f4f6', text: '#6b7280' },
         },
       },
       { field: 'salary', headerName: 'Salary', width: 120 },
     ],
     rowData: generateStaticData(50),
-    height: '400px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
   },
   parameters: {
     docs: {
       description: {
-        story: 'Custom status badge cell renderer with different colors for each status type.',
+        story:
+          'Built-in badge cell renderer with per-value color mapping (green = Active, yellow = On Leave, blue = Remote, purple = Travel).',
+      },
+    },
+  },
+};
+
+export const ButtonCell: Story = {
+  args: {
+    columnDefs: [
+      { field: 'id', headerName: 'ID', width: 80 },
+      { field: 'name', headerName: 'Name', width: 200 },
+      { field: 'department', headerName: 'Department', width: 180 },
+      {
+        field: 'status',
+        headerName: 'Action',
+        width: 140,
+        buttonOptions: {
+          label: 'View Details',
+          variant: 'primary',
+          onClick: (params: any) => {
+            alert(`Clicked row ${params.node.rowIndex}: ${params.data.name}`);
+          },
+        },
+      },
+      {
+        field: 'status',
+        headerName: 'Delete',
+        width: 120,
+        buttonOptions: {
+          label: 'Remove',
+          variant: 'danger',
+          onClick: (params: any) => {
+            alert(`Delete ${params.data.name}?`);
+          },
+        },
+      },
+      {
+        field: 'status',
+        headerName: 'Export',
+        width: 120,
+        buttonOptions: {
+          label: 'Export',
+          variant: 'secondary',
+          onClick: (params: any) => {
+            alert(`Export ${params.data.name}`);
+          },
+        },
+      },
+    ],
+    rowData: generateStaticData(50),
+    height: 'calc(100vh - 60px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Built-in button cell renderer with `primary`, `danger`, and `secondary` variants. `onClick` receives AG Grid-compatible params: `{ value, data, node, api, colDef, event }`.',
       },
     },
   },
@@ -207,7 +297,7 @@ export const CurrencyFormatter: Story = {
       },
     ],
     rowData: generateStaticData(50),
-    height: '400px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
   },
@@ -215,6 +305,90 @@ export const CurrencyFormatter: Story = {
     docs: {
       description: {
         story: 'Currency formatter showing salary with dollar sign and comma separators.',
+      },
+    },
+  },
+};
+
+export const CheckboxRenderer: Story = {
+  args: {
+    columnDefs: [
+      { field: 'id', headerName: 'ID', width: 80 },
+      { field: 'name', headerName: 'Name', width: 200 },
+      {
+        field: 'performance',
+        headerName: 'High Perf?',
+        width: 120,
+        cellRenderer: 'checkbox',
+        // Example: boolean logic for checkbox
+        valueGetter: (params: any) => params.data.performance >= 80,
+      },
+      {
+        field: 'status',
+        headerName: 'Remote?',
+        width: 120,
+        cellRenderer: 'checkbox',
+        valueGetter: (params: any) => params.data.status === 'Remote',
+      },
+    ],
+    rowData: generateStaticData(50),
+    height: 'calc(100vh - 60px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Dedicated **checkbox cell renderer**. Renders a boolean value as a centered checkbox. ' +
+          'Can be used with `valueGetter` to derive boolean state from complex data.',
+      },
+    },
+  },
+};
+
+export const RatingRenderer: Story = {
+  args: {
+    columnDefs: [
+      { field: 'id', headerName: 'ID', width: 80 },
+      { field: 'name', headerName: 'Name', width: 200 },
+      {
+        field: 'performance',
+        headerName: 'Performance',
+        width: 150,
+        cellRenderer: 'rating',
+        // Scale 60-100 to 0-5 stars
+        valueGetter: (params: any) => (params.data.performance - 60) / 8,
+        ratingOptions: {
+          color: '#ffb400',
+          size: 16,
+        },
+      },
+      {
+        field: 'performance',
+        headerName: 'Stars (Small)',
+        width: 120,
+        cellRenderer: 'rating',
+        valueGetter: (params: any) => (params.data.performance - 60) / 8,
+        ratingOptions: {
+          color: '#3b82f6',
+          size: 10,
+          max: 5,
+        },
+      },
+    ],
+    rowData: generateStaticData(50),
+    height: 'calc(100vh - 60px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Rating cell renderer** using SVG-style star shapes on Canvas. ' +
+          'Supports custom colors, sizes, and max star count. ' +
+          'Great for visualising scores or feedback.',
       },
     },
   },

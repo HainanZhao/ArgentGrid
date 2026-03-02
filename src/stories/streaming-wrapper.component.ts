@@ -48,7 +48,6 @@ interface Stock {
         [width]="width"
         [theme]="theme"
         [gridOptions]="gridOptions"
-        [renderThrottleMs]="renderThrottleMs"
         (gridReady)="onGridReady($event)"
       />
     </div>
@@ -148,9 +147,8 @@ interface Stock {
 export class StreamingWrapperComponent implements OnInit, OnDestroy {
   @ViewChild('grid') gridComponent!: ArgentGridComponent;
 
-  @Input() updateFrequency = 200; // ms
+  @Input() updateFrequency = 100; // ms
   @Input() batchSize = 10;
-  @Input() renderThrottleMs = 16;
 
   columnDefs: ColDef<Stock>[] = [
     { field: 'symbol', headerName: 'Symbol', width: 100, pinned: 'left', sortable: true },
@@ -160,26 +158,61 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
       headerName: 'Price',
       width: 120,
       sortable: true,
-      valueFormatter: (params: any) => `$${params.value.toFixed(2)}`,
+      cellRenderer: (params: any) => {
+        const arrow = params.data.change >= 0 ? '▲' : '▼';
+        return `${arrow} $${params.value.toFixed(2)}`;
+      },
+      cellStyle: (params: any) => ({
+        color: params.data.change >= 0 ? '#16a34a' : '#dc2626',
+      }),
+      tooltipValueGetter: (params: any) => {
+        const d = params.data;
+        const sign = d.change >= 0 ? '+' : '';
+        return `${d.name}\nPrice: $${d.price.toFixed(2)}\nChange: ${sign}$${d.change.toFixed(2)} (${sign}${d.changePct.toFixed(2)}%)\nVolume: ${d.volume.toLocaleString()}`;
+      },
     },
     {
       field: 'change',
       headerName: 'Change',
       width: 100,
-      valueFormatter: (params: any) => {
+      cellRenderer: (params: any) => {
         const val = params.value;
+        const arrow = val >= 0 ? '▲' : '▼';
         const sign = val >= 0 ? '+' : '';
-        return `${sign}${val.toFixed(2)}`;
+        return `${arrow} ${sign}${val.toFixed(2)}`;
       },
+      cellStyle: (params: any) => ({
+        color: params.value >= 0 ? '#16a34a' : '#dc2626',
+      }),
     },
     {
       field: 'changePct',
       headerName: '% Change',
-      width: 100,
-      valueFormatter: (params: any) => {
+      width: 110,
+      cellRenderer: (params: any) => {
         const val = params.value;
+        const arrow = val >= 0 ? '▲' : '▼';
         const sign = val >= 0 ? '+' : '';
-        return `${sign}${val.toFixed(2)}%`;
+        return `${arrow} ${sign}${val.toFixed(2)}%`;
+      },
+      cellStyle: (params: any) => ({
+        color: params.value >= 0 ? '#16a34a' : '#dc2626',
+      }),
+    },
+    {
+      field: 'history',
+      headerName: 'Trend',
+      width: 140,
+      sortable: false,
+      sparklineOptions: {
+        type: 'bar',
+        column: {
+          fill: '#3b82f6',
+          stroke: '#2563eb',
+          strokeWidth: 0,
+          padding: 0.15,
+        },
+        padding: { top: 4, bottom: 4, left: 4, right: 4 },
       },
     },
     {
@@ -218,10 +251,15 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
   private gridApi?: GridApi<Stock>;
   private intervalId: any;
   private rateIntervalId: any;
+  private flushIntervalId: any;
   isRunning = false;
   updateCount = 0;
   messageRate = 0;
   private lastUpdateCount = 0;
+
+  // Transaction throttling - buffer updates and apply in batches
+  private pendingUpdates: Stock[] = [];
+  private flushIntervalMs = 200; // Apply transactions at most every 500ms
 
   ngOnInit(): void {
     this.rowData = this.generateInitialData();
@@ -247,6 +285,11 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
       this.updateStocks();
     }, this.updateFrequency);
 
+    // Flush pending updates every 500ms
+    this.flushIntervalId = setInterval(() => {
+      this.flushPendingUpdates();
+    }, this.flushIntervalMs);
+
     // Calculate message rate every second
     this.rateIntervalId = setInterval(() => {
       this.messageRate = this.updateCount - this.lastUpdateCount;
@@ -262,6 +305,11 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
     if (this.rateIntervalId) {
       clearInterval(this.rateIntervalId);
     }
+    if (this.flushIntervalId) {
+      clearInterval(this.flushIntervalId);
+    }
+    // Flush any remaining updates before stopping
+    this.flushPendingUpdates();
   }
 
   forceRender(): void {
@@ -372,9 +420,19 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
 
     this.rowData = newRowData;
 
-    // Apply updates to grid via transaction
-    this.gridApi.applyTransaction({ update: updates });
+    // Buffer updates for throttled applyTransaction
+    this.pendingUpdates.push(...updates);
     this.updateCount += updates.length;
+  }
+
+  private flushPendingUpdates(): void {
+    if (!this.gridApi || this.pendingUpdates.length === 0) return;
+
+    // Apply all buffered updates in a single transaction
+    const updatesToApply = [...this.pendingUpdates];
+    this.pendingUpdates = [];
+
+    this.gridApi.applyTransaction({ update: updatesToApply });
   }
 
   ngOnDestroy(): void {

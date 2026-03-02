@@ -2,6 +2,14 @@ import { BrowserModule } from '@angular/platform-browser';
 import type { Meta, StoryObj } from '@storybook/angular';
 import { moduleMetadata } from '@storybook/angular';
 import { ArgentGridComponent, ArgentGridModule, themeQuartz } from '../public-api';
+import {
+  departmentValueFormatter,
+  locationValueFormatter,
+  roleValueFormatter,
+  STORY_DEPARTMENTS,
+  STORY_LOCATIONS,
+  STORY_ROLES,
+} from './story-utils';
 
 interface Employee {
   id: number;
@@ -30,9 +38,9 @@ export default meta;
 type Story = StoryObj<ArgentGridComponent<Employee>>;
 
 function generateStaticData(count: number): Employee[] {
-  const departments = ['Engineering', 'Sales', 'Marketing'];
-  const roles = ['Engineer', 'Manager', 'Analyst'];
-  const locations = ['New York', 'London', 'Berlin'];
+  const departments = STORY_DEPARTMENTS;
+  const roles = STORY_ROLES;
+  const locations = STORY_LOCATIONS;
 
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
@@ -64,6 +72,7 @@ export const TextFilter: Story = {
         filter: 'text',
         floatingFilter: true,
         headerComponentParams: { filterIcon: '🔤' },
+        valueFormatter: departmentValueFormatter,
       },
       {
         field: 'role',
@@ -72,12 +81,18 @@ export const TextFilter: Story = {
         filter: 'text',
         floatingFilter: true,
         headerComponentParams: { filterIcon: '🔤' },
+        valueFormatter: roleValueFormatter,
       },
       { field: 'salary', headerName: 'Salary', width: 120 },
-      { field: 'location', headerName: 'Location', width: 150 },
+      {
+        field: 'location',
+        headerName: 'Location',
+        width: 150,
+        valueFormatter: locationValueFormatter,
+      },
     ],
     rowData: generateStaticData(50),
-    height: '500px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
   },
@@ -103,7 +118,12 @@ export const NumberFilter: Story = {
         headerComponentParams: { filterIcon: '🔢' },
       },
       { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'department', headerName: 'Department', width: 180 },
+      {
+        field: 'department',
+        headerName: 'Department',
+        width: 180,
+        valueFormatter: departmentValueFormatter,
+      },
       {
         field: 'salary',
         headerName: 'Salary 🔢',
@@ -112,10 +132,15 @@ export const NumberFilter: Story = {
         floatingFilter: true,
         headerComponentParams: { filterIcon: '🔢' },
       },
-      { field: 'location', headerName: 'Location', width: 150 },
+      {
+        field: 'location',
+        headerName: 'Location',
+        width: 150,
+        valueFormatter: locationValueFormatter,
+      },
     ],
     rowData: generateStaticData(50),
-    height: '500px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
   },
@@ -141,8 +166,9 @@ export const SetFilter: Story = {
         filter: 'set',
         floatingFilter: true,
         headerComponentParams: { filterIcon: '☑️' },
+        valueFormatter: departmentValueFormatter,
       },
-      { field: 'role', headerName: 'Role', width: 250 },
+      { field: 'role', headerName: 'Role', width: 250, valueFormatter: roleValueFormatter },
       { field: 'salary', headerName: 'Salary', width: 120 },
       {
         field: 'location',
@@ -151,10 +177,11 @@ export const SetFilter: Story = {
         filter: 'set',
         floatingFilter: true,
         headerComponentParams: { filterIcon: '☑️' },
+        valueFormatter: locationValueFormatter,
       },
     ],
     rowData: generateStaticData(50),
-    height: '500px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
   },
@@ -173,12 +200,24 @@ export const HiddenFloatingFilters: Story = {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
       { field: 'name', headerName: 'Name', width: 200, filter: 'text' },
-      { field: 'department', headerName: 'Department', width: 180, filter: 'text' },
-      { field: 'role', headerName: 'Role', width: 250, filter: 'text' },
+      {
+        field: 'department',
+        headerName: 'Department',
+        width: 180,
+        filter: 'text',
+        valueFormatter: departmentValueFormatter,
+      },
+      {
+        field: 'role',
+        headerName: 'Role',
+        width: 250,
+        filter: 'text',
+        valueFormatter: roleValueFormatter,
+      },
       { field: 'salary', headerName: 'Salary', width: 120, filter: 'number' },
     ],
     rowData: generateStaticData(50),
-    height: '500px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
   },
@@ -218,6 +257,7 @@ export const AllFilterTypes: Story = {
         filter: 'set',
         floatingFilter: true,
         headerComponentParams: { filterIcon: '☑️' },
+        valueFormatter: departmentValueFormatter,
       },
       {
         field: 'startDate',
@@ -237,7 +277,7 @@ export const AllFilterTypes: Story = {
       },
     ],
     rowData: generateStaticData(50),
-    height: '500px',
+    height: 'calc(100vh - 60px)',
     width: '100%',
     theme: themeQuartz,
   },
