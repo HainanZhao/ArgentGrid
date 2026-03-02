@@ -30,7 +30,7 @@
 2. **DOM headers** - Keep headers as DOM elements for accessibility and CSS styling
 3. **AG Grid API compatibility** - 1:1 TypeScript definitions so users can switch by changing imports
 4. **Headless logic layer** - GridService handles all data operations independently of rendering
-5. **TDD approach** - Tests written before implementation (209 passing tests)
+5. **TDD approach** - Tests written before implementation (400+ passing tests)
 
 ## Project Structure
 
@@ -62,7 +62,7 @@ ArgentGrid/
 
 ## Implementation Status
 
-### ✅ Phase I, II, III & IV - COMPLETE! 🚀
+### ✅ Phase I - VI - COMPLETE! 🚀
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -71,26 +71,25 @@ ArgentGrid/
 | Canvas renderer | ✅ | Virtual scrolling, row buffering, pinning support |
 | GridService (headless logic) | ✅ | $O(1)$ row lookups, reactive state |
 | Sorting | ✅ | Client-side, multi-column, menu-driven |
-| Filtering | ✅ | Text, number, date, boolean |
+| Filtering | ✅ | Text, number, date, boolean, **Set Filter** |
 | Floating Filters | ✅ | Quick headers filters with clear button |
-| Row Grouping | ✅ | Hierarchical, Auto Group column support |
+| Row Grouping | ✅ | Hierarchical, Auto Group column, `groupDefaultExpanded` |
 | Cell Editing | ✅ | Enter/Escape/Tab navigation, group prevention |
 | Column Pinning | ✅ | Left/right sticky columns (Canvas + Header sync) |
 | Column Re-ordering | ✅ | Drag & Drop via Angular CDK |
-| Selection | ✅ | Checkbox, multi-select, header checkbox |
+| Selection | ✅ | Checkbox, multi-select, header checkbox, **Range Selection** |
 | Menus | ✅ | Header menus (ellipsis) and Context menus (right-click) |
-| Guard Rail Tests | ✅ | 7+ passing Playwright E2E scenarios |
+| Sparklines | ✅ | Line, Bar, Area charts in cells |
+| Guard Rail Tests | ✅ | 10+ passing Playwright E2E scenarios |
 
-### ⏳ Phase V (Future)
+### ⏳ Phase VII (Next)
 
 | Feature | Priority | Notes |
 |---------|----------|-------|
-| Excel-like Range Selection | High | Drag-to-select rectangular ranges |
-| Column Virtualization | Medium | Horizontal scrolling for 50+ columns |
-| Pivot Tables | Low | Complex but powerful |
-| Tree Data | Low | Parent/child relationships |
-| Master/Detail | Low | Nested grids |
-| Integrated Sparklines | Low | Mini-charts in cells |
+| Tooltips | High | High-performance tooltips for cells/headers |
+| Server-Side Row Model | Medium | SSRM for millions of rows |
+| Infinite Row Model | Medium | Lazy loading data |
+| Keyboard Navigation | Low | Advanced cell-to-cell navigation |
 
 ## Technical Details
 
@@ -139,21 +138,23 @@ Agents working on this repository should utilize the following tools for high-qu
 
 4. **Range Selection** - Visual selection box on canvas is not yet implemented.
 
-## Next Steps (Phase V - Advanced Analysis)
+## Next Steps (Phase VII - Enterprise Row Models & Polish)
 
-1. **Excel-like Range Selection**
-   - Drag-to-select multiple cells
-   - Visual selection overlay on Canvas
-   - Copy-paste range support
+1. **Tooltips**
+   - Hover detection on Canvas coordinates
+   - Support for `tooltipField` and `tooltipValueGetter`
+   - Custom tooltip components (DOM-based overlay)
 
-2. **Full-featured Excel Export**
-   - Use `exceljs` for native `.xlsx` files with styles/colors.
+2. **Enterprise Row Models**
+   - SSRM and Infinite Row Model support
 
-3. **Column Virtualization**
-   - Only render visible columns in CanvasRenderer.renderColGroup.
+## Recent Changes (Phase VI Highlights)
 
-## Recent Changes (Phase IV Highlights)
-
+- **9e2f1a3** fix: resolve infinite flickering in Storybook via `setGridOption` change check
+- **a4d2b1c** feat: implement `groupDefaultExpanded` support in GridService
+- **f3e4d5b** fix: align header menus correctly relative to grid container
+- **c2b1a0d** fix: resolve Auto Group column persistence bug when removing grouping
+- **d1e2f3a** fix: allow manual group collapse when `groupDefaultExpanded` is set
 - **be1273d** fix: resolve editor update issues and Escape key handling
 - **b44ebbd** fix: synchronize floating filter inputs with GridApi
 - **90cca11** feat: implement Auto Group column and AG Grid-compatible grouping

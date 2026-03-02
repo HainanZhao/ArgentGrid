@@ -29,11 +29,12 @@
 | **Accessibility (ARIA)**| Yes | Yes | **Partial (Headers only)** |
 
 
-## 🚀 Status: Phase VI Complete - Enterprise Feature Parity
+## 🚀 Status: Phase VI Underway - Advanced UX
 
-**Phases I-VI**: ✅ Complete (100%)  
-**Phase VII**: ⏳ Next (Enterprise Row Models)  
-**Phase VIII**: ⏳ Future (Final Polish)
+**Phases I-V**: ✅ Complete (100%)  
+**Phase VI**: 🚧 Active (Advanced UX & Validation)  
+**Phase VII**: ⏳ Next (SSRM & Data Scale)  
+**Phase VIII**: ⏳ Future (AI & Formulas)
 
 ArgentGrid now has feature parity with AG Grid Enterprise for core features, and has successfully migrated to a Storybook-driven development workflow.
 
@@ -73,10 +74,10 @@ ArgentGrid now has feature parity with AG Grid Enterprise for core features, and
     - [x] Add "hamburger" or "ellipsis" menu to column headers.
     - [x] Support Sort, Filter, and "Hide Column" actions from menu.
     - [x] Integrate with existing `GridApi`.
-- [ ] **Context Menus**:
+- [x] **Context Menus**:
     - [x] Right-click cell interaction.
     - [x] Default actions: Copy, Export, Reset Columns.
-    - [ ] Support for user-defined custom context menu items.
+    - [x] Support for user-defined custom context menu items via `getContextMenuItems`.
 - [x] **Excel-like Range Selection**:
     - [x] Drag-to-select rectangular ranges of cells.
     - [x] Visual selection box rendered on Canvas.
@@ -89,39 +90,34 @@ ArgentGrid now has feature parity with AG Grid Enterprise for core features, and
 - [x] **True Excel Export**: Implementation using `exceljs` for native `.xlsx` files with styles.
 - [x] **Integrated Sparklines**: Mini-charts rendered directly in cells using the Canvas engine.
 
-### Phase VI: UX Polish & Extensibility 🚧
-- [x] **String-Based Cell Renderers**: Support for cellRenderer functions returning plain text (HTML tags stripped).
+### Phase VI: Advanced UX & Developer Experience 🚧
+- [x] **String-Based Cell Renderers**: Support for cellRenderer functions returning plain text.
   - [x] Basic cellRenderer support
   - [x] HTML tag stripping (plain text only)
-  - [x] Documentation of limitations (no colors, backgrounds, borders)
-  - [ ] Async cellRenderer (Promise<string>) - Future
-  - [ ] Registered renderer names (cellRenderer: 'myRenderer') - Future
-- [x] **Context Menu API**: Full implementation of `getContextMenuItems` to allow dynamic, user-defined menu actions.
-  - [x] Right-click cell interaction
-  - [x] Default actions: Copy, Export, Reset Columns
-  - [x] User-defined custom context menu items (PR #11)
-- [x] **State Persistence**: Save/Restore user grid state (order, width, filters) to LocalStorage. (PR #12)
-  - [x] getState(), setState()
-  - [x] saveState(), restoreState(), clearState(), hasState()
-  - [x] LocalStorage integration
-  - [x] Documentation: STATE-PERSISTENCE-GUIDE.md
-- [x] **Advanced Filtering**: Set Filter (Excel-style checkboxes) and Multi-Filter support. (PR #13, #14)
-  - [x] Set filter logic (matchesSetFilter)
-  - [x] getUniqueValues() method
-  - [x] SetFilterComponent UI
-  - [x] UI integration in floating filters
-  - [ ] Multi-filter support - Future
-- [ ] **Advanced Keyboard Navigation**: Full cell-to-cell navigation (Arrows, Tab, Page Up/Down) matching AG Grid behavior.
+  - [ ] Registered renderer names (cellRenderer: 'myRenderer')
+- [x] **Context Menu API**: Full implementation of `getContextMenuItems`.
+- [x] **State Persistence**: Save/Restore user grid state to LocalStorage.
+- [x] **Advanced Filtering (Part 1)**: Set Filter (Excel-style checkboxes).
+- [ ] **Tooltips**: High-performance tooltips for cells and headers.
+  - [ ] Hover detection on Canvas coordinates.
+  - [ ] Support for `tooltipField` and `tooltipValueGetter` in `ColDef`.
+- [ ] **Multi-Filter Support**: Combine Set Filter with Text/Number filters.
+- [ ] **Advanced Editing & Validation**:
+  - [ ] **Cell Editor Validation**: Built-in constraints for user input.
+  - [ ] **Bulk Editing**: Drag-to-fill or copy-paste range of values.
+- [ ] **Advanced Keyboard Navigation**: Full cell-to-cell navigation (Arrows, Tab, Page Up/Down).
 
-### Phase VII: Enterprise Row Models ⏳ NEXT
+### Phase VII: Enterprise Data Scale ⏳ NEXT
 - [ ] **Server-Side Row Model (SSRM)**: Loading and aggregating millions of rows on the server.
-- [ ] **Infinite Row Model**: Standard infinite scrolling for large flat datasets.
+- [ ] **Infinite Row Model**: Standard lazy loading for large flat datasets.
+- [ ] **Column Virtualization**: Performance optimization for grids with 100+ columns.
 - [ ] **Tree Data**: Advanced hierarchical structures with path-based navigation.
 
-### Phase VIII: Final Polish ⏳ FUTURE
-- [ ] **Advanced Accessibility**: Full ARIA compliance and screen reader optimization for the Canvas viewport.
-- [ ] **Touch & Mobile Support**: Optimized interactions for mobile devices.
-- [ ] **Web Workers**: Move data processing to background threads for even better responsiveness.
+### Phase VIII: Next-Gen Analytics & AI ⏳ FUTURE
+- [ ] **Formula Engine**: Excel-like formula support in cells.
+- [ ] **AI Toolkit**: Integrated LLM support for data analysis and grid configuration.
+- [ ] **Full Accessibility (ARIA)**: Deep ARIA compliance for Canvas-rendered content.
+- [ ] **Touch & Mobile Support**: Optimized touch interactions.
 
 ## 🎉 Project Milestone: PHASE VI COMPLETE!
 
