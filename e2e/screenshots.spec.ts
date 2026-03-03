@@ -40,9 +40,13 @@ test.describe('ArgentGrid Screenshots', () => {
   });
 
   test('capture benchmark screenshot', async ({ page }) => {
-    await page.goto('/iframe.html?id=features-benchmark--benchmark-10-k');
-    await page.waitForSelector('app-benchmark-wrapper', { timeout: 30000 });
-    await page.waitForTimeout(2000);
+    await page.goto('/iframe.html?id=features-benchmark--benchmark-100-k');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForSelector('button:has-text("Run Benchmark")', { timeout: 120000 });
+    await page.waitForSelector('argent-grid', { timeout: 120000 });
+
+    // Wait for Angular to finish rendering and any initial data to load
+    await page.waitForTimeout(3000);
 
     await page.screenshot({
       path: 'e2e/screenshots/benchmark.png',

@@ -267,7 +267,6 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
 
   onGridReady(api: GridApi<Stock>): void {
     this.gridApi = api;
-    console.log('Grid Ready, rowData count:', this.rowData.length);
     this.startStreaming();
   }
 
@@ -314,15 +313,16 @@ export class StreamingWrapperComponent implements OnInit, OnDestroy {
 
   forceRender(): void {
     if (this.gridComponent) {
-      console.log('Forcing grid render...');
       this.gridComponent.refresh();
     }
   }
 
   checkData(): void {
     if (this.gridApi) {
-      console.log('Current Row Data:', this.gridApi.getRowData());
-      console.log('Displayed Count:', this.gridApi.getDisplayedRowCount());
+      const rowData = this.gridApi.getRowData();
+      const displayedCount = this.gridApi.getDisplayedRowCount();
+      void rowData;
+      void displayedCount;
     }
   }
 

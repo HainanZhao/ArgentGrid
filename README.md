@@ -205,24 +205,34 @@ ArgentGrid includes a benchmarking suite to measure rendering efficiency and scr
 **Option 1: Interactive (UI)**
 1. Start Storybook: `npm run storybook`
 2. Open [http://localhost:6006](http://localhost:6006)
-3. Navigate to **ArgentGrid / Benchmark**
+3. Navigate to **Features / Benchmark**
 4. View real-time **ms frame** metrics and a detailed report.
 
+Available benchmark stories:
+- `Benchmark10K` (quick sanity check)
+- `Benchmark100K` (default large-dataset benchmark)
+- `Benchmark500K` (heavy stress test)
+- `Benchmark1M` (extreme stress test)
+
 **Option 2: Automated (CLI)**
-To run the automated performance test:
+To run the automated benchmark suite:
 ```bash
 npx playwright test e2e/benchmark.spec.ts --reporter=list
 ```
 
--------------------------------------------
+----------------------------------------------
 🚀 ArgentGrid Performance Benchmark Results
--------------------------------------------
-Initial Render      : 2.60ms
-Avg Scroll Frame    : 1.55ms
-Selection All       : 103.70ms
-Grouping Toggle     : 147.10ms
-Total Test Time     : 495.60ms
--------------------------------------------
+----------------------------------------------
+Metrics reported by the benchmark runner: (100K rows on MacBook Pro M2 + 16GB)
+- Initial Render: 0.2ms
+- Selection Update: 113.8ms
+- Grouping Toggle: 101.6ms
+- Avg Scroll Frame: 0.67ms
+- Total (ms): 820ms
+
+
+Note: Results vary by machine, browser, and thermal state. For CI comparisons,
+track deltas between runs rather than absolute values.
 
 ## License
 
