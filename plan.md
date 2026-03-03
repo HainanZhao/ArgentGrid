@@ -102,8 +102,8 @@ ArgentGrid now has feature parity with AG Grid Enterprise for core features, and
   - [ ] Hover detection on Canvas coordinates.
   - [ ] Support for `tooltipField` and `tooltipValueGetter` in `ColDef`.
 - [ ] **Multi-Filter Support**: Combine Set Filter with Text/Number filters.
-- [ ] **Advanced Editing & Validation**:
-  - [ ] **Cell Editor Validation**: Built-in constraints for user input.
+- [x] **Advanced Editing & Validation**:
+  - [x] **Cell Editor Validation**: Built-in constraints for user input.
   - [ ] **Bulk Editing**: Drag-to-fill or copy-paste range of values.
 - [ ] **Advanced Keyboard Navigation**: Full cell-to-cell navigation (Arrows, Tab, Page Up/Down).
 

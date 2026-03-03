@@ -1,6 +1,6 @@
-import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
+import { type CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import {
-  AfterViewInit,
+  type AfterViewInit,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
@@ -8,11 +8,11 @@ import {
   EventEmitter,
   Inject,
   Input,
-  OnChanges,
-  OnDestroy,
-  OnInit,
+  type OnChanges,
+  type OnDestroy,
+  type OnInit,
   Output,
-  SimpleChanges,
+  type SimpleChanges,
   ViewChild,
 } from '@angular/core';
 import { Subject } from 'rxjs';
@@ -21,7 +21,7 @@ import { CanvasRenderer } from '../rendering/canvas-renderer';
 import { isColumnVisible } from '../rendering/render/column-utils';
 import { GridService } from '../services/grid.service';
 import { applyThemeCSSVariables, convertThemeToGridTheme } from '../themes/theme-builder';
-import {
+import type {
   CellRange,
   ColDef,
   ColGroupDef,
@@ -1874,27 +1874,32 @@ export class ArgentGridComponent<TData = any>
     }, 0);
   }
 
+  private validationErrors: string[] | null = null;
+
   stopEditing(save: boolean = true): void {
     if (!this.isEditing) return;
+
+    if (this.editorInputRef) {
+      this.editorInputRef.nativeElement.classList.remove('ag-cell-editor-invalid');
+    }
+    this.validationErrors = null;
 
     const rowNode = this.editingRowNode;
     const colDef = this.editingColDef;
 
-    // Capture current value from input directly if it exists, to be sure
-    if (this.editorInputRef) {
-      this.editingValue = this.editorInputRef.nativeElement.value;
-    }
-
     if (save && colDef && rowNode) {
+      if (this.editorInputRef) {
+        this.editingValue = this.editorInputRef.nativeElement.value;
+      }
+
       const newValue = this.editingValue;
       const field = colDef.field as string;
       const oldValue = (rowNode.data as any)[field];
 
-      // Apply valueParser if provided
       let parsedValue: any = newValue;
       if (typeof colDef.valueParser === 'function') {
         parsedValue = colDef.valueParser({
-          value: rowNode.data,
+          value: oldValue,
           newValue,
           data: rowNode.data,
           node: rowNode,
@@ -1903,27 +1908,76 @@ export class ArgentGridComponent<TData = any>
         });
       }
 
-      // Apply valueSetter if provided
+      let valueSetterResult = true;
+
       if (typeof colDef.valueSetter === 'function') {
-        colDef.valueSetter({
+        valueSetterResult =
+          colDef.valueSetter({
+            value: parsedValue,
+            newValue: parsedValue,
+            data: rowNode.data,
+            node: rowNode,
+            colDef,
+            api: this.gridApi,
+          }) ?? true;
+      } else if (field) {
+        (rowNode.data as any)[field] = parsedValue;
+      }
+
+      if (valueSetterResult === false) {
+        const invalidMode = this.gridOptions?.invalidEditValueMode ?? 'legacy';
+        if (invalidMode === 'none') {
+          this.isEditing = false;
+          this.editingRowNode = null;
+          this.editingColDef = null;
+          this.validationErrors = null;
+          this._cdr.detectChanges();
+          return;
+        }
+
+        this.validationErrors = ['Invalid value'];
+
+        if (this.editorInputRef) {
+          this.editorInputRef.nativeElement.classList.add('ag-cell-editor-invalid');
+        }
+
+        this._cdr.detectChanges();
+        return;
+      }
+
+      if (typeof colDef.getValidationErrors === 'function') {
+        this.validationErrors = colDef.getValidationErrors({
           value: parsedValue,
-          newValue: parsedValue,
           data: rowNode.data,
           node: rowNode,
           colDef,
           api: this.gridApi,
         });
-      } else if (field) {
-        // Default: update data directly
-        (rowNode.data as any)[field] = parsedValue;
+
+        if (this.validationErrors && this.validationErrors.length > 0) {
+          const invalidMode = this.gridOptions?.invalidEditValueMode ?? 'legacy';
+          if (invalidMode === 'none') {
+            this.isEditing = false;
+            this.editingRowNode = null;
+            this.editingColDef = null;
+            this.validationErrors = null;
+            this._cdr.detectChanges();
+            return;
+          }
+
+          if (this.editorInputRef) {
+            this.editorInputRef.nativeElement.classList.add('ag-cell-editor-invalid');
+          }
+
+          this._cdr.detectChanges();
+          return;
+        }
       }
 
-      // Update via transaction
       this.gridApi.applyTransaction({
         update: [rowNode.data],
       });
 
-      // Trigger callback
       if (colDef.onCellValueChanged) {
         const column = this.gridApi.getColumn(colDef.colId || field || '');
         if (column) {
@@ -1943,6 +1997,7 @@ export class ArgentGridComponent<TData = any>
     this.isEditing = false;
     this.editingRowNode = null;
     this.editingColDef = null;
+    this.validationErrors = null;
     this._cdr.detectChanges();
   }
 

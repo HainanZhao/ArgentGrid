@@ -144,6 +144,8 @@ export interface GridOptions<TData = any> {
   undoRedoCellEditing?: boolean;
   /** The limit for undo/redo steps. */
   undoRedoCellEditingLimit?: number;
+  /** How to handle invalid cell edits. */
+  invalidEditValueMode?: 'legacy' | 'topScroll' | 'none';
 
   // === PAGINATION ===
   /** Enable pagination. */
@@ -362,6 +364,8 @@ export interface ColDef<TData = any, TValue = any> {
   singleClickEdit?: boolean;
   /** If true, the value parser will be used for import. */
   useValueParserForImport?: boolean;
+  /** Callback to get validation errors for the cell. */
+  getValidationErrors?: (params: GetValidationErrorsParams<TData>) => string[] | null;
 
   // === EVENTS ===
   /** Callback called when a cell value changes. */
@@ -1485,6 +1489,14 @@ export interface ValueParserParams<TData = any, TValue = any> {
   data: TData;
   value: TValue;
   newValue: TValue;
+  node: IRowNode<TData>;
+  colDef: ColDef<TData>;
+  api: GridApi<TData>;
+}
+
+export interface GetValidationErrorsParams<TData = any> {
+  value: any;
+  data: TData;
   node: IRowNode<TData>;
   colDef: ColDef<TData>;
   api: GridApi<TData>;

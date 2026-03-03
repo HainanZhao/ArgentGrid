@@ -441,3 +441,26 @@
   top: 0;
   left: 0;
 }
+
+/* ============================================================================
+   CELL EDITOR VALIDATION
+   ============================================================================ */
+.ag-cell-editor-invalid {
+  position: relative;
+  border: 2px solid #dc2626;
+  background-color: #fef2f2;
+  padding-right: 24px;
+  box-sizing: border-box;
+}
+
+.ag-cell-editor-invalid::after {
+  content: "✕";
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: bold;
+  pointer-events: none;
+}
