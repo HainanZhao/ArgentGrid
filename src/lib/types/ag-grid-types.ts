@@ -446,6 +446,8 @@ export interface ColDef<TData = any, TValue = any> {
   cellClass?: string | string[] | ((params: CellClassParams<TData, TValue>) => string | string[]);
   /** Rules for applying CSS classes to cells based on data. */
   cellClassRules?: { [key: string]: (params: CellClassParams<TData, TValue>) => boolean };
+  /** If true, the cell will not show an ellipsis if the text overflows. */
+  suppressEllipsis?: boolean;
   /** Cell renderer component. */
   cellRenderer?: any;
   /** Parameters for the cell renderer. */

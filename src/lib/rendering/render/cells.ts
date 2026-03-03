@@ -207,7 +207,9 @@ export function drawCellContent<TData = any>(
 
   // Truncate text if needed
   const maxWidth = width - theme.cellPadding * 2;
-  const truncatedText = truncateText(ctx, formattedValue, maxWidth);
+  const truncatedText = colDef?.suppressEllipsis
+    ? formattedValue
+    : truncateText(ctx, formattedValue, maxWidth);
 
   if (truncatedText) {
     ctx.fillText(truncatedText, Math.floor(textX), Math.floor(textY));
@@ -359,10 +361,7 @@ export function calculateColumnWidth<TData = any>(
  */
 export function stripHtmlTags(html: string): string {
   if (!html) return '';
-  return html
-    .replace(/<[^>]*>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ');
 }
 
 export function getFormattedValue<TData = any>(
