@@ -15,6 +15,4 @@ test('Take selection mode screenshot', async ({ page }) => {
     path: 'e2e/screenshots/selection-mode.png',
     fullPage: true 
   });
-  
-  console.log('Screenshot saved to e2e/screenshots/selection-mode.png');
 });

@@ -40,25 +40,11 @@ test.describe('ArgentGrid Screenshots', () => {
   });
 
   test('capture benchmark screenshot', async ({ page }) => {
-    // Capture console errors for debugging
-    const consoleErrors: string[] = [];
-    page.on('console', msg => {
-      if (msg.type() === 'error') consoleErrors.push(msg.text());
-    });
-    
     await page.goto('/iframe.html?id=features-benchmark--benchmark-100-k');
-    
-    // Wait for the wrapper component to be attached to DOM first
     await page.waitForLoadState('domcontentloaded');
-    
-    // Then wait for the element with a generous timeout (CI can be slow)
-    await page.waitForSelector('app-benchmark-wrapper', { timeout: 120000 });
-    
-    // Log any console errors for debugging
-    if (consoleErrors.length > 0) {
-      console.log('Console errors:', consoleErrors);
-    }
-    
+    await page.waitForSelector('button:has-text("Run Benchmark")', { timeout: 120000 });
+    await page.waitForSelector('argent-grid', { timeout: 120000 });
+
     // Wait for Angular to finish rendering and any initial data to load
     await page.waitForTimeout(3000);
 
