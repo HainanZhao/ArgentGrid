@@ -79,7 +79,8 @@ export class ArgentGridComponent<TData = any>
    * Returns the current effective header height, prioritizing grid options, then defaulting to effectiveRowHeight.
    */
   get effectiveHeaderHeight(): number {
-    return this.gridApi?.getGridOption('headerHeight') || this.effectiveRowHeight;
+    const headerHeight = this.gridApi?.getGridOption('headerHeight');
+    return headerHeight !== undefined ? headerHeight : this.effectiveRowHeight;
   }
 
   get totalHeight(): number {
