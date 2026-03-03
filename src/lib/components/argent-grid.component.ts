@@ -1873,7 +1873,6 @@ export class ArgentGridComponent<TData = any>
     }, 0);
   }
 
-
   stopEditing(save: boolean = true): void {
     if (!this.isEditing) return;
 
@@ -1906,7 +1905,7 @@ export class ArgentGridComponent<TData = any>
       // === VALIDATION: Check errors BEFORE mutating data ===
       const validationMode = (colDef as any).validationMode || 'none';
       let validationErrors: string | string[] | null = null;
-      
+
       if (typeof (colDef as any).valueValidator === 'function') {
         validationErrors = (colDef as any).valueValidator({
           data: rowNode.data,
@@ -1921,7 +1920,7 @@ export class ArgentGridComponent<TData = any>
       // Handle validation results
       if (validationErrors && validationErrors.length > 0) {
         const errors = Array.isArray(validationErrors) ? validationErrors : [validationErrors];
-        
+
         if (validationMode === 'raise') {
           // Show validation error - keep editing mode active, show error
           console.warn('Validation failed:', errors);
@@ -1934,13 +1933,13 @@ export class ArgentGridComponent<TData = any>
         } else {
           // 'none' mode - just exit without applying transaction
         }
-        
+
         // Always clear editing state before returning (FIX: Issue #3)
         this.isEditing = false;
         this.editingRowNode = null;
         this.editingColDef = null;
         this._cdr.detectChanges();
-        
+
         // For 'none' mode, we exit early without calling applyTransaction (FIX: Issue #2)
         if (validationMode === 'none') {
           return;

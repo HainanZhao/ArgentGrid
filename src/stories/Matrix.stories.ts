@@ -28,32 +28,36 @@ export default meta;
 type Story = StoryObj<ArgentGridComponent<MatrixData>>;
 
 // Matrix rain characters
-const MATRIX_CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const MATRIX_CHARS =
+  'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 function generateMatrixData(count: number): MatrixData[] {
   const chars = MATRIX_CHARS.split('');
-  
+
   return Array.from({ length: count }, (_, i) => ({
     id: i + 1,
     character: chars[i % chars.length],
     binary: i.toString(2).padStart(8, '0'),
     hex: i.toString(16).toUpperCase().padStart(2, '0'),
-    matrixCode: Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join(''),
+    matrixCode: Array.from(
+      { length: 10 },
+      () => chars[Math.floor(Math.random() * chars.length)]
+    ).join(''),
   }));
 }
 
 export const MatrixRain: Story = {
   args: {
     columnDefs: [
-      { 
-        field: 'id', 
-        headerName: '#', 
+      {
+        field: 'id',
+        headerName: '#',
         width: 80,
         cellClass: 'matrix-id',
       },
-      { 
-        field: 'character', 
-        headerName: 'Symbol', 
+      {
+        field: 'character',
+        headerName: 'Symbol',
         width: 120,
         cellClass: 'matrix-symbol',
         cellRenderer: 'matrixRain',
@@ -61,21 +65,21 @@ export const MatrixRain: Story = {
           color: '#00ff41',
         },
       },
-      { 
-        field: 'binary', 
-        headerName: 'Binary', 
+      {
+        field: 'binary',
+        headerName: 'Binary',
         width: 150,
         cellClass: 'matrix-binary',
       },
-      { 
-        field: 'hex', 
-        headerName: 'Hex', 
+      {
+        field: 'hex',
+        headerName: 'Hex',
         width: 100,
         cellClass: 'matrix-hex',
       },
-      { 
-        field: 'matrixCode', 
-        headerName: 'Matrix Code', 
+      {
+        field: 'matrixCode',
+        headerName: 'Matrix Code',
         width: 200,
         cellClass: 'matrix-code',
       },
@@ -105,9 +109,9 @@ export const Neo: Story = {
   args: {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
-      { 
-        field: 'character', 
-        headerName: 'The One', 
+      {
+        field: 'character',
+        headerName: 'The One',
         width: 150,
         cellRenderer: 'matrixRain',
       },
@@ -147,11 +151,11 @@ export const DigitalRain: Story = {
   args: {
     columnDefs: [
       { field: 'id', headerName: 'Stream', width: 100 },
-      { 
-        field: 'matrixCode', 
-        headerName: 'Digital Rain', 
+      {
+        field: 'matrixCode',
+        headerName: 'Digital Rain',
         flex: 1,
-        cellStyle: { 
+        cellStyle: {
           fontFamily: 'monospace',
           letterSpacing: '2px',
         },
@@ -162,8 +166,9 @@ export const DigitalRain: Story = {
       character: MATRIX_CHARS[i % MATRIX_CHARS.length],
       binary: i.toString(2).padStart(8, '0'),
       hex: i.toString(16).toUpperCase().padStart(2, '0'),
-      matrixCode: Array.from({ length: 40 }, () => 
-        MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)]
+      matrixCode: Array.from(
+        { length: 40 },
+        () => MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)]
       ).join(''),
     })),
     height: 'calc(100vh - 60px)',
