@@ -1873,6 +1873,7 @@ export class ArgentGridComponent<TData = any>
     }, 0);
   }
 
+
   stopEditing(save: boolean = true): void {
     if (!this.isEditing) return;
 
@@ -1902,7 +1903,54 @@ export class ArgentGridComponent<TData = any>
         });
       }
 
-      // Apply valueSetter if provided
+      // === VALIDATION: Check errors BEFORE mutating data ===
+      const validationMode = (colDef as any).validationMode || 'none';
+      let validationErrors: string | string[] | null = null;
+      
+      if (typeof (colDef as any).valueValidator === 'function') {
+        validationErrors = (colDef as any).valueValidator({
+          data: rowNode.data,
+          value: oldValue,
+          newValue: parsedValue,
+          node: rowNode,
+          colDef,
+          api: this.gridApi,
+        });
+      }
+
+      // Handle validation results
+      if (validationErrors && validationErrors.length > 0) {
+        const errors = Array.isArray(validationErrors) ? validationErrors : [validationErrors];
+        
+        if (validationMode === 'raise') {
+          // Show validation error - keep editing mode active, show error
+          console.warn('Validation failed:', errors);
+          // TODO: Trigger error display in UI
+          // Don't clear editing state so user can fix the value
+          return;
+        } else if (validationMode === 'revert') {
+          // Revert to old value - exit editing but don't apply changes
+          console.warn('Validation failed, reverting:', errors);
+        } else {
+          // 'none' mode - just exit without applying transaction
+        }
+        
+        // Always clear editing state before returning (FIX: Issue #3)
+        this.isEditing = false;
+        this.editingRowNode = null;
+        this.editingColDef = null;
+        this._cdr.detectChanges();
+        
+        // For 'none' mode, we exit early without calling applyTransaction (FIX: Issue #2)
+        if (validationMode === 'none') {
+          return;
+        }
+        // For 'revert', we just exit - old value remains unchanged
+        return;
+      }
+
+      // === VALIDATION PASSED: Apply value ===
+      // Apply valueSetter if provided (FIX: Issue #1 - now after validation)
       if (typeof colDef.valueSetter === 'function') {
         colDef.valueSetter({
           value: parsedValue,
@@ -1944,7 +1992,6 @@ export class ArgentGridComponent<TData = any>
     this.editingColDef = null;
     this._cdr.detectChanges();
   }
-
   onEditorInput(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.editingValue = input.value;

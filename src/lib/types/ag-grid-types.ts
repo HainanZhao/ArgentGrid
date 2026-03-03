@@ -348,6 +348,10 @@ export interface ColDef<TData = any, TValue = any> {
   valueSetter?: string | ValueSetterFunc<TData, TValue>;
   /** Callback or string expression to parse the cell value after editing. */
   valueParser?: string | ValueParserFunc<TData, TValue>;
+  /** Callback to validate the cell value after editing. */
+  valueValidator?: (params: ValueValidatorParams<TData, TValue>) => string | string[] | null;
+  /** Validation mode: 'raise' (show error), 'revert' (undo changes), 'none' (skip validation). */
+  validationMode?: 'raise' | 'revert' | 'none';
   /** Cell editor component. */
   cellEditor?: any;
   /** Parameters for the cell editor. */
@@ -1480,6 +1484,15 @@ export interface ValueSetterParams<TData = any, TValue = any> {
 }
 
 export interface ValueParserParams<TData = any, TValue = any> {
+  data: TData;
+  value: TValue;
+  newValue: TValue;
+  node: IRowNode<TData>;
+  colDef: ColDef<TData>;
+  api: GridApi<TData>;
+}
+
+export interface ValueValidatorParams<TData = any, TValue = any> {
   data: TData;
   value: TValue;
   newValue: TValue;
