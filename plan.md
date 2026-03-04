@@ -22,9 +22,9 @@
 | **Context Menu** | No | Yes | **Yes (Basic)** |
 | **Header Menus** | Basic | Advanced | **Yes (Sort, Hide, Pin)** |
 | **Side Bar** | No | Yes | **Yes (Columns, Filters)** |
-| **Keyboard Nav** | Yes (Cell-level) | Yes (Advanced) | **Basic (Editing only)** |
+| **Keyboard Nav** | Yes (Cell-level) | Yes (Advanced) | **🚧 Phase VI** |
 | **State Persistence** | No | Yes | **Yes** ✅ (LocalStorage) |
-| **Integrated Charts** | No | Yes | **Planned (Phase IV)** |
+| **Integrated Charts** | No | Yes | **Planned (Phase IX)** |
 | **Sparklines** | No | Yes | **Yes (Area, Line, Bar)** |
 | **Accessibility (ARIA)**| Yes | Yes | **Partial (Headers only)** |
 
@@ -35,6 +35,7 @@
 **Phase VI**: 🚧 Active (Advanced UX & Validation)  
 **Phase VII**: ⏳ Next (SSRM & Data Scale)  
 **Phase VIII**: ⏳ Future (AI & Formulas)
+**Phase IX**: ⏳ Future (Enterprise Productivity)
 
 ArgentGrid now has feature parity with AG Grid Enterprise for core features, and has successfully migrated to a Storybook-driven development workflow.
 
@@ -98,10 +99,18 @@ ArgentGrid now has feature parity with AG Grid Enterprise for core features, and
 - [x] **Context Menu API**: Full implementation of `getContextMenuItems`.
 - [x] **State Persistence**: Save/Restore user grid state to LocalStorage.
 - [x] **Advanced Filtering (Part 1)**: Set Filter (Excel-style checkboxes).
-- [ ] **Tooltips**: High-performance tooltips for cells and headers.
-  - [ ] Hover detection on Canvas coordinates.
-  - [ ] Support for `tooltipField` and `tooltipValueGetter` in `ColDef`.
-- [ ] **Multi-Filter Support**: Combine Set Filter with Text/Number filters.
+- [x] **Tooltips**: High-performance tooltips for cells and headers.
+  - [x] Hover detection on Canvas coordinates.
+  - [x] Support for `tooltipField` and `tooltipValueGetter` in `ColDef`.
+- [x] **Quick Filter**: High-performance global search across all visible columns.
+- [x] **Multi-Column Sorting**: Support for sorting by multiple columns (Shift+Click).
+- [x] **Enhanced Clipboard Support**: Copy range selection with headers (TSV format) and paste support.
+- [ ] **Floating Filters**: Inline filter row below column headers for immediate access.
+- [x] **Client-side Pagination**: Efficiently manage and navigate large flat datasets.
+- [x] **Overlay API**: Built-in and customizable "Loading" and "No Rows" overlays.
+
+- [ ] **Auto-Height & Dynamic Row Height**: Row heights that adapt to cell content.
+- [x] **Multi-Filter Support**: Combine Set Filter with Text/Number filters.
 - [x] **Advanced Editing & Validation**:
   - [x] **Cell Editor Validation**: Built-in constraints for user input.
   - [ ] **Bulk Editing**: Drag-to-fill or copy-paste range of values.
@@ -118,6 +127,13 @@ ArgentGrid now has feature parity with AG Grid Enterprise for core features, and
 - [ ] **AI Toolkit**: Integrated LLM support for data analysis and grid configuration.
 - [ ] **Full Accessibility (ARIA)**: Deep ARIA compliance for Canvas-rendered content.
 - [ ] **Touch & Mobile Support**: Optimized touch interactions.
+
+### Phase IX: Enterprise Analysis & Productivity ⏳ FUTURE
+- [ ] **Integrated Charts**: Create Bar, Line, and Pie charts directly from range selection.
+- [ ] **Status Bar**: Display Count, Sum, Average, etc. for the currently selected range.
+- [ ] **Excel-style Fill Handle**: Drag-to-fill cell values and sequences.
+- [ ] **Column & Row Spanning**: Complex cell layouts for detailed reports.
+- [ ] **Master/Detail (Advanced)**: Support for multiple detail levels and custom detail components.
 
 ## 🎉 Project Milestone: PHASE VI COMPLETE!
 

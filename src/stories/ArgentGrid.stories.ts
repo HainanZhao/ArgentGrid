@@ -299,3 +299,112 @@ export const WithCustomTheme: Story = {
     },
   },
 };
+
+export const WithPagination: Story = {
+  args: {
+    columnDefs: [
+      { field: 'id', headerName: 'ID', width: 80 },
+      { field: 'name', headerName: 'Name', width: 200 },
+      {
+        field: 'department',
+        headerName: 'Department',
+        width: 180,
+        valueFormatter: departmentValueFormatter,
+      },
+      { field: 'role', headerName: 'Role', width: 250, valueFormatter: roleValueFormatter },
+      { field: 'salary', headerName: 'Salary', width: 120 },
+    ],
+    rowData: generateStaticData(100),
+    gridOptions: {
+      pagination: true,
+      paginationPageSize: 20,
+    },
+    height: 'calc(100vh - 60px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Client-side pagination** with 100 rows and 20 rows per page. **Navigate using the pagination controls** at the bottom of the grid. Automatically handles page numbering and row ranges.',
+      },
+    },
+  },
+};
+
+export const MultiColumnSorting: Story = {
+  args: {
+    columnDefs: [
+      { field: 'department', headerName: 'Department', width: 180, sortable: true },
+      { field: 'role', headerName: 'Role', width: 250, sortable: true },
+      { field: 'name', headerName: 'Name', width: 200, sortable: true },
+      { field: 'salary', headerName: 'Salary', width: 120, sortable: true },
+    ],
+    rowData: generateStaticData(100),
+    height: 'calc(100vh - 60px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Multi-Column Sorting**: **Hold SHIFT and click** column headers to sort by multiple columns. ' +
+          'A number (1, 2, 3...) will appear next to the arrow indicating the sort priority. ' +
+          'For example, sort by Department first, then by Role.',
+      },
+    },
+  },
+};
+
+export const Overlays: Story = {
+  render: (args) => ({
+    props: {
+      ...args,
+      generateStaticData, // Pass the helper to props
+    },
+    template: `
+      <div style="display: flex; flex-direction: column; gap: 10px; height: 100%; padding: 10px; box-sizing: border-box;">
+        <div style="display: flex; gap: 10px; margin-bottom: 5px;">
+          <button (click)="grid.getApi().showLoadingOverlay()" style="padding: 5px 10px; cursor: pointer;">Show Loading Overlay</button>
+          <button (click)="grid.getApi().showNoRowsOverlay()" style="padding: 5px 10px; cursor: pointer;">Show No Rows Overlay</button>
+          <button (click)="grid.getApi().hideOverlay()" style="padding: 5px 10px; cursor: pointer;">Hide Overlays</button>
+          <button (click)="grid.getApi().setRowData([])" style="padding: 5px 10px; cursor: pointer;">Clear Row Data (Auto No Rows)</button>
+          <button (click)="grid.getApi().setRowData(generateStaticData(50))" style="padding: 5px 10px; cursor: pointer;">Reset Row Data</button>
+        </div>
+        <argent-grid 
+          #grid
+          style="flex: 1;"
+          [columnDefs]="columnDefs" 
+          [rowData]="rowData" 
+          [height]="height" 
+          [width]="width"
+          [theme]="theme"
+          [gridOptions]="gridOptions">
+        </argent-grid>
+      </div>
+    `,
+  }),
+  args: {
+    columnDefs: [
+      { field: 'id', headerName: 'ID', width: 80 },
+      { field: 'name', headerName: 'Name', width: 200 },
+      { field: 'department', headerName: 'Department', width: 180 },
+    ],
+    rowData: generateStaticData(50),
+    height: 'calc(100vh - 100px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Overlay API**: Manually trigger built-in overlays via the API. ' +
+          'Includes **Loading** and **No Rows** overlays. ' +
+          'The grid also automatically shows the "No Rows" overlay when data is empty.',
+      },
+    },
+  },
+};

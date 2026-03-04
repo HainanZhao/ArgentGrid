@@ -6,6 +6,7 @@ import {
   Component,
   ElementRef,
   EventEmitter,
+  HostListener,
   Inject,
   Input,
   type OnChanges,
@@ -28,6 +29,7 @@ import type {
   Column,
   ColumnGroup,
   DefaultMenuItem,
+  FilterModelItem,
   GetContextMenuItemsParams,
   GridApi,
   GridOptions,
@@ -66,6 +68,7 @@ export class ArgentGridComponent<TData = any>
 
   canvasHeight = 0;
   showOverlay = false;
+  activeOverlay: 'loading' | 'noRows' | null = null;
   private viewportHeight = 500;
 
   /**
@@ -458,6 +461,9 @@ export class ArgentGridComponent<TData = any>
         } else {
           this.canvasRenderer?.render();
         }
+      } else if (event.type === 'overlayChanged') {
+        this.activeOverlay = event.value;
+        this.showOverlay = !!this.activeOverlay;
       } else {
         // All other state changes (sort, filter, rangeSelection, etc.) go through the
         // rAF-coalesced scheduler. Multiple rapid events (e.g. rangeSelectionChanged
@@ -482,7 +488,7 @@ export class ArgentGridComponent<TData = any>
     }
 
     // Update overlay state
-    this.showOverlay = !this.rowData || this.rowData.length === 0;
+    this.updateAutomaticOverlay();
 
     // Update selection state
     this.updateSelectionState();
@@ -498,7 +504,7 @@ export class ArgentGridComponent<TData = any>
       }
     }
 
-    this.showOverlay = !newData || newData.length === 0;
+    this.updateAutomaticOverlay();
     this.updateSelectionState();
 
     // Trigger change detection with OnPush
@@ -531,6 +537,39 @@ export class ArgentGridComponent<TData = any>
       this.canvasRenderer?.render();
     }
     this._cdr.detectChanges();
+  }
+
+  updateAutomaticOverlay(): void {
+    if (this.gridOptions?.loading) {
+      this.activeOverlay = 'loading';
+      this.showOverlay = true;
+      return;
+    }
+
+    if (!this.rowData || this.rowData.length === 0) {
+      if (!this.gridOptions?.suppressNoRowsOverlay) {
+        this.activeOverlay = 'noRows';
+        this.showOverlay = true;
+      } else {
+        this.showOverlay = false;
+      }
+    } else {
+      this.showOverlay = !!this.activeOverlay;
+    }
+  }
+
+  getOverlayType(): 'loading' | 'noRows' | null {
+    return this.activeOverlay;
+  }
+
+  getOverlayContent(): string {
+    if (this.activeOverlay === 'loading') {
+      return this.gridOptions?.loadingOverlayComponent || 'Loading...';
+    }
+    if (this.activeOverlay === 'noRows') {
+      return this.gridOptions?.noRowsOverlayComponent || 'No Rows To Show';
+    }
+    return '';
   }
 
   getHeaderRows(): (Column | ColumnGroup)[][] {
@@ -678,6 +717,60 @@ export class ArgentGridComponent<TData = any>
     return false;
   }
 
+  // Pagination helpers
+  isPaginationEnabled(): boolean {
+    return !!this.gridApi?.getGridOption('pagination');
+  }
+
+  getCurrentPage(): number {
+    return this.gridApi?.paginationGetCurrentPage() ?? 0;
+  }
+
+  getTotalPages(): number {
+    return this.gridApi?.paginationGetTotalPages() ?? 1;
+  }
+
+  getPaginationTotalRows(): number {
+    return this.gridApi?.getPaginationTotalRows() ?? 0;
+  }
+
+  getPaginationStart(): number {
+    const page = this.getCurrentPage();
+    const size = this.gridApi?.paginationGetPageSize() ?? 100;
+    return this.getPaginationTotalRows() === 0 ? 0 : page * size + 1;
+  }
+
+  getPaginationEnd(): number {
+    const page = this.getCurrentPage();
+    const size = this.gridApi?.paginationGetPageSize() ?? 100;
+    const total = this.getPaginationTotalRows();
+    return Math.min((page + 1) * size, total);
+  }
+
+  isFirstPage(): boolean {
+    return this.getCurrentPage() === 0;
+  }
+
+  isLastPage(): boolean {
+    return this.getCurrentPage() >= this.getTotalPages() - 1;
+  }
+
+  paginationGoToFirstPage(): void {
+    this.gridApi?.paginationGoToFirstPage();
+  }
+
+  paginationGoToPreviousPage(): void {
+    this.gridApi?.paginationGoToPreviousPage();
+  }
+
+  paginationGoToNextPage(): void {
+    this.gridApi?.paginationGoToNextPage();
+  }
+
+  paginationGoToLastPage(): void {
+    this.gridApi?.paginationGoToLastPage();
+  }
+
   trackByRowGroup(index: number, col: Column): string {
     return col.colId || index.toString();
   }
@@ -772,10 +865,22 @@ export class ArgentGridComponent<TData = any>
     if ('children' in col || !col.sort) {
       return '';
     }
-    return col.sort === 'asc' ? '▲' : '▼';
+
+    const arrow = col.sort === 'asc' ? '▲' : '▼';
+    const sortModel = this.gridApi?.getSortModel() || [];
+
+    if (sortModel.length > 1) {
+      const colId = (col as any).colId || (col as any).field?.toString() || '';
+      const index = sortModel.findIndex((item) => item.colId === colId);
+      if (index >= 0) {
+        return `${arrow} ${index + 1}`;
+      }
+    }
+
+    return arrow;
   }
 
-  onHeaderClick(col: Column | ColDef<TData> | ColGroupDef<TData>): void {
+  onHeaderClick(col: Column | ColDef<TData> | ColGroupDef<TData>, event: MouseEvent): void {
     if (this.isResizing) return;
 
     if ((col as any).colId === 'ag-Grid-SelectionColumn') {
@@ -787,18 +892,16 @@ export class ArgentGridComponent<TData = any>
       return;
     }
 
-    // Toggle sort
-    const currentSort = col.sort;
-    const newSort = currentSort === 'asc' ? 'desc' : currentSort === 'desc' ? null : 'asc';
-
     const colId = (col as any).colId || (col as any).field?.toString() || '';
+    // Get latest column state from API to ensure we have the current sort
+    const latestCol = this.gridApi?.getColumn(colId);
+    const currentSort = latestCol?.sort || null;
 
-    // Update the column directly if it's a Column object
-    if ('colId' in col && !(col as any).children) {
-      (col as any).sort = newSort;
-    }
+    // Toggle sort
+    const newSort = currentSort === 'asc' ? 'desc' : currentSort === 'desc' ? null : 'asc';
+    const isMultiSort = event.shiftKey;
 
-    this.gridApi.setSortModel(newSort ? [{ colId, sort: newSort }] : []);
+    this.gridApi.setColumnSort(colId, newSort, isMultiSort);
     this.canvasRenderer?.render();
   }
 
@@ -1011,6 +1114,26 @@ export class ArgentGridComponent<TData = any>
       if (!target.closest('.argent-grid-cell-editor')) {
         this.stopEditing(true);
       }
+    }
+
+    // Ensure container is focused for keyboard shortcuts
+    this._elementRef.nativeElement.focus();
+  }
+
+  @HostListener('keydown', ['$event'])
+  handleKeyDown(event: KeyboardEvent): void {
+    if (this.isEditing) return;
+
+    const isCtrlOrMeta = event.ctrlKey || event.metaKey;
+
+    if (isCtrlOrMeta && event.key.toLowerCase() === 'c') {
+      // Copy
+      this.gridApi.copyToClipboard();
+      event.preventDefault();
+    } else if (isCtrlOrMeta && event.key.toLowerCase() === 'v') {
+      // Paste
+      this.gridApi.pasteFromClipboard();
+      event.preventDefault();
     }
   }
 
@@ -1394,21 +1517,33 @@ export class ArgentGridComponent<TData = any>
   onSetFilterChanged(values: any[]): void {
     if (!this.activeSetFilterColumn || !this.gridApi) return;
 
-    const field = this.activeSetFilterColumn.field;
-    if (!field) return;
+    const col = this.activeSetFilterColumn;
+    const colId = col.colId;
+    if (!colId) return;
+
+    const isMulti = this.isMultiFilter(col);
 
     if (values.length === 0) {
-      const currentModel = this.gridApi.getFilterModel();
-      delete (currentModel as any)[field];
-      this.gridApi.setFilterModel(currentModel);
+      if (isMulti) {
+        this.updateMultiFilter(colId, null, 'set');
+      } else {
+        const currentModel = this.gridApi.getFilterModel();
+        delete currentModel[colId];
+        this.gridApi.setFilterModel(currentModel);
+      }
     } else {
-      this.gridApi.setFilterModel({
-        ...this.gridApi.getFilterModel(),
-        [field]: {
-          filterType: 'set',
-          values: values,
-        },
-      });
+      const subFilter: FilterModelItem = {
+        filterType: 'set',
+        values: values,
+      };
+
+      if (isMulti) {
+        this.updateMultiFilter(colId, subFilter, 'set');
+      } else {
+        const currentModel = this.gridApi.getFilterModel();
+        currentModel[colId] = subFilter;
+        this.gridApi.setFilterModel(currentModel);
+      }
     }
 
     this.closeSetFilter();
@@ -1417,21 +1552,31 @@ export class ArgentGridComponent<TData = any>
 
   hasSetFilterValue(col: Column | ColDef<TData>): boolean {
     if (!this.gridApi) return false;
-    const field = 'field' in col ? col.field : null;
-    if (!field) return false;
+    const colId = (col as any).colId || (col as any).field?.toString() || '';
+    if (!colId) return false;
 
     const model = this.gridApi.getFilterModel();
-    const filter = (model as any)[field];
-    return filter && filter.filterType === 'set' && filter.values && filter.values.length > 0;
+    let filter = model[colId];
+
+    if (filter && filter.filterType === 'multiFilter') {
+      filter = this.getSubFilterFromMulti(filter, 'set');
+    }
+
+    return !!(filter && filter.filterType === 'set' && filter.values && filter.values.length > 0);
   }
 
   getSetFilterCount(col: Column | ColDef<TData>): number {
     if (!this.gridApi) return 0;
-    const field = 'field' in col ? col.field : null;
-    if (!field) return 0;
+    const colId = (col as any).colId || (col as any).field?.toString() || '';
+    if (!colId) return 0;
 
     const model = this.gridApi.getFilterModel();
-    const filter = (model as any)[field];
+    let filter = model[colId];
+
+    if (filter && filter.filterType === 'multiFilter') {
+      filter = this.getSubFilterFromMulti(filter, 'set');
+    }
+
     if (filter && filter.filterType === 'set' && Array.isArray(filter.values)) {
       return filter.values.length;
     }
@@ -1738,6 +1883,67 @@ export class ArgentGridComponent<TData = any>
     return 'text';
   }
 
+  isMultiFilter(col: Column | ColDef<TData> | ColGroupDef<TData>): boolean {
+    const colDef = this.getColumnDefForColumn(col as any);
+    return colDef && this.isColDef(colDef) && Array.isArray(colDef.filter);
+  }
+
+  getFilterTypeFromCol(colDef: ColDef<TData>): string {
+    if (Array.isArray(colDef.filter)) {
+      return 'multiFilter';
+    }
+    return colDef.filter === true ? 'text' : colDef.filter || 'text';
+  }
+
+  private getSubFilterFromMulti(
+    multiFilter: FilterModelItem,
+    type: 'text' | 'number' | 'date' | 'boolean' | 'set'
+  ): FilterModelItem | null {
+    if (multiFilter.filterType !== 'multiFilter' || !multiFilter.filterModels) {
+      return null;
+    }
+    return multiFilter.filterModels.find((m) => m.filterType === type) || null;
+  }
+
+  private updateMultiFilter(
+    colId: string,
+    subFilter: FilterModelItem | null,
+    type: 'text' | 'number' | 'date' | 'boolean' | 'set'
+  ): void {
+    if (!this.gridApi) return;
+    const currentModel = this.gridApi.getFilterModel();
+    let multiFilter = currentModel[colId];
+
+    if (!multiFilter || multiFilter.filterType !== 'multiFilter') {
+      multiFilter = {
+        filterType: 'multiFilter',
+        filterModels: [],
+      };
+    }
+
+    const models = multiFilter.filterModels || [];
+    const existingIndex = models.findIndex((m) => m.filterType === type);
+
+    if (subFilter) {
+      if (existingIndex >= 0) {
+        models[existingIndex] = subFilter;
+      } else {
+        models.push(subFilter);
+      }
+    } else if (existingIndex >= 0) {
+      models.splice(existingIndex, 1);
+    }
+
+    if (models.length === 0) {
+      delete currentModel[colId];
+    } else {
+      multiFilter.filterModels = models;
+      currentModel[colId] = multiFilter;
+    }
+
+    this.gridApi.setFilterModel(currentModel);
+  }
+
   private filterTimeout: any;
   onFloatingFilterInput(event: Event, col: Column | ColDef<TData> | ColGroupDef<TData>): void {
     const colDef = this.getColumnDefForColumn(col as any);
@@ -1751,39 +1957,70 @@ export class ArgentGridComponent<TData = any>
 
     clearTimeout(this.filterTimeout);
     this.filterTimeout = setTimeout(() => {
+      if (!this.gridApi) return;
+
       const currentModel = this.gridApi.getFilterModel();
-      const existingFilter = (currentModel[colId] || {}) as any;
+      const isMulti = this.isMultiFilter(col);
+      const filterType = this.getFilterTypeForFloating(colDef);
+
+      let existingFilter: any;
+      if (isMulti) {
+        const multi = currentModel[colId];
+        existingFilter = (multi && this.getSubFilterFromMulti(multi, filterType as any)) || {};
+      } else {
+        existingFilter = currentModel[colId] || {};
+      }
 
       if (!value && existingFilter.type !== 'blank' && existingFilter.type !== 'notBlank') {
-        delete currentModel[colId];
+        if (isMulti) {
+          this.updateMultiFilter(colId, null, filterType as any);
+        } else {
+          delete currentModel[colId];
+          this.gridApi.setFilterModel(currentModel);
+        }
       } else {
-        const filterType = this.getFilterTypeFromCol(colDef);
-        currentModel[colId] = {
+        const subFilter: FilterModelItem = {
           ...existingFilter,
           filterType: filterType as any,
           type: existingFilter.type || (filterType === 'text' ? 'contains' : 'equals'),
           filter: value,
         };
+
+        if (isMulti) {
+          this.updateMultiFilter(colId, subFilter, filterType as any);
+        } else {
+          currentModel[colId] = subFilter;
+          this.gridApi.setFilterModel(currentModel);
+        }
       }
 
-      this.gridApi.setFilterModel(currentModel);
       this.canvasRenderer?.render();
     }, 300);
   }
 
-  private getFilterTypeFromCol(col: ColDef<TData>): string {
-    const filter = col.filter;
-    if (filter === 'number') return 'number';
-    if (filter === 'date') return 'date';
-    if (filter === 'boolean') return 'boolean';
-    return 'text';
+  private getFilterTypeForFloating(colDef: ColDef<TData>): string {
+    if (Array.isArray(colDef.filter)) {
+      // Find the first non-set filter for the floating input
+      return colDef.filter.find((f) => f !== 'set') || 'text';
+    }
+    return colDef.filter === true ? 'text' : colDef.filter || 'text';
   }
 
   getFloatingFilterValue(col: Column | ColDef<TData> | ColGroupDef<TData>): string {
     if (!this.gridApi) return '';
     const colId = (col as any).colId || (col as any).field?.toString() || '';
     const model = this.gridApi.getFilterModel();
-    return model[colId]?.filter || '';
+    let filter = model[colId];
+
+    if (filter && filter.filterType === 'multiFilter') {
+      const colDef = this.getColumnDefForColumn(col as any);
+      if (colDef && this.isColDef(colDef)) {
+        const type = this.getFilterTypeForFloating(colDef);
+        filter = this.getSubFilterFromMulti(filter, type as any);
+      }
+    }
+
+    return filter?.filter || '';
   }
 
   hasFilterValue(
@@ -1803,10 +2040,15 @@ export class ArgentGridComponent<TData = any>
     input.value = '';
     const colId = (col as any).colId || (col as any).field?.toString() || '';
 
-    const currentModel = this.gridApi.getFilterModel();
-    delete currentModel[colId];
+    if (this.isMultiFilter(col)) {
+      const type = this.getFilterTypeForFloating(colDef);
+      this.updateMultiFilter(colId, null, type as any);
+    } else {
+      const currentModel = this.gridApi.getFilterModel();
+      delete currentModel[colId];
+      this.gridApi.setFilterModel(currentModel);
+    }
 
-    this.gridApi.setFilterModel(currentModel);
     this.canvasRenderer?.render();
     this._cdr.detectChanges();
   }

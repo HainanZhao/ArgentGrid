@@ -87,6 +87,22 @@ describe('GridService', () => {
     expect(sortedData[2].age).toBe(35);
   });
 
+  it('should update column objects when setSortModel is called', () => {
+    const sortApi = service.createApi(testColumnDefs, [...testRowData]);
+    sortApi.setSortModel([{ colId: 'name', sort: 'desc' }]);
+
+    const nameCol = sortApi.getColumn('name');
+    const ageCol = sortApi.getColumn('age');
+
+    expect(nameCol?.sort).toBe('desc');
+    expect(ageCol?.sort).toBe(null);
+
+    // Change sort model
+    sortApi.setSortModel([{ colId: 'age', sort: 'asc' }]);
+    expect(nameCol?.sort).toBe(null);
+    expect(ageCol?.sort).toBe('asc');
+  });
+
   it('should handle transaction - add rows and respect sorting', () => {
     const sortApi = service.createApi(testColumnDefs, [...testRowData]);
     sortApi.setSortModel([{ colId: 'name', sort: 'asc' }]);
@@ -146,6 +162,70 @@ describe('GridService', () => {
     api.setFilterModel(filterModel);
     expect(api.getFilterModel()).toEqual(filterModel);
     expect(api.isFilterPresent()).toBe(true);
+  });
+
+  describe('Pagination', () => {
+    let paginationApi: GridApi<TestData>;
+    const manyRows: TestData[] = Array.from({ length: 55 }, (_, i) => ({
+      id: i + 1,
+      name: `Person ${i + 1}`,
+      age: 20 + (i % 30),
+      email: `person${i + 1}@example.com`,
+    }));
+
+    beforeEach(() => {
+      paginationApi = service.createApi(testColumnDefs, manyRows, {
+        pagination: true,
+        paginationPageSize: 20,
+      });
+    });
+
+    it('should initialize with first page of data', () => {
+      expect(paginationApi.paginationGetPageSize()).toBe(20);
+      expect(paginationApi.paginationGetCurrentPage()).toBe(0);
+      expect(paginationApi.paginationGetTotalPages()).toBe(3); // 20 + 20 + 15
+      expect(paginationApi.getDisplayedRowCount()).toBe(20);
+      expect(paginationApi.getPaginationTotalRows()).toBe(55);
+      expect(paginationApi.getDisplayedRowAtIndex(0)?.data.id).toBe(1);
+    });
+
+    it('should navigate to next page', () => {
+      paginationApi.paginationGoToNextPage();
+      expect(paginationApi.paginationGetCurrentPage()).toBe(1);
+      expect(paginationApi.getDisplayedRowCount()).toBe(20);
+      expect(paginationApi.getDisplayedRowAtIndex(0)?.data.id).toBe(21);
+    });
+
+    it('should navigate to last page', () => {
+      paginationApi.paginationGoToLastPage();
+      expect(paginationApi.paginationGetCurrentPage()).toBe(2);
+      expect(paginationApi.getDisplayedRowCount()).toBe(15);
+      expect(paginationApi.getDisplayedRowAtIndex(0)?.data.id).toBe(41);
+    });
+
+    it('should navigate to previous page', () => {
+      paginationApi.paginationGoToNextPage();
+      paginationApi.paginationGoToPreviousPage();
+      expect(paginationApi.paginationGetCurrentPage()).toBe(0);
+      expect(paginationApi.getDisplayedRowAtIndex(0)?.data.id).toBe(1);
+    });
+
+    it('should change page size', () => {
+      paginationApi.paginationSetPageSize(10);
+      expect(paginationApi.paginationGetPageSize()).toBe(10);
+      expect(paginationApi.paginationGetTotalPages()).toBe(6);
+      expect(paginationApi.getDisplayedRowCount()).toBe(10);
+    });
+
+    it('should respect sorting when paginating', () => {
+      // Sort by age descending
+      paginationApi.setSortModel([{ colId: 'age', sort: 'desc' }]);
+      // Page 1 should have top 20 oldest people
+      const firstRow = paginationApi.getDisplayedRowAtIndex(0);
+      const lastRow = paginationApi.getDisplayedRowAtIndex(19);
+
+      expect(firstRow?.data.age).toBeGreaterThanOrEqual(lastRow?.data.age || 0);
+    });
   });
 
   it('should apply text filter - contains', () => {
@@ -277,6 +357,68 @@ describe('GridService', () => {
     data.forEach((row) => {
       expect(row.name.startsWith('J')).toBe(true);
       expect(row.age).toBeLessThan(30);
+    });
+  });
+
+  describe('Quick Filter', () => {
+    let quickApi: GridApi<TestData>;
+    const quickData: TestData[] = [
+      { id: 1, name: 'Apple', age: 10, email: 'fruit@example.com' },
+      { id: 2, name: 'Banana', age: 20, email: 'yellow@example.com' },
+      { id: 3, name: 'Cherry', age: 30, email: 'red@example.com' },
+    ];
+
+    beforeEach(() => {
+      quickApi = service.createApi(testColumnDefs, quickData);
+    });
+
+    it('should find text across multiple columns', () => {
+      // Matches 'Apple' in name
+      quickApi.setQuickFilter('apple');
+      expect(quickApi.getDisplayedRowCount()).toBe(1);
+      expect(quickApi.getDisplayedRowAtIndex(0)?.data.name).toBe('Apple');
+
+      // Matches 'example.com' in email (all rows)
+      quickApi.setQuickFilter('example.com');
+      expect(quickApi.getDisplayedRowCount()).toBe(3);
+
+      // Matches 'yellow' in email (Banana)
+      quickApi.setQuickFilter('yellow');
+      expect(quickApi.getDisplayedRowCount()).toBe(1);
+      expect(quickApi.getDisplayedRowAtIndex(0)?.data.name).toBe('Banana');
+    });
+
+    it('should be case-insensitive', () => {
+      quickApi.setQuickFilter('CHERRY');
+      expect(quickApi.getDisplayedRowCount()).toBe(1);
+      expect(quickApi.getDisplayedRowAtIndex(0)?.data.name).toBe('Cherry');
+    });
+
+    it('should combine with column filters (AND logic)', () => {
+      // Column filter for age > 15 (Banana and Cherry)
+      quickApi.setFilterModel({
+        age: { filterType: 'number', type: 'greaterThan', filter: 15 },
+      });
+      expect(quickApi.getDisplayedRowCount()).toBe(2);
+
+      // Quick filter for 'banana' (Only Banana should match both)
+      quickApi.setQuickFilter('banana');
+      expect(quickApi.getDisplayedRowCount()).toBe(1);
+      expect(quickApi.getDisplayedRowAtIndex(0)?.data.name).toBe('Banana');
+    });
+
+    it('should only search visible columns', () => {
+      // Hide 'email' column
+      quickApi.setColumnVisible('email', false);
+
+      // Search for 'yellow' (only exists in hidden email column)
+      quickApi.setQuickFilter('yellow');
+      expect(quickApi.getDisplayedRowCount()).toBe(0);
+
+      // Show it again
+      quickApi.setColumnVisible('email', true);
+      quickApi.setQuickFilter('yellow');
+      expect(quickApi.getDisplayedRowCount()).toBe(1);
     });
   });
 
@@ -922,6 +1064,36 @@ describe('GridService', () => {
       expect(api.getDisplayedRowCount()).toBe(2);
     });
 
+    it('should apply sorting correctly when data is filtered', () => {
+      const api = service.createApi(testColumnDefs, [
+        { id: 1, name: 'Alice', age: 30, email: 'a@example.com' },
+        { id: 2, name: 'Bob', age: 25, email: 'b@example.com' },
+        { id: 3, name: 'Charlie', age: 35, email: 'c@example.com' },
+      ]);
+
+      // 1. Filter to include Alice and Bob (age <= 30)
+      api.setFilterModel({
+        age: { filterType: 'number', type: 'lessThanOrEqual', filter: 30 },
+      });
+      expect(api.getDisplayedRowCount()).toBe(2);
+
+      // 2. Sort by name DESC (should be Bob then Alice)
+      api.setSortModel([{ colId: 'name', sort: 'desc' }]);
+
+      const data = api.getRowData();
+      expect(data.length).toBe(2);
+      expect(data[0].name).toBe('Bob');
+      expect(data[1].name).toBe('Alice');
+
+      // 3. Clear filter, sort should still apply to all data
+      api.setFilterModel({});
+      const allData = api.getRowData();
+      expect(allData.length).toBe(3);
+      expect(allData[0].name).toBe('Charlie');
+      expect(allData[1].name).toBe('Bob');
+      expect(allData[2].name).toBe('Alice');
+    });
+
     it('should preserve selection across transactions', () => {
       const api = service.createApi(testColumnDefs, [
         { id: 1, name: 'John' },
@@ -1254,36 +1426,134 @@ describe('GridService', () => {
   });
 
   describe('Clipboard Operations', () => {
-    it('should copy to clipboard', () => {
+    it('should copy range selection to clipboard in TSV format', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       // Mock navigator.clipboard
       const originalClipboard = navigator.clipboard;
+      const writeSpy = vi.fn().mockResolvedValue(undefined);
       Object.assign(navigator, {
-        clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+        clipboard: { writeText: writeSpy },
+      });
+
+      // Select a range: First 2 rows of 'name' and 'age' columns
+      const nameCol = api.getColumn('name')!;
+      const ageCol = api.getColumn('age')!;
+      api.addCellRange({
+        startRow: 0,
+        endRow: 1,
+        columns: [nameCol, ageCol],
+        startColumn: 'name',
+        endColumn: 'age',
       });
 
       api.copyToClipboard();
 
-      expect(navigator.clipboard.writeText).toHaveBeenCalled();
+      // Check if it contains headers and the data
+      const callArgs = writeSpy.mock.calls[0][0];
+      expect(callArgs).toContain('Name\tAge');
+      expect(callArgs).toContain('John Doe\t30');
+      expect(callArgs).toContain('Jane Smith\t25');
+      expect(callArgs).toContain('\t'); // TSV
 
       // Restore
       Object.assign(navigator, { clipboard: originalClipboard });
     });
 
-    it('should paste from clipboard', () => {
+    it('should paste TSV data into grid', async () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       // Mock navigator.clipboard
       const originalClipboard = navigator.clipboard;
       Object.assign(navigator, {
-        clipboard: { readText: vi.fn().mockResolvedValue('test\tpaste') },
+        clipboard: { readText: vi.fn().mockResolvedValue('Pasted Name\t42') },
       });
 
-      api.pasteFromClipboard();
+      // Select start cell
+      const nameCol = api.getColumn('name')!;
+      api.addCellRange({
+        startRow: 0,
+        endRow: 0,
+        columns: [nameCol],
+        startColumn: 'name',
+        endColumn: 'name',
+      });
 
-      expect(navigator.clipboard.readText).toHaveBeenCalled();
+      await api.pasteFromClipboard();
+
+      const firstRow = api.getDisplayedRowAtIndex(0)?.data;
+      expect(firstRow.name).toBe('Pasted Name');
+      expect(firstRow.age).toBe(42);
 
       // Restore
       Object.assign(navigator, { clipboard: originalClipboard });
+    });
+
+    it('should ignore headers when pasting if heuristic matches', async () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const originalClipboard = navigator.clipboard;
+      // TSV with header row
+      const tsvData = 'Name\tAge\nHeuristic Name\t33';
+      Object.assign(navigator, {
+        clipboard: { readText: vi.fn().mockResolvedValue(tsvData) },
+      });
+
+      const nameCol = api.getColumn('name')!;
+      api.addCellRange({
+        startRow: 0,
+        endRow: 0,
+        columns: [nameCol],
+        startColumn: 'name',
+        endColumn: 'name',
+      });
+
+      await api.pasteFromClipboard();
+
+      const firstRow = api.getDisplayedRowAtIndex(0)?.data;
+      // Should have skipped the header "Name" and pasted "Heuristic Name"
+      expect(firstRow.name).toBe('Heuristic Name');
+      expect(firstRow.age).toBe(33);
+
+      Object.assign(navigator, { clipboard: originalClipboard });
+    });
+  });
+
+  describe('Overlay API', () => {
+    it('should emit overlayChanged event when showLoadingOverlay is called', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const stateChangeSpy = vi.fn();
+      service.gridStateChanged$.subscribe(stateChangeSpy);
+
+      api.showLoadingOverlay();
+
+      expect(stateChangeSpy).toHaveBeenCalledWith({
+        type: 'overlayChanged',
+        value: 'loading',
+      });
+    });
+
+    it('should emit overlayChanged event when showNoRowsOverlay is called', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const stateChangeSpy = vi.fn();
+      service.gridStateChanged$.subscribe(stateChangeSpy);
+
+      api.showNoRowsOverlay();
+
+      expect(stateChangeSpy).toHaveBeenCalledWith({
+        type: 'overlayChanged',
+        value: 'noRows',
+      });
+    });
+
+    it('should emit overlayChanged event when hideOverlay is called', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const stateChangeSpy = vi.fn();
+      service.gridStateChanged$.subscribe(stateChangeSpy);
+
+      api.hideOverlay();
+
+      expect(stateChangeSpy).toHaveBeenCalledWith({
+        type: 'overlayChanged',
+        value: null,
+      });
     });
   });
 
@@ -2074,6 +2344,103 @@ describe('GridService', () => {
       expect(
         api.getAllColumns().find((c) => c.colId === 'ag-Grid-SelectionColumn')
       ).toBeUndefined();
+    });
+
+    it('should update column objects when setSortModel is called', () => {
+      const sortApi = service.createApi(testColumnDefs, [...testRowData]);
+      sortApi.setSortModel([{ colId: 'name', sort: 'desc' }]);
+
+      const nameCol = sortApi.getColumn('name');
+      const ageCol = sortApi.getColumn('age');
+
+      expect(nameCol?.sort).toBe('desc');
+      expect(ageCol?.sort).toBe(null);
+
+      // Change sort model
+      sortApi.setSortModel([{ colId: 'age', sort: 'asc' }]);
+      expect(nameCol?.sort).toBe(null);
+      expect(ageCol?.sort).toBe('asc');
+    });
+
+    it('should sort correctly when data is filtered', () => {
+      const filterSortApi = service.createApi(testColumnDefs, [
+        { id: 1, name: 'Alice', age: 30, email: 'a@example.com' },
+        { id: 2, name: 'Bob', age: 25, email: 'b@example.com' },
+        { id: 3, name: 'Charlie', age: 35, email: 'c@example.com' },
+      ]);
+
+      // 1. Filter to include Alice and Bob (age <= 30)
+      filterSortApi.setFilterModel({
+        age: { filterType: 'number', type: 'lessThanOrEqual', filter: 30 },
+      });
+      expect(filterSortApi.getDisplayedRowCount()).toBe(2);
+
+      // 2. Sort by name DESC (should be Bob then Alice)
+      filterSortApi.setColumnSort('name', 'desc');
+
+      const data = filterSortApi.getRowData();
+      expect(data.length).toBe(2);
+      expect(data[0].name).toBe('Bob');
+      expect(data[1].name).toBe('Alice');
+
+      // 3. Clear filter, sort should still apply to all data
+      filterSortApi.setFilterModel({});
+      const allData = filterSortApi.getRowData();
+      expect(allData.length).toBe(3);
+      expect(allData[0].name).toBe('Charlie');
+      expect(allData[1].name).toBe('Bob');
+      expect(allData[2].name).toBe('Alice');
+    });
+
+    it('should handle multi-column sorting state and priority', () => {
+      const multiApi = service.createApi(testColumnDefs, [
+        { id: 1, name: 'B', age: 30, email: 'b1@example.com' },
+        { id: 2, name: 'A', age: 25, email: 'a@example.com' },
+        { id: 3, name: 'B', age: 20, email: 'b2@example.com' },
+      ]);
+
+      // Sort by name ASC, then age ASC (multi-sort)
+      multiApi.setColumnSort('name', 'asc', false);
+      multiApi.setColumnSort('age', 'asc', true);
+
+      const model = multiApi.getSortModel();
+      expect(model.length).toBe(2);
+      expect(model[0].colId).toBe('name');
+      expect(model[1].colId).toBe('age');
+
+      const nameCol = multiApi.getColumn('name');
+      const ageCol = multiApi.getColumn('age');
+      expect(nameCol?.sort).toBe('asc');
+      expect(ageCol?.sort).toBe('asc');
+
+      const data = multiApi.getRowData();
+      expect(data[0].name).toBe('A');
+      expect(data[1].name).toBe('B');
+      expect(data[1].age).toBe(20);
+    });
+
+    it('should apply multiFilter with AND logic', () => {
+      const multiFilterApi = service.createApi(testColumnDefs, [
+        { id: 1, name: 'John Doe', age: 30, email: 'john@example.com' },
+        { id: 2, name: 'Jane Smith', age: 25, email: 'jane@example.com' },
+        { id: 3, name: 'Bob Johnson', age: 35, email: 'bob@example.com' },
+        { id: 4, name: 'Johnny Cash', age: 40, email: 'johnny@example.com' },
+      ]);
+
+      multiFilterApi.setFilterModel({
+        name: {
+          filterType: 'multiFilter',
+          filterModels: [
+            { filterType: 'set', values: ['John Doe', 'Jane Smith', 'Johnny Cash'] },
+            { filterType: 'text', type: 'contains', filter: 'John' },
+          ],
+        },
+      });
+
+      const data = multiFilterApi.getRowData();
+      expect(data.length).toBe(2);
+      expect(data.some((r) => r.name === 'John Doe')).toBe(true);
+      expect(data.some((r) => r.name === 'Johnny Cash')).toBe(true);
     });
   });
 });

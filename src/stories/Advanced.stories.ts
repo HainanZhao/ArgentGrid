@@ -247,3 +247,84 @@ export const FullFeatures: Story = {
     },
   },
 };
+
+export const ClipboardSupport: Story = {
+  render: (args) => ({
+    props: args,
+    template: `
+      <div style="display: flex; flex-direction: column; gap: 15px; height: 100%; padding: 10px; box-sizing: border-box;">
+        <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; border: 1px solid #90caf9;">
+          <h4 style="margin-top: 0;">Clipboard Support Instructions:</h4>
+          <ul style="margin-bottom: 0;">
+            <li><b>Range Copy:</b> Click and drag to select a range, then press <b>Ctrl+C</b> (or Cmd+C).</li>
+            <li><b>Row Copy:</b> Click a row (or use checkboxes), then press <b>Ctrl+C</b>.</li>
+            <li><b>Paste:</b> Select a cell or range, then press <b>Ctrl+V</b> to paste TSV data from Excel/Sheets.</li>
+          </ul>
+        </div>
+        
+        <div style="display: flex; gap: 15px; flex: 1; min-height: 0;">
+          <div style="flex: 3; display: flex; flex-direction: column;">
+            <argent-grid 
+              style="flex: 1;"
+              [columnDefs]="columnDefs" 
+              [rowData]="rowData" 
+              [height]="height" 
+              [width]="width"
+              [theme]="theme"
+              [gridOptions]="gridOptions">
+            </argent-grid>
+          </div>
+          
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+            <label><b>Paste/External Data Area:</b></label>
+            <textarea 
+              placeholder="Paste from grid here, or copy from here to paste into grid (TSV format)..." 
+              style="flex: 1; width: 100%; padding: 10px; font-family: monospace; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; resize: none;"
+            ></textarea>
+            <div style="font-size: 11px; color: #666;">
+              Example for pasting: <br>
+              <code style="background: #eee; padding: 2px;">New Hire\tEngineering\t125000</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    `,
+  }),
+  args: {
+    columnDefs: [
+      { field: 'name', headerName: 'Name', width: 200, editable: true },
+      {
+        field: 'department',
+        headerName: 'Department',
+        width: 180,
+        editable: true,
+        valueFormatter: departmentValueFormatter,
+      },
+      { field: 'salary', headerName: 'Salary', width: 120, editable: true },
+      {
+        field: 'location',
+        headerName: 'Location',
+        width: 150,
+        editable: true,
+        valueFormatter: locationValueFormatter,
+      },
+    ],
+    rowData: generateStaticData(20),
+    height: '100%',
+    width: '100%',
+    theme: themeQuartz,
+    gridOptions: {
+      enableRangeSelection: true,
+      rowSelection: 'multiple',
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Enhanced Clipboard Support**: Copy ranges or rows in TSV format compatible with Excel/Google Sheets. ' +
+          'Supports pasting data back into the grid, with automatic header detection and basic type conversion.',
+      },
+    },
+  },
+};

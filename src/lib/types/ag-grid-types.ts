@@ -232,8 +232,20 @@ export interface GridOptions<TData = any> {
   theme?: Theme | 'legacy';
   /** Configuration for the side bar. */
   sideBar?: any;
-  /** Component to use for the overlay. */
-  overlayComponent?: any;
+
+  // === OVERLAYS ===
+  /** Component to use for the loading overlay. */
+  loadingOverlayComponent?: any;
+  /** Parameters to pass to the loading overlay component. */
+  loadingOverlayComponentParams?: any;
+  /** Component to use for the no rows overlay. */
+  noRowsOverlayComponent?: any;
+  /** Parameters to pass to the no rows overlay component. */
+  noRowsOverlayComponentParams?: any;
+  /** Set to true to suppress the loading overlay. */
+  suppressLoadingOverlay?: boolean;
+  /** Set to true to suppress the no rows overlay. */
+  suppressNoRowsOverlay?: boolean;
   /** Show loading overlay. */
   loading?: boolean;
 
@@ -673,6 +685,8 @@ export interface GridApi<TData = any> {
   onFilterChanged(): void;
   /** Returns true if any filter is present. */
   isFilterPresent(): boolean;
+  /** Sets the quick filter text. */
+  setQuickFilter(text: string): void;
 
   // === SORT API ===
   /** Sets the sort model. */
@@ -699,6 +713,8 @@ export interface GridApi<TData = any> {
   paginationGoToNextPage(): void;
   /** Goes to the previous page. */
   paginationGoToPreviousPage(): void;
+  /** Returns the total number of rows across all pages. */
+  getPaginationTotalRows(): number;
 
   // === EXPORT API ===
   /** Exports the grid data as CSV. */
@@ -793,6 +809,14 @@ export interface GridApi<TData = any> {
   addCellRange(params: CellRange): void;
   /** Clears the range selection. */
   clearRangeSelection(): void;
+
+  // === OVERLAY API ===
+  /** Shows the loading overlay. */
+  showLoadingOverlay(): void;
+  /** Shows the no rows overlay. */
+  showNoRowsOverlay(): void;
+  /** Hides the currently showing overlay. */
+  hideOverlay(): void;
 }
 
 // ============================================================================
@@ -920,6 +944,7 @@ export interface FilterModelItem {
   filter?: any;
   filterTo?: any;
   values?: any[];
+  filterModels?: FilterModelItem[];
 }
 
 export interface SortModelItem {

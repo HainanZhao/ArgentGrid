@@ -2,6 +2,7 @@ import { moveItemInArray } from '@angular/cdk/drag-drop';
 import { Injectable } from '@angular/core';
 import { Workbook } from 'exceljs';
 import { Subject } from 'rxjs';
+import { getCellValue, getFormattedValue } from '../rendering/render/cells';
 import {
   CellRange,
   ColDef,
@@ -59,6 +60,13 @@ export class GridService<TData = any> {
   private pivotColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
   private isPivotMode = false;
 
+  // Pagination state
+  private currentPage = 0;
+  private pageSize = 100;
+
+  // Quick Filter state
+  private quickFilterText = '';
+
   createApi(
     columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null,
     rowData: TData[] | null,
@@ -71,6 +79,13 @@ export class GridService<TData = any> {
     this.gridId = this.generateGridId();
     this.gridOptions = gridOptions ? { ...gridOptions } : {};
     this.isPivotMode = !!this.gridOptions.pivotMode;
+
+    // Initialize pagination
+    this.pageSize = this.gridOptions.paginationPageSize || 100;
+    this.currentPage = 0;
+
+    // Initialize Quick Filter
+    this.quickFilterText = this.gridOptions.quickFilterText || '';
 
     this.initializeColumns(true);
 
@@ -494,6 +509,37 @@ export class GridService<TData = any> {
     }
   }
 
+  public getColumnDefForColumn(
+    column: Column | ColumnGroup | ColDef<TData> | ColGroupDef<TData>
+  ): ColDef<TData> | ColGroupDef<TData> | null {
+    if (!this.columnDefs) return null;
+
+    const colId =
+      (column as any).colId || (column as any).field?.toString() || (column as any).groupId;
+    if (!colId) return null;
+
+    const defaultColDef = this.gridOptions?.defaultColDef || {};
+
+    const findDef = (
+      defs: (ColDef<TData> | ColGroupDef<TData>)[]
+    ): ColDef<TData> | ColGroupDef<TData> | null => {
+      for (const def of defs) {
+        if ('children' in def) {
+          if (def.groupId === colId) return { ...defaultColDef, ...def };
+          const found = findDef(def.children);
+          if (found) return found;
+        } else {
+          if (def.colId === colId || def.field?.toString() === colId) {
+            return { ...defaultColDef, ...def };
+          }
+        }
+      }
+      return null;
+    };
+
+    return findDef(this.columnDefs);
+  }
+
   public setColumnVisible(col: string | Column, visible: boolean): void {
     const colId = typeof col === 'string' ? col : col.colId;
     const column = this.columns.get(colId);
@@ -517,12 +563,33 @@ export class GridService<TData = any> {
     const column = this.columns.get(colId);
     if (column) {
       column.sort = sort;
+
       if (!multiSort) {
+        // Clear other sorts in columns Map
         this.columns.forEach((c) => {
           if (c.colId !== colId) c.sort = null;
         });
+        // Set new single-column sort model
+        this.sortModel = sort ? [{ colId, sort }] : [];
+      } else {
+        // Update multi-sort model
+        const existingIndex = this.sortModel.findIndex((item) => item.colId === colId);
+        if (sort) {
+          if (existingIndex >= 0) {
+            this.sortModel[existingIndex].sort = sort;
+          } else {
+            this.sortModel.push({ colId, sort });
+          }
+        } else {
+          // Remove from model if sort is null
+          if (existingIndex >= 0) {
+            this.sortModel.splice(existingIndex, 1);
+          }
+        }
+        // NOTE: column.sort is already updated above for the current column
       }
-      this.applySorting();
+
+      this.applyFiltering();
       this.gridStateChanged$.next({ type: 'sortChanged' });
     }
   }
@@ -533,6 +600,13 @@ export class GridService<TData = any> {
     if (pinned === 'left' || pinned === true) return 'left';
     if (pinned === 'right') return 'right';
     return false;
+  }
+
+  public getPaginationTotalRows(): number {
+    if (this.groupingDirty) {
+      return this.filteredRowData.length;
+    }
+    return this.flattenGroupedDataWithLevel(this.cachedGroupedData || []).length;
   }
 
   private getRowId(data: TData, index: number): string {
@@ -615,27 +689,69 @@ export class GridService<TData = any> {
         this.applyFiltering();
         this.gridStateChanged$.next({ type: 'filterChanged' });
       },
-      isFilterPresent: () => Object.keys(this.filterModel).length > 0,
+      isFilterPresent: () => Object.keys(this.filterModel).length > 0 || !!this.quickFilterText,
+      setQuickFilter: (text: string) => {
+        this.quickFilterText = text;
+        this.applyFiltering();
+        this.gridStateChanged$.next({ type: 'filterChanged' });
+      },
 
       // Sort API
       setSortModel: (model) => {
         this.sortModel = model;
-        this.applySorting();
-        this.applyFiltering(); // Re-filter and re-group after sort
+        // Sync column.sort property
+        this.columns.forEach((col) => {
+          const sortItem = model.find((m) => m.colId === col.colId);
+          col.sort = sortItem ? sortItem.sort : null;
+        });
+        this.applyFiltering(); // Re-filter, re-sort and re-group
         this.gridStateChanged$.next({ type: 'sortChanged' });
       },
       getSortModel: () => [...this.sortModel],
       // onSortChanged handled below
 
       // Pagination API
-      paginationGetPageSize: () => 100,
-      paginationSetPageSize: () => {},
-      paginationGetCurrentPage: () => 0,
-      paginationGetTotalPages: () => 1,
-      paginationGoToFirstPage: () => {},
-      paginationGoToLastPage: () => {},
-      paginationGoToNextPage: () => {},
-      paginationGoToPreviousPage: () => {},
+      paginationGetPageSize: () => this.pageSize,
+      paginationSetPageSize: (size: number) => {
+        this.pageSize = size;
+        this.currentPage = 0; // Reset to first page
+        this.applyFiltering(); // Re-initialize row nodes
+        this.gridStateChanged$.next({ type: 'paginationChanged' });
+      },
+      paginationGetCurrentPage: () => this.currentPage,
+      paginationGetTotalPages: () => {
+        const totalRows = this.groupingDirty
+          ? this.filteredRowData.length
+          : this.flattenGroupedDataWithLevel(this.cachedGroupedData || []).length;
+        return Math.ceil(totalRows / this.pageSize) || 1;
+      },
+      paginationGoToFirstPage: () => {
+        this.currentPage = 0;
+        this.applyFiltering();
+        this.gridStateChanged$.next({ type: 'paginationChanged' });
+      },
+      paginationGoToLastPage: () => {
+        const totalPages = api.paginationGetTotalPages();
+        this.currentPage = Math.max(0, totalPages - 1);
+        this.applyFiltering();
+        this.gridStateChanged$.next({ type: 'paginationChanged' });
+      },
+      paginationGoToNextPage: () => {
+        const totalPages = api.paginationGetTotalPages();
+        if (this.currentPage < totalPages - 1) {
+          this.currentPage++;
+          this.applyFiltering();
+          this.gridStateChanged$.next({ type: 'paginationChanged' });
+        }
+      },
+      paginationGoToPreviousPage: () => {
+        if (this.currentPage > 0) {
+          this.currentPage--;
+          this.applyFiltering();
+          this.gridStateChanged$.next({ type: 'paginationChanged' });
+        }
+      },
+      getPaginationTotalRows: () => this.getPaginationTotalRows(),
 
       // Export API
       exportDataAsCsv: (params) => this.exportAsCsv(params, api),
@@ -645,25 +761,144 @@ export class GridService<TData = any> {
       // Clipboard API
       copyToClipboard: () => {
         try {
-          const selectedData = api.getSelectedRows().map((node) => node.data);
-          const csv = selectedData.map((row) => Object.values(row as any).join(',')).join('\n');
-          if (typeof navigator !== 'undefined' && (navigator as any).clipboard) {
-            (navigator as any).clipboard.writeText(csv);
+          let text = '';
+          const ranges = api.getCellRanges();
+
+          if (ranges && ranges.length > 0) {
+            // Copy Range Selection (TSV format)
+            const range = ranges[0];
+            const startRow = Math.min(range.startRow, range.endRow);
+            const endRow = Math.max(range.startRow, range.endRow);
+            const cols = range.columns;
+
+            // Include headers for range selection (standard spreadsheet behavior)
+            text += `${cols.map((c) => c.headerName || c.field || '').join('\t')}\n`;
+
+            for (let i = startRow; i <= endRow; i++) {
+              const node = api.getDisplayedRowAtIndex(i);
+              if (!node || node.group) continue;
+
+              const rowValues = cols.map((col) => {
+                const colDef = this.getColumnDefForColumn(col);
+                const val = getCellValue(col, colDef as any, node, api);
+                return getFormattedValue(val, colDef as any, node.data, node, api);
+              });
+              text += `${rowValues.join('\t')}\n`;
+            }
+          } else {
+            // Copy Selected Rows (TSV format)
+            const selectedNodes = api.getSelectedNodes();
+            if (selectedNodes.length > 0) {
+              const visibleCols = Array.from(this.columns.values()).filter(
+                (c) => c.visible && c.colId !== 'ag-Grid-SelectionColumn'
+              );
+
+              // Headers
+              text += `${visibleCols.map((c) => c.headerName || c.field || '').join('\t')}\n`;
+
+              text += selectedNodes
+                .map((node) => {
+                  return visibleCols
+                    .map((col) => {
+                      const colDef = this.getColumnDefForColumn(col);
+                      const val = getCellValue(col, colDef as any, node, api);
+                      return getFormattedValue(val, colDef as any, node.data, node, api);
+                    })
+                    .join('\t');
+                })
+                .join('\n');
+            }
+          }
+
+          if (text && typeof navigator !== 'undefined' && (navigator as any).clipboard) {
+            (navigator as any).clipboard.writeText(text);
           }
         } catch (_e) {
-          // Ignore clipboard errors
+          console.error('Clipboard copy error', _e);
         }
       },
       cutToClipboard: () => {
         api.copyToClipboard();
       },
-      pasteFromClipboard: () => {
+      pasteFromClipboard: async () => {
         try {
-          if (typeof navigator !== 'undefined' && (navigator as any).clipboard) {
-            (navigator as any).clipboard.readText();
+          if (typeof navigator === 'undefined' || !(navigator as any).clipboard) return;
+
+          const text = await (navigator as any).clipboard.readText();
+          if (!text) return;
+
+          // Parse TSV (Tab Separated Values)
+          const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+          if (lines.length === 0) return;
+
+          const visibleCols = Array.from(this.columns.values()).filter(
+            (c) => c.visible && c.field && c.colId !== 'ag-Grid-SelectionColumn'
+          );
+
+          // Heuristic to detect headers: if more than 50% of first line matches visible col names/fields
+          const firstLineValues = lines[0].split('\t');
+          const headerMatchCount = firstLineValues.filter((val) =>
+            visibleCols.some(
+              (col) =>
+                col.headerName?.toLowerCase() === val.toLowerCase() ||
+                col.field?.toLowerCase() === val.toLowerCase()
+            )
+          ).length;
+
+          const hasHeaders =
+            headerMatchCount > firstLineValues.length / 2 && firstLineValues.length > 1;
+          const dataLines = hasHeaders ? lines.slice(1) : lines;
+
+          // Determine start position
+          let startRow = 0;
+          let startColId = '';
+
+          const ranges = api.getCellRanges();
+          if (ranges && ranges.length > 0) {
+            const range = ranges[0];
+            startRow = Math.min(range.startRow, range.endRow);
+            startColId = range.columns[0]?.colId;
           }
+
+          if (!startColId && visibleCols.length > 0) {
+            startColId = visibleCols[0].colId;
+          }
+
+          if (!startColId) return;
+
+          const startColIndex = visibleCols.findIndex((c) => c.colId === startColId);
+          if (startColIndex === -1) return;
+
+          // Apply data to rowData (modifying objects in-place)
+          dataLines.forEach((line, i) => {
+            const rowIndex = startRow + i;
+            const node = api.getDisplayedRowAtIndex(rowIndex);
+            if (!node || node.group) return;
+
+            const values = line.split('\t');
+            values.forEach((value, j) => {
+              const colIndex = startColIndex + j;
+              const col = visibleCols[colIndex];
+              if (!col || !col.field) return;
+
+              // Basic type conversion support (naive)
+              const field = col.field as string;
+              const originalValue = (node.data as any)[field];
+
+              if (typeof originalValue === 'number') {
+                (node.data as any)[field] = Number(value.replace(/[^0-9.-]+/g, ''));
+              } else if (typeof originalValue === 'boolean') {
+                (node.data as any)[field] = value.toLowerCase() === 'true';
+              } else {
+                (node.data as any)[field] = value;
+              }
+            });
+          });
+
+          this.applyFiltering(); // Re-sort/re-filter/re-group
+          this.gridStateChanged$.next({ type: 'rowDataChanged' });
         } catch (_e) {
-          // Ignore clipboard errors
+          console.error('Clipboard paste error', _e);
         }
       },
 
@@ -1045,6 +1280,17 @@ export class GridService<TData = any> {
       forEachNodeAfterFilterAndSort: (callback) => {
         this.displayedRowNodes.forEach((node) => callback(node));
       },
+
+      // Overlay API
+      showLoadingOverlay: () => {
+        this.gridStateChanged$.next({ type: 'overlayChanged', value: 'loading' });
+      },
+      showNoRowsOverlay: () => {
+        this.gridStateChanged$.next({ type: 'overlayChanged', value: 'noRows' });
+      },
+      hideOverlay: () => {
+        this.gridStateChanged$.next({ type: 'overlayChanged', value: null });
+      },
     });
 
     return api;
@@ -1146,8 +1392,7 @@ export class GridService<TData = any> {
       return;
     }
 
-    // Sort rowData based on sort model
-    this.rowData.sort((a, b) => {
+    const sortFn = (a: TData, b: TData) => {
       for (const sortItem of this.sortModel) {
         const column = this.columns.get(sortItem.colId);
         if (!column?.field) continue;
@@ -1162,16 +1407,17 @@ export class GridService<TData = any> {
         }
       }
       return 0;
-    });
+    };
 
-    // Also update filtered data if no filter present
-    if (Object.keys(this.filterModel).length === 0) {
-      this.filteredRowData = [...this.rowData];
-    }
+    // Sort both arrays
+    this.rowData.sort(sortFn);
+    this.filteredRowData.sort(sortFn);
   }
 
   private applyFiltering(): void {
     this.groupingDirty = true;
+
+    // 1. Initial Filtering (Column Filters)
     if (Object.keys(this.filterModel).length === 0) {
       // No filters, use all data
       this.filteredRowData = [...this.rowData];
@@ -1191,7 +1437,26 @@ export class GridService<TData = any> {
       });
     }
 
-    // Apply grouping after filtering
+    // 2. Quick Filter (Global Search)
+    if (this.quickFilterText) {
+      const searchText = this.quickFilterText.toLowerCase();
+      const visibleColumns = Array.from(this.columns.values()).filter((c) => c.visible);
+
+      this.filteredRowData = this.filteredRowData.filter((row) => {
+        // Match if ANY visible column contains the text
+        return visibleColumns.some((col) => {
+          if (!col.field) return false;
+          const value = (row as any)[col.field];
+          if (value === null || value === undefined) return false;
+          return String(value).toLowerCase().includes(searchText);
+        });
+      });
+    }
+
+    // Apply sorting to the (filtered) data
+    this.applySorting();
+
+    // Apply grouping after filtering and sorting
     this.applyGrouping();
   }
 
@@ -1536,8 +1801,9 @@ export class GridService<TData = any> {
     // DO NOT CLEAR this.rowNodes - reuse existing nodes to preserve state
     this.displayedRowNodes = [];
     const flattened = this.flattenGroupedDataWithLevel(this.cachedGroupedData || []);
+    const paginatedFlattened = this.getPaginatedData(flattened);
 
-    flattened.forEach((entry, index) => {
+    paginatedFlattened.forEach((entry, index) => {
       const { item, level } = entry;
       let id: string;
       let data: TData;
@@ -1573,7 +1839,7 @@ export class GridService<TData = any> {
         node.rowIndex = index;
         node.displayedRowIndex = index;
         node.firstChild = index === 0;
-        node.lastChild = index === flattened.length - 1;
+        node.lastChild = index === paginatedFlattened.length - 1;
       } else {
         // Create new node only if it doesn't exist
         node = {
@@ -1587,7 +1853,7 @@ export class GridService<TData = any> {
           group: isGroup,
           level,
           firstChild: index === 0,
-          lastChild: index === flattened.length - 1,
+          lastChild: index === paginatedFlattened.length - 1,
           rowIndex: index,
           displayedRowIndex: index,
           setSelected: (selected: boolean, clearSelection: boolean = false) => {
@@ -1648,6 +1914,14 @@ export class GridService<TData = any> {
     const { filterType, type, filter, filterTo } = filterItem;
 
     switch (filterType) {
+      case 'multiFilter':
+        // multiFilter: all sub-filters must pass (AND logic by default in AG Grid for multiFilter)
+        if (!Array.isArray(filterItem.filterModels)) {
+          return true;
+        }
+        return filterItem.filterModels.every((subFilter: FilterModelItem) =>
+          this.matchesFilter(value, subFilter)
+        );
       case 'text':
         return this.matchesTextFilter(String(value), type, filter);
       case 'number':
@@ -1796,6 +2070,16 @@ export class GridService<TData = any> {
     return Boolean(value) === Boolean(filter);
   }
 
+  private getPaginatedData<T>(data: T[]): T[] {
+    if (!this.gridOptions?.pagination) {
+      return data;
+    }
+
+    const start = this.currentPage * this.pageSize;
+    const end = start + this.pageSize;
+    return data.slice(start, end);
+  }
+
   private initializeRowNodesFromFilteredData(): void {
     this.groupingDirty = true;
     // DO NOT CLEAR this.rowNodes - reuse existing nodes
@@ -1819,7 +2103,8 @@ export class GridService<TData = any> {
       }
     });
 
-    const orderedRows = [...pinnedTopRows, ...normalRows, ...pinnedBottomRows];
+    const paginatedNormalRows = this.getPaginatedData(normalRows);
+    const orderedRows = [...pinnedTopRows, ...paginatedNormalRows, ...pinnedBottomRows];
 
     orderedRows.forEach((data, index) => {
       const id = this.getRowId(data, index);
