@@ -375,9 +375,19 @@ export const QuickFilter: Story = {
     columnDefs: [
       { field: 'id', headerName: 'ID', width: 80 },
       { field: 'name', headerName: 'Name', width: 200 },
-      { field: 'department', headerName: 'Department', width: 180, valueFormatter: departmentValueFormatter },
+      {
+        field: 'department',
+        headerName: 'Department',
+        width: 180,
+        valueFormatter: departmentValueFormatter,
+      },
       { field: 'role', headerName: 'Role', width: 250, valueFormatter: roleValueFormatter },
-      { field: 'location', headerName: 'Location', width: 150, valueFormatter: locationValueFormatter },
+      {
+        field: 'location',
+        headerName: 'Location',
+        width: 150,
+        valueFormatter: locationValueFormatter,
+      },
     ],
     rowData: generateStaticData(100),
     height: 'calc(100vh - 120px)',

@@ -772,7 +772,7 @@ export class GridService<TData = any> {
             const cols = range.columns;
 
             // Include headers for range selection (standard spreadsheet behavior)
-            text += cols.map((c) => c.headerName || c.field || '').join('\t') + '\n';
+            text += `${cols.map((c) => c.headerName || c.field || '').join('\t')}\n`;
 
             for (let i = startRow; i <= endRow; i++) {
               const node = api.getDisplayedRowAtIndex(i);
@@ -783,7 +783,7 @@ export class GridService<TData = any> {
                 const val = getCellValue(col, colDef as any, node, api);
                 return getFormattedValue(val, colDef as any, node.data, node, api);
               });
-              text += rowValues.join('\t') + '\n';
+              text += `${rowValues.join('\t')}\n`;
             }
           } else {
             // Copy Selected Rows (TSV format)
@@ -794,7 +794,7 @@ export class GridService<TData = any> {
               );
 
               // Headers
-              text += visibleCols.map((c) => c.headerName || c.field || '').join('\t') + '\n';
+              text += `${visibleCols.map((c) => c.headerName || c.field || '').join('\t')}\n`;
 
               text += selectedNodes
                 .map((node) => {
