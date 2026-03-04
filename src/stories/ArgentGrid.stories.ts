@@ -299,3 +299,61 @@ export const WithCustomTheme: Story = {
     },
   },
 };
+
+export const WithPagination: Story = {
+  args: {
+    columnDefs: [
+      { field: 'id', headerName: 'ID', width: 80 },
+      { field: 'name', headerName: 'Name', width: 200 },
+      {
+        field: 'department',
+        headerName: 'Department',
+        width: 180,
+        valueFormatter: departmentValueFormatter,
+      },
+      { field: 'role', headerName: 'Role', width: 250, valueFormatter: roleValueFormatter },
+      { field: 'salary', headerName: 'Salary', width: 120 },
+    ],
+    rowData: generateStaticData(100),
+    gridOptions: {
+      pagination: true,
+      paginationPageSize: 20,
+    },
+    height: 'calc(100vh - 60px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Client-side pagination** with 100 rows and 20 rows per page. **Navigate using the pagination controls** at the bottom of the grid. Automatically handles page numbering and row ranges.',
+      },
+    },
+  },
+};
+
+export const MultiColumnSorting: Story = {
+  args: {
+    columnDefs: [
+      { field: 'department', headerName: 'Department', width: 180, sortable: true },
+      { field: 'role', headerName: 'Role', width: 250, sortable: true },
+      { field: 'name', headerName: 'Name', width: 200, sortable: true },
+      { field: 'salary', headerName: 'Salary', width: 120, sortable: true },
+    ],
+    rowData: generateStaticData(100),
+    height: 'calc(100vh - 60px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Multi-Column Sorting**: **Hold SHIFT and click** column headers to sort by multiple columns. ' +
+          'A number (1, 2, 3...) will appear next to the arrow indicating the sort priority. ' +
+          'For example, sort by Department first, then by Role.',
+      },
+    },
+  },
+};

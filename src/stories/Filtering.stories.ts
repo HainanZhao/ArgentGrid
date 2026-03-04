@@ -290,3 +290,55 @@ export const AllFilterTypes: Story = {
     },
   },
 };
+
+export const MultiFilter: Story = {
+  args: {
+    columnDefs: [
+      { field: 'id', headerName: 'ID', width: 80 },
+      {
+        field: 'name',
+        headerName: 'Name',
+        width: 200,
+        filter: 'text',
+        floatingFilter: true,
+      },
+      {
+        field: 'department',
+        headerName: 'Dept (Set + Text)',
+        width: 220,
+        filter: ['set', 'text'],
+        floatingFilter: true,
+        valueFormatter: departmentValueFormatter,
+      },
+      {
+        field: 'role',
+        headerName: 'Role (Set + Text)',
+        width: 220,
+        filter: ['set', 'text'],
+        floatingFilter: true,
+        valueFormatter: roleValueFormatter,
+      },
+      {
+        field: 'salary',
+        headerName: 'Salary',
+        width: 150,
+        filter: 'number',
+        floatingFilter: true,
+      },
+    ],
+    rowData: generateStaticData(50),
+    height: 'calc(100vh - 60px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Multi-Filter Support**: Columns like Department and Role have both a **Set Filter** and a **Text Filter**. ' +
+          'Users can select specific values from the dropdown AND further refine results by typing in the text input. ' +
+          'Both filters must pass for a row to be displayed (AND logic).',
+      },
+    },
+  },
+};

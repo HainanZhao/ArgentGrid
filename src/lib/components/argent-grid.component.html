@@ -43,7 +43,7 @@
                 [style.width.px]="getItemWidth(entry.item)"
                 [style.height.px]="getItemRowSpan(entry.item, entry.rowIndex) * effectiveHeaderHeight"
                 [class.sortable]="!isColumnGroup(entry.item) && isSortable(entry.item)"
-                (click)="!isColumnGroup(entry.item) && onHeaderClick(entry.item)"
+                (click)="!isColumnGroup(entry.item) && onHeaderClick(entry.item, $event)"
                 cdkDrag
                 [cdkDragDisabled]="isColumnGroup(entry.item) || entry.item.colId === 'ag-Grid-SelectionColumn'"
                 [cdkDragData]="entry.item">
@@ -102,7 +102,7 @@
                   [style.width.px]="getItemWidth(entry.item)"
                   [style.height.px]="getItemRowSpan(entry.item, entry.rowIndex) * effectiveHeaderHeight"
                   [class.sortable]="!isColumnGroup(entry.item) && isSortable(entry.item)"
-                  (click)="!isColumnGroup(entry.item) && onHeaderClick(entry.item)"
+                  (click)="!isColumnGroup(entry.item) && onHeaderClick(entry.item, $event)"
                   cdkDrag
                   [cdkDragDisabled]="isColumnGroup(entry.item) || entry.item.colId === 'ag-Grid-SelectionColumn'"
                   [cdkDragData]="entry.item">
@@ -154,7 +154,7 @@
                 [style.width.px]="getItemWidth(entry.item)"
                 [style.height.px]="getItemRowSpan(entry.item, entry.rowIndex) * effectiveHeaderHeight"
                 [class.sortable]="!isColumnGroup(entry.item) && isSortable(entry.item)"
-                (click)="!isColumnGroup(entry.item) && onHeaderClick(entry.item)"
+                (click)="!isColumnGroup(entry.item) && onHeaderClick(entry.item, $event)"
                 cdkDrag
                 [cdkDragDisabled]="isColumnGroup(entry.item) || entry.item.colId === 'ag-Grid-SelectionColumn'"
                 [cdkDragData]="entry.item">
@@ -199,16 +199,25 @@
               <div *ngIf="isColumnVisible(col)"
                    class="argent-grid-floating-filter-cell"
                    [style.width.px]="getItemWidth(col)">
-                <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
-                  <input #filterInput
-                         class="floating-filter-input"
-                         [type]="getFilterInputType(col)"
-                         [value]="getFloatingFilterValue(col)"
-                         (input)="onFloatingFilterInput($event, col)"
-                         [placeholder]="'Filter...'" />
-                  <span class="floating-filter-clear" 
-                        *ngIf="hasFilterValue(col, filterInput)"
-                        (click)="clearFloatingFilter(col, filterInput)">✕</span>
+                <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)" [class.multi-filter-container]="isMultiFilter(col)">
+                  <button class="floating-filter-btn" 
+                          *ngIf="isSetFilter(col)"
+                          [class.active]="hasSetFilterValue(col)"
+                          (click)="openSetFilter($event, col)">
+                    <span class="filter-label">{{ getFloatingFilterValue(col) || 'All' }}</span>
+                    <span class="filter-count" *ngIf="hasSetFilterValue(col)">🔽 {{ getSetFilterCount(col) }}</span>
+                  </button>
+                  <div class="floating-filter-input-wrapper" *ngIf="!isSetFilter(col) || isMultiFilter(col)">
+                    <input #filterInput
+                           class="floating-filter-input"
+                           [type]="getFilterInputType(col)"
+                           [value]="getFloatingFilterValue(col)"
+                           (input)="onFloatingFilterInput($event, col)"
+                           [placeholder]="'Filter...'" />
+                    <span class="floating-filter-clear" 
+                          *ngIf="hasFilterValue(col, filterInput)"
+                          (click)="clearFloatingFilter(col, filterInput)">✕</span>
+                  </div>
                 </div>
               </div>
             </ng-container>
@@ -220,7 +229,7 @@
                 <div *ngIf="isColumnVisible(col)"
                      class="argent-grid-floating-filter-cell"
                      [style.width.px]="getItemWidth(col)">
-                  <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
+                  <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)" [class.multi-filter-container]="isMultiFilter(col)">
                     <button class="floating-filter-btn" 
                             *ngIf="isSetFilter(col)"
                             [class.active]="hasSetFilterValue(col)"
@@ -228,7 +237,7 @@
                       <span class="filter-label">{{ getFloatingFilterValue(col) || 'All' }}</span>
                       <span class="filter-count" *ngIf="hasSetFilterValue(col)">🔽 {{ getSetFilterCount(col) }}</span>
                     </button>
-                    <ng-container *ngIf="!isSetFilter(col)">
+                    <div class="floating-filter-input-wrapper" *ngIf="!isSetFilter(col) || isMultiFilter(col)">
                       <input #filterInput
                              class="floating-filter-input"
                              [type]="getFilterInputType(col)"
@@ -238,7 +247,7 @@
                       <span class="floating-filter-clear" 
                             *ngIf="hasFilterValue(col, filterInput)"
                             (click)="clearFloatingFilter(col, filterInput)">✕</span>
-                    </ng-container>
+                    </div>
                   </div>
                 </div>
               </ng-container>
@@ -250,16 +259,25 @@
               <div *ngIf="isColumnVisible(col)"
                    class="argent-grid-floating-filter-cell"
                    [style.width.px]="getItemWidth(col)">
-                <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)">
-                  <input #filterInput
-                         class="floating-filter-input"
-                         [type]="getFilterInputType(col)"
-                         [value]="getFloatingFilterValue(col)"
-                         (input)="onFloatingFilterInput($event, col)"
-                         [placeholder]="'Filter...'" />
-                  <span class="floating-filter-clear" 
-                        *ngIf="hasFilterValue(col, filterInput)"
-                        (click)="clearFloatingFilter(col, filterInput)">✕</span>
+                <div class="floating-filter-container" *ngIf="isFloatingFilterEnabled(col)" [class.multi-filter-container]="isMultiFilter(col)">
+                  <button class="floating-filter-btn" 
+                          *ngIf="isSetFilter(col)"
+                          [class.active]="hasSetFilterValue(col)"
+                          (click)="openSetFilter($event, col)">
+                    <span class="filter-label">{{ getFloatingFilterValue(col) || 'All' }}</span>
+                    <span class="filter-count" *ngIf="hasSetFilterValue(col)">🔽 {{ getSetFilterCount(col) }}</span>
+                  </button>
+                  <div class="floating-filter-input-wrapper" *ngIf="!isSetFilter(col) || isMultiFilter(col)">
+                    <input #filterInput
+                           class="floating-filter-input"
+                           [type]="getFilterInputType(col)"
+                           [value]="getFloatingFilterValue(col)"
+                           (input)="onFloatingFilterInput($event, col)"
+                           [placeholder]="'Filter...'" />
+                    <span class="floating-filter-clear" 
+                          *ngIf="hasFilterValue(col, filterInput)"
+                          (click)="clearFloatingFilter(col, filterInput)">✕</span>
+                  </div>
                 </div>
               </div>
             </ng-container>
@@ -325,6 +343,22 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Pagination Panel -->
+  <div class="argent-grid-pagination" *ngIf="isPaginationEnabled()">
+    <div class="pagination-info">
+      <span class="pagination-rows">
+        {{ getPaginationStart() }} - {{ getPaginationEnd() }} of {{ getPaginationTotalRows() }}
+      </span>
+    </div>
+    <div class="pagination-controls">
+      <button class="pagination-btn" [disabled]="isFirstPage()" (click)="paginationGoToFirstPage()" title="First Page">«</button>
+      <button class="pagination-btn" [disabled]="isFirstPage()" (click)="paginationGoToPreviousPage()" title="Previous Page">‹</button>
+      <span class="pagination-page">Page {{ getCurrentPage() + 1 }} of {{ getTotalPages() }}</span>
+      <button class="pagination-btn" [disabled]="isLastPage()" (click)="paginationGoToNextPage()" title="Next Page">›</button>
+      <button class="pagination-btn" [disabled]="isLastPage()" (click)="paginationGoToLastPage()" title="Last Page">»</button>
     </div>
   </div>
 

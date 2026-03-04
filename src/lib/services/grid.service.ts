@@ -59,6 +59,10 @@ export class GridService<TData = any> {
   private pivotColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
   private isPivotMode = false;
 
+  // Pagination state
+  private currentPage = 0;
+  private pageSize = 100;
+
   createApi(
     columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null,
     rowData: TData[] | null,
@@ -71,6 +75,10 @@ export class GridService<TData = any> {
     this.gridId = this.generateGridId();
     this.gridOptions = gridOptions ? { ...gridOptions } : {};
     this.isPivotMode = !!this.gridOptions.pivotMode;
+
+    // Initialize pagination
+    this.pageSize = this.gridOptions.paginationPageSize || 100;
+    this.currentPage = 0;
 
     this.initializeColumns(true);
 
@@ -517,12 +525,33 @@ export class GridService<TData = any> {
     const column = this.columns.get(colId);
     if (column) {
       column.sort = sort;
+
       if (!multiSort) {
+        // Clear other sorts in columns Map
         this.columns.forEach((c) => {
           if (c.colId !== colId) c.sort = null;
         });
+        // Set new single-column sort model
+        this.sortModel = sort ? [{ colId, sort }] : [];
+      } else {
+        // Update multi-sort model
+        const existingIndex = this.sortModel.findIndex((item) => item.colId === colId);
+        if (sort) {
+          if (existingIndex >= 0) {
+            this.sortModel[existingIndex].sort = sort;
+          } else {
+            this.sortModel.push({ colId, sort });
+          }
+        } else {
+          // Remove from model if sort is null
+          if (existingIndex >= 0) {
+            this.sortModel.splice(existingIndex, 1);
+          }
+        }
+        // NOTE: column.sort is already updated above for the current column
       }
-      this.applySorting();
+
+      this.applyFiltering();
       this.gridStateChanged$.next({ type: 'sortChanged' });
     }
   }
@@ -533,6 +562,13 @@ export class GridService<TData = any> {
     if (pinned === 'left' || pinned === true) return 'left';
     if (pinned === 'right') return 'right';
     return false;
+  }
+
+  public getPaginationTotalRows(): number {
+    if (this.groupingDirty) {
+      return this.filteredRowData.length;
+    }
+    return this.flattenGroupedDataWithLevel(this.cachedGroupedData || []).length;
   }
 
   private getRowId(data: TData, index: number): string {
@@ -620,22 +656,59 @@ export class GridService<TData = any> {
       // Sort API
       setSortModel: (model) => {
         this.sortModel = model;
-        this.applySorting();
-        this.applyFiltering(); // Re-filter and re-group after sort
+        // Sync column.sort property
+        this.columns.forEach((col) => {
+          const sortItem = model.find((m) => m.colId === col.colId);
+          col.sort = sortItem ? sortItem.sort : null;
+        });
+        this.applyFiltering(); // Re-filter, re-sort and re-group
         this.gridStateChanged$.next({ type: 'sortChanged' });
       },
       getSortModel: () => [...this.sortModel],
       // onSortChanged handled below
 
       // Pagination API
-      paginationGetPageSize: () => 100,
-      paginationSetPageSize: () => {},
-      paginationGetCurrentPage: () => 0,
-      paginationGetTotalPages: () => 1,
-      paginationGoToFirstPage: () => {},
-      paginationGoToLastPage: () => {},
-      paginationGoToNextPage: () => {},
-      paginationGoToPreviousPage: () => {},
+      paginationGetPageSize: () => this.pageSize,
+      paginationSetPageSize: (size: number) => {
+        this.pageSize = size;
+        this.currentPage = 0; // Reset to first page
+        this.applyFiltering(); // Re-initialize row nodes
+        this.gridStateChanged$.next({ type: 'paginationChanged' });
+      },
+      paginationGetCurrentPage: () => this.currentPage,
+      paginationGetTotalPages: () => {
+        const totalRows = this.groupingDirty
+          ? this.filteredRowData.length
+          : this.flattenGroupedDataWithLevel(this.cachedGroupedData || []).length;
+        return Math.ceil(totalRows / this.pageSize) || 1;
+      },
+      paginationGoToFirstPage: () => {
+        this.currentPage = 0;
+        this.applyFiltering();
+        this.gridStateChanged$.next({ type: 'paginationChanged' });
+      },
+      paginationGoToLastPage: () => {
+        const totalPages = api.paginationGetTotalPages();
+        this.currentPage = Math.max(0, totalPages - 1);
+        this.applyFiltering();
+        this.gridStateChanged$.next({ type: 'paginationChanged' });
+      },
+      paginationGoToNextPage: () => {
+        const totalPages = api.paginationGetTotalPages();
+        if (this.currentPage < totalPages - 1) {
+          this.currentPage++;
+          this.applyFiltering();
+          this.gridStateChanged$.next({ type: 'paginationChanged' });
+        }
+      },
+      paginationGoToPreviousPage: () => {
+        if (this.currentPage > 0) {
+          this.currentPage--;
+          this.applyFiltering();
+          this.gridStateChanged$.next({ type: 'paginationChanged' });
+        }
+      },
+      getPaginationTotalRows: () => this.getPaginationTotalRows(),
 
       // Export API
       exportDataAsCsv: (params) => this.exportAsCsv(params, api),
@@ -1146,8 +1219,7 @@ export class GridService<TData = any> {
       return;
     }
 
-    // Sort rowData based on sort model
-    this.rowData.sort((a, b) => {
+    const sortFn = (a: TData, b: TData) => {
       for (const sortItem of this.sortModel) {
         const column = this.columns.get(sortItem.colId);
         if (!column?.field) continue;
@@ -1162,12 +1234,11 @@ export class GridService<TData = any> {
         }
       }
       return 0;
-    });
+    };
 
-    // Also update filtered data if no filter present
-    if (Object.keys(this.filterModel).length === 0) {
-      this.filteredRowData = [...this.rowData];
-    }
+    // Sort both arrays
+    this.rowData.sort(sortFn);
+    this.filteredRowData.sort(sortFn);
   }
 
   private applyFiltering(): void {
@@ -1191,7 +1262,10 @@ export class GridService<TData = any> {
       });
     }
 
-    // Apply grouping after filtering
+    // Apply sorting to the (filtered) data
+    this.applySorting();
+
+    // Apply grouping after filtering and sorting
     this.applyGrouping();
   }
 
@@ -1536,8 +1610,9 @@ export class GridService<TData = any> {
     // DO NOT CLEAR this.rowNodes - reuse existing nodes to preserve state
     this.displayedRowNodes = [];
     const flattened = this.flattenGroupedDataWithLevel(this.cachedGroupedData || []);
+    const paginatedFlattened = this.getPaginatedData(flattened);
 
-    flattened.forEach((entry, index) => {
+    paginatedFlattened.forEach((entry, index) => {
       const { item, level } = entry;
       let id: string;
       let data: TData;
@@ -1573,7 +1648,7 @@ export class GridService<TData = any> {
         node.rowIndex = index;
         node.displayedRowIndex = index;
         node.firstChild = index === 0;
-        node.lastChild = index === flattened.length - 1;
+        node.lastChild = index === paginatedFlattened.length - 1;
       } else {
         // Create new node only if it doesn't exist
         node = {
@@ -1587,7 +1662,7 @@ export class GridService<TData = any> {
           group: isGroup,
           level,
           firstChild: index === 0,
-          lastChild: index === flattened.length - 1,
+          lastChild: index === paginatedFlattened.length - 1,
           rowIndex: index,
           displayedRowIndex: index,
           setSelected: (selected: boolean, clearSelection: boolean = false) => {
@@ -1648,6 +1723,14 @@ export class GridService<TData = any> {
     const { filterType, type, filter, filterTo } = filterItem;
 
     switch (filterType) {
+      case 'multiFilter':
+        // multiFilter: all sub-filters must pass (AND logic by default in AG Grid for multiFilter)
+        if (!Array.isArray(filterItem.filterModels)) {
+          return true;
+        }
+        return filterItem.filterModels.every((subFilter: FilterModelItem) =>
+          this.matchesFilter(value, subFilter)
+        );
       case 'text':
         return this.matchesTextFilter(String(value), type, filter);
       case 'number':
@@ -1796,6 +1879,16 @@ export class GridService<TData = any> {
     return Boolean(value) === Boolean(filter);
   }
 
+  private getPaginatedData<T>(data: T[]): T[] {
+    if (!this.gridOptions?.pagination) {
+      return data;
+    }
+
+    const start = this.currentPage * this.pageSize;
+    const end = start + this.pageSize;
+    return data.slice(start, end);
+  }
+
   private initializeRowNodesFromFilteredData(): void {
     this.groupingDirty = true;
     // DO NOT CLEAR this.rowNodes - reuse existing nodes
@@ -1819,7 +1912,8 @@ export class GridService<TData = any> {
       }
     });
 
-    const orderedRows = [...pinnedTopRows, ...normalRows, ...pinnedBottomRows];
+    const paginatedNormalRows = this.getPaginatedData(normalRows);
+    const orderedRows = [...pinnedTopRows, ...paginatedNormalRows, ...pinnedBottomRows];
 
     orderedRows.forEach((data, index) => {
       const id = this.getRowId(data, index);

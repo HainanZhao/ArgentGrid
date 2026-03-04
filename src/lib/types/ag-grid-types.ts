@@ -699,6 +699,8 @@ export interface GridApi<TData = any> {
   paginationGoToNextPage(): void;
   /** Goes to the previous page. */
   paginationGoToPreviousPage(): void;
+  /** Returns the total number of rows across all pages. */
+  getPaginationTotalRows(): number;
 
   // === EXPORT API ===
   /** Exports the grid data as CSV. */
@@ -920,6 +922,7 @@ export interface FilterModelItem {
   filter?: any;
   filterTo?: any;
   values?: any[];
+  filterModels?: FilterModelItem[];
 }
 
 export interface SortModelItem {
