@@ -1908,7 +1908,7 @@ export class ArgentGridComponent<TData = any>
         });
       }
 
-      // === FIX Issue #1: Call getValidationErrors BEFORE mutating data ===
+      // Validate before mutating data (avoid partial changes on validation failure)
       // First check if there are validation errors with the parsed value
       let hasValidationErrors = false;
       if (typeof colDef.getValidationErrors === 'function') {
@@ -1929,8 +1929,8 @@ export class ArgentGridComponent<TData = any>
       if (hasValidationErrors) {
         const invalidMode = this.gridOptions?.invalidEditValueMode ?? 'legacy';
 
-        // FIX Issue #2: For 'none' mode with validation errors, we don't apply changes
-        // FIX Issue #3: Always clear isEditing even when validation fails
+        // In .none. mode, exit without applying transaction
+        // Ensure isEditing is cleared on validation failure
         if (invalidMode === 'none') {
           // 'none' mode: exit without applying transaction (don't save invalid data)
           this.isEditing = false;
@@ -1970,7 +1970,7 @@ export class ArgentGridComponent<TData = any>
       if (valueSetterResult === false) {
         const invalidMode = this.gridOptions?.invalidEditValueMode ?? 'legacy';
 
-        // FIX Issue #2 & #3: Handle all invalid cases properly
+        // Handle invalid value in all modes
         if (invalidMode === 'none') {
           this.isEditing = false;
           this.editingRowNode = null;
@@ -1986,7 +1986,7 @@ export class ArgentGridComponent<TData = any>
           this.editorInputRef.nativeElement.classList.add('ag-cell-editor-invalid');
         }
 
-        // FIX Issue #3: Make sure isEditing is cleared here too
+        // Clear isEditing on valueSetter failure
         // But we want to keep editing active so user can fix the value
         // Actually for valueSetter failure, let's keep editing active like original
         this._cdr.detectChanges();
