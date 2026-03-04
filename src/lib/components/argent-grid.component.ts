@@ -1908,6 +1908,48 @@ export class ArgentGridComponent<TData = any>
         });
       }
 
+      // Validate before mutating data (avoid partial changes on validation failure)
+      // First check if there are validation errors with the parsed value
+      let hasValidationErrors = false;
+      if (typeof colDef.getValidationErrors === 'function') {
+        this.validationErrors = colDef.getValidationErrors({
+          value: parsedValue,
+          data: rowNode.data, // Use old data for validation (not yet mutated)
+          node: rowNode,
+          colDef,
+          api: this.gridApi,
+        });
+
+        if (this.validationErrors && this.validationErrors.length > 0) {
+          hasValidationErrors = true;
+        }
+      }
+
+      // Handle validation errors BEFORE any data mutation
+      if (hasValidationErrors) {
+        const invalidMode = this.gridOptions?.invalidEditValueMode ?? 'legacy';
+
+        // In .none. mode, exit without applying transaction
+        // Ensure isEditing is cleared on validation failure
+        if (invalidMode === 'none') {
+          // 'none' mode: exit without applying transaction (don't save invalid data)
+          this.isEditing = false;
+          this.editingRowNode = null;
+          this.editingColDef = null;
+          this.validationErrors = null;
+          this._cdr.detectChanges();
+          return;
+        }
+
+        // For other modes: show error but keep editing active
+        if (this.editorInputRef) {
+          this.editorInputRef.nativeElement.classList.add('ag-cell-editor-invalid');
+        }
+        this._cdr.detectChanges();
+        return;
+      }
+
+      // Only now apply the valueSetter or default assignment
       let valueSetterResult = true;
 
       if (typeof colDef.valueSetter === 'function') {
@@ -1924,8 +1966,11 @@ export class ArgentGridComponent<TData = any>
         (rowNode.data as any)[field] = parsedValue;
       }
 
+      // Handle valueSetter failure
       if (valueSetterResult === false) {
         const invalidMode = this.gridOptions?.invalidEditValueMode ?? 'legacy';
+
+        // Handle invalid value in all modes
         if (invalidMode === 'none') {
           this.isEditing = false;
           this.editingRowNode = null;
@@ -1941,39 +1986,14 @@ export class ArgentGridComponent<TData = any>
           this.editorInputRef.nativeElement.classList.add('ag-cell-editor-invalid');
         }
 
+        // Clear isEditing on valueSetter failure
+        // But we want to keep editing active so user can fix the value
+        // Actually for valueSetter failure, let's keep editing active like original
         this._cdr.detectChanges();
         return;
       }
 
-      if (typeof colDef.getValidationErrors === 'function') {
-        this.validationErrors = colDef.getValidationErrors({
-          value: parsedValue,
-          data: rowNode.data,
-          node: rowNode,
-          colDef,
-          api: this.gridApi,
-        });
-
-        if (this.validationErrors && this.validationErrors.length > 0) {
-          const invalidMode = this.gridOptions?.invalidEditValueMode ?? 'legacy';
-          if (invalidMode === 'none') {
-            this.isEditing = false;
-            this.editingRowNode = null;
-            this.editingColDef = null;
-            this.validationErrors = null;
-            this._cdr.detectChanges();
-            return;
-          }
-
-          if (this.editorInputRef) {
-            this.editorInputRef.nativeElement.classList.add('ag-cell-editor-invalid');
-          }
-
-          this._cdr.detectChanges();
-          return;
-        }
-      }
-
+      // Apply transaction to update grid
       this.gridApi.applyTransaction({
         update: [rowNode.data],
       });
