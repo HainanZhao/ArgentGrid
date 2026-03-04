@@ -1,4 +1,4 @@
-<div class="argent-grid-container" [style.height]="height" [style.width]="width" (click)="onContainerClick($event)">
+<div class="argent-grid-container" [style.height]="height" [style.width]="width" (click)="onContainerClick($event)" tabindex="0">
   <div class="argent-grid-main-layout" cdkDropListGroup>
     <div class="argent-grid-content-area">
       <!-- Row Group Panel -->
@@ -364,7 +364,22 @@
 
   <!-- Overlay for loading/no rows -->
   <div class="argent-grid-overlay" *ngIf="showOverlay">
-    <ng-content select="[overlay]"></ng-content>
+    <div class="argent-grid-overlay-wrapper">
+      <div class="argent-grid-overlay-content" [class.loading]="activeOverlay === 'loading'">
+        <ng-container *ngIf="activeOverlay === 'loading' && !gridOptions?.loadingOverlayComponent">
+          <div class="ag-overlay-loading-wrapper">
+            <span class="ag-overlay-loading-center">Loading...</span>
+          </div>
+        </ng-container>
+        <ng-container *ngIf="activeOverlay === 'noRows' && !gridOptions?.noRowsOverlayComponent">
+          <span class="ag-overlay-no-rows-center">No Rows To Show</span>
+        </ng-container>
+        <div *ngIf="activeOverlay && (gridOptions?.loadingOverlayComponent || gridOptions?.noRowsOverlayComponent)" 
+             [innerHTML]="getOverlayContent()">
+        </div>
+        <ng-content select="[overlay]"></ng-content>
+      </div>
+    </div>
   </div>
 
   <!-- Menus and Popups -->

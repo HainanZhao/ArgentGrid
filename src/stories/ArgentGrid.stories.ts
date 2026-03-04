@@ -357,3 +357,54 @@ export const MultiColumnSorting: Story = {
     },
   },
 };
+
+export const Overlays: Story = {
+  render: (args) => ({
+    props: {
+      ...args,
+      generateStaticData, // Pass the helper to props
+    },
+    template: `
+      <div style="display: flex; flex-direction: column; gap: 10px; height: 100%; padding: 10px; box-sizing: border-box;">
+        <div style="display: flex; gap: 10px; margin-bottom: 5px;">
+          <button (click)="grid.getApi().showLoadingOverlay()" style="padding: 5px 10px; cursor: pointer;">Show Loading Overlay</button>
+          <button (click)="grid.getApi().showNoRowsOverlay()" style="padding: 5px 10px; cursor: pointer;">Show No Rows Overlay</button>
+          <button (click)="grid.getApi().hideOverlay()" style="padding: 5px 10px; cursor: pointer;">Hide Overlays</button>
+          <button (click)="grid.getApi().setRowData([])" style="padding: 5px 10px; cursor: pointer;">Clear Row Data (Auto No Rows)</button>
+          <button (click)="grid.getApi().setRowData(generateStaticData(50))" style="padding: 5px 10px; cursor: pointer;">Reset Row Data</button>
+        </div>
+        <argent-grid 
+          #grid
+          style="flex: 1;"
+          [columnDefs]="columnDefs" 
+          [rowData]="rowData" 
+          [height]="height" 
+          [width]="width"
+          [theme]="theme"
+          [gridOptions]="gridOptions">
+        </argent-grid>
+      </div>
+    `,
+  }),
+  args: {
+    columnDefs: [
+      { field: 'id', headerName: 'ID', width: 80 },
+      { field: 'name', headerName: 'Name', width: 200 },
+      { field: 'department', headerName: 'Department', width: 180 },
+    ],
+    rowData: generateStaticData(50),
+    height: 'calc(100vh - 100px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Overlay API**: Manually trigger built-in overlays via the API. ' +
+          'Includes **Loading** and **No Rows** overlays. ' +
+          'The grid also automatically shows the "No Rows" overlay when data is empty.',
+      },
+    },
+  },
+};

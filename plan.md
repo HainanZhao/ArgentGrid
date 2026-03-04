@@ -102,12 +102,12 @@ ArgentGrid now has feature parity with AG Grid Enterprise for core features, and
 - [x] **Tooltips**: High-performance tooltips for cells and headers.
   - [x] Hover detection on Canvas coordinates.
   - [x] Support for `tooltipField` and `tooltipValueGetter` in `ColDef`.
-- [ ] **Quick Filter**: High-performance global search across all visible columns.
+- [x] **Quick Filter**: High-performance global search across all visible columns.
 - [x] **Multi-Column Sorting**: Support for sorting by multiple columns (Shift+Click).
-- [ ] **Enhanced Clipboard Support**: Copy range selection with headers (TSV format) and paste support.
+- [x] **Enhanced Clipboard Support**: Copy range selection with headers (TSV format) and paste support.
 - [ ] **Floating Filters**: Inline filter row below column headers for immediate access.
 - [x] **Client-side Pagination**: Efficiently manage and navigate large flat datasets.
-- [ ] **Overlay API**: Built-in and customizable "Loading" and "No Rows" overlays.
+- [x] **Overlay API**: Built-in and customizable "Loading" and "No Rows" overlays.
 
 - [ ] **Auto-Height & Dynamic Row Height**: Row heights that adapt to cell content.
 - [x] **Multi-Filter Support**: Combine Set Filter with Text/Number filters.

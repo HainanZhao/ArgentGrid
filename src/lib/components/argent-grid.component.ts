@@ -6,6 +6,7 @@ import {
   Component,
   ElementRef,
   EventEmitter,
+  HostListener,
   Inject,
   Input,
   type OnChanges,
@@ -67,6 +68,7 @@ export class ArgentGridComponent<TData = any>
 
   canvasHeight = 0;
   showOverlay = false;
+  activeOverlay: 'loading' | 'noRows' | null = null;
   private viewportHeight = 500;
 
   /**
@@ -459,6 +461,9 @@ export class ArgentGridComponent<TData = any>
         } else {
           this.canvasRenderer?.render();
         }
+      } else if (event.type === 'overlayChanged') {
+        this.activeOverlay = event.value;
+        this.showOverlay = !!this.activeOverlay;
       } else {
         // All other state changes (sort, filter, rangeSelection, etc.) go through the
         // rAF-coalesced scheduler. Multiple rapid events (e.g. rangeSelectionChanged
@@ -483,7 +488,7 @@ export class ArgentGridComponent<TData = any>
     }
 
     // Update overlay state
-    this.showOverlay = !this.rowData || this.rowData.length === 0;
+    this.updateAutomaticOverlay();
 
     // Update selection state
     this.updateSelectionState();
@@ -499,7 +504,7 @@ export class ArgentGridComponent<TData = any>
       }
     }
 
-    this.showOverlay = !newData || newData.length === 0;
+    this.updateAutomaticOverlay();
     this.updateSelectionState();
 
     // Trigger change detection with OnPush
@@ -532,6 +537,39 @@ export class ArgentGridComponent<TData = any>
       this.canvasRenderer?.render();
     }
     this._cdr.detectChanges();
+  }
+
+  updateAutomaticOverlay(): void {
+    if (this.gridOptions?.loading) {
+      this.activeOverlay = 'loading';
+      this.showOverlay = true;
+      return;
+    }
+
+    if (!this.rowData || this.rowData.length === 0) {
+      if (!this.gridOptions?.suppressNoRowsOverlay) {
+        this.activeOverlay = 'noRows';
+        this.showOverlay = true;
+      } else {
+        this.showOverlay = false;
+      }
+    } else {
+      this.showOverlay = !!this.activeOverlay;
+    }
+  }
+
+  getOverlayType(): 'loading' | 'noRows' | null {
+    return this.activeOverlay;
+  }
+
+  getOverlayContent(): string {
+    if (this.activeOverlay === 'loading') {
+      return this.gridOptions?.loadingOverlayComponent || 'Loading...';
+    }
+    if (this.activeOverlay === 'noRows') {
+      return this.gridOptions?.noRowsOverlayComponent || 'No Rows To Show';
+    }
+    return '';
   }
 
   getHeaderRows(): (Column | ColumnGroup)[][] {
@@ -1076,6 +1114,26 @@ export class ArgentGridComponent<TData = any>
       if (!target.closest('.argent-grid-cell-editor')) {
         this.stopEditing(true);
       }
+    }
+
+    // Ensure container is focused for keyboard shortcuts
+    this._elementRef.nativeElement.focus();
+  }
+
+  @HostListener('keydown', ['$event'])
+  handleKeyDown(event: KeyboardEvent): void {
+    if (this.isEditing) return;
+
+    const isCtrlOrMeta = event.ctrlKey || event.metaKey;
+
+    if (isCtrlOrMeta && event.key.toLowerCase() === 'c') {
+      // Copy
+      this.gridApi.copyToClipboard();
+      event.preventDefault();
+    } else if (isCtrlOrMeta && event.key.toLowerCase() === 'v') {
+      // Paste
+      this.gridApi.pasteFromClipboard();
+      event.preventDefault();
     }
   }
 

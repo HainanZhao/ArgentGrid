@@ -2,6 +2,7 @@ import { moveItemInArray } from '@angular/cdk/drag-drop';
 import { Injectable } from '@angular/core';
 import { Workbook } from 'exceljs';
 import { Subject } from 'rxjs';
+import { getCellValue, getFormattedValue } from '../rendering/render/cells';
 import {
   CellRange,
   ColDef,
@@ -63,6 +64,9 @@ export class GridService<TData = any> {
   private currentPage = 0;
   private pageSize = 100;
 
+  // Quick Filter state
+  private quickFilterText = '';
+
   createApi(
     columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null,
     rowData: TData[] | null,
@@ -79,6 +83,9 @@ export class GridService<TData = any> {
     // Initialize pagination
     this.pageSize = this.gridOptions.paginationPageSize || 100;
     this.currentPage = 0;
+
+    // Initialize Quick Filter
+    this.quickFilterText = this.gridOptions.quickFilterText || '';
 
     this.initializeColumns(true);
 
@@ -502,6 +509,37 @@ export class GridService<TData = any> {
     }
   }
 
+  public getColumnDefForColumn(
+    column: Column | ColumnGroup | ColDef<TData> | ColGroupDef<TData>
+  ): ColDef<TData> | ColGroupDef<TData> | null {
+    if (!this.columnDefs) return null;
+
+    const colId =
+      (column as any).colId || (column as any).field?.toString() || (column as any).groupId;
+    if (!colId) return null;
+
+    const defaultColDef = this.gridOptions?.defaultColDef || {};
+
+    const findDef = (
+      defs: (ColDef<TData> | ColGroupDef<TData>)[]
+    ): ColDef<TData> | ColGroupDef<TData> | null => {
+      for (const def of defs) {
+        if ('children' in def) {
+          if (def.groupId === colId) return { ...defaultColDef, ...def };
+          const found = findDef(def.children);
+          if (found) return found;
+        } else {
+          if (def.colId === colId || def.field?.toString() === colId) {
+            return { ...defaultColDef, ...def };
+          }
+        }
+      }
+      return null;
+    };
+
+    return findDef(this.columnDefs);
+  }
+
   public setColumnVisible(col: string | Column, visible: boolean): void {
     const colId = typeof col === 'string' ? col : col.colId;
     const column = this.columns.get(colId);
@@ -651,7 +689,12 @@ export class GridService<TData = any> {
         this.applyFiltering();
         this.gridStateChanged$.next({ type: 'filterChanged' });
       },
-      isFilterPresent: () => Object.keys(this.filterModel).length > 0,
+      isFilterPresent: () => Object.keys(this.filterModel).length > 0 || !!this.quickFilterText,
+      setQuickFilter: (text: string) => {
+        this.quickFilterText = text;
+        this.applyFiltering();
+        this.gridStateChanged$.next({ type: 'filterChanged' });
+      },
 
       // Sort API
       setSortModel: (model) => {
@@ -718,25 +761,144 @@ export class GridService<TData = any> {
       // Clipboard API
       copyToClipboard: () => {
         try {
-          const selectedData = api.getSelectedRows().map((node) => node.data);
-          const csv = selectedData.map((row) => Object.values(row as any).join(',')).join('\n');
-          if (typeof navigator !== 'undefined' && (navigator as any).clipboard) {
-            (navigator as any).clipboard.writeText(csv);
+          let text = '';
+          const ranges = api.getCellRanges();
+
+          if (ranges && ranges.length > 0) {
+            // Copy Range Selection (TSV format)
+            const range = ranges[0];
+            const startRow = Math.min(range.startRow, range.endRow);
+            const endRow = Math.max(range.startRow, range.endRow);
+            const cols = range.columns;
+
+            // Include headers for range selection (standard spreadsheet behavior)
+            text += cols.map((c) => c.headerName || c.field || '').join('\t') + '\n';
+
+            for (let i = startRow; i <= endRow; i++) {
+              const node = api.getDisplayedRowAtIndex(i);
+              if (!node || node.group) continue;
+
+              const rowValues = cols.map((col) => {
+                const colDef = this.getColumnDefForColumn(col);
+                const val = getCellValue(col, colDef as any, node, api);
+                return getFormattedValue(val, colDef as any, node.data, node, api);
+              });
+              text += rowValues.join('\t') + '\n';
+            }
+          } else {
+            // Copy Selected Rows (TSV format)
+            const selectedNodes = api.getSelectedNodes();
+            if (selectedNodes.length > 0) {
+              const visibleCols = Array.from(this.columns.values()).filter(
+                (c) => c.visible && c.colId !== 'ag-Grid-SelectionColumn'
+              );
+
+              // Headers
+              text += visibleCols.map((c) => c.headerName || c.field || '').join('\t') + '\n';
+
+              text += selectedNodes
+                .map((node) => {
+                  return visibleCols
+                    .map((col) => {
+                      const colDef = this.getColumnDefForColumn(col);
+                      const val = getCellValue(col, colDef as any, node, api);
+                      return getFormattedValue(val, colDef as any, node.data, node, api);
+                    })
+                    .join('\t');
+                })
+                .join('\n');
+            }
+          }
+
+          if (text && typeof navigator !== 'undefined' && (navigator as any).clipboard) {
+            (navigator as any).clipboard.writeText(text);
           }
         } catch (_e) {
-          // Ignore clipboard errors
+          console.error('Clipboard copy error', _e);
         }
       },
       cutToClipboard: () => {
         api.copyToClipboard();
       },
-      pasteFromClipboard: () => {
+      pasteFromClipboard: async () => {
         try {
-          if (typeof navigator !== 'undefined' && (navigator as any).clipboard) {
-            (navigator as any).clipboard.readText();
+          if (typeof navigator === 'undefined' || !(navigator as any).clipboard) return;
+
+          const text = await (navigator as any).clipboard.readText();
+          if (!text) return;
+
+          // Parse TSV (Tab Separated Values)
+          const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+          if (lines.length === 0) return;
+
+          const visibleCols = Array.from(this.columns.values()).filter(
+            (c) => c.visible && c.field && c.colId !== 'ag-Grid-SelectionColumn'
+          );
+
+          // Heuristic to detect headers: if more than 50% of first line matches visible col names/fields
+          const firstLineValues = lines[0].split('\t');
+          const headerMatchCount = firstLineValues.filter((val) =>
+            visibleCols.some(
+              (col) =>
+                col.headerName?.toLowerCase() === val.toLowerCase() ||
+                col.field?.toLowerCase() === val.toLowerCase()
+            )
+          ).length;
+
+          const hasHeaders =
+            headerMatchCount > firstLineValues.length / 2 && firstLineValues.length > 1;
+          const dataLines = hasHeaders ? lines.slice(1) : lines;
+
+          // Determine start position
+          let startRow = 0;
+          let startColId = '';
+
+          const ranges = api.getCellRanges();
+          if (ranges && ranges.length > 0) {
+            const range = ranges[0];
+            startRow = Math.min(range.startRow, range.endRow);
+            startColId = range.columns[0]?.colId;
           }
+
+          if (!startColId && visibleCols.length > 0) {
+            startColId = visibleCols[0].colId;
+          }
+
+          if (!startColId) return;
+
+          const startColIndex = visibleCols.findIndex((c) => c.colId === startColId);
+          if (startColIndex === -1) return;
+
+          // Apply data to rowData (modifying objects in-place)
+          dataLines.forEach((line, i) => {
+            const rowIndex = startRow + i;
+            const node = api.getDisplayedRowAtIndex(rowIndex);
+            if (!node || node.group) return;
+
+            const values = line.split('\t');
+            values.forEach((value, j) => {
+              const colIndex = startColIndex + j;
+              const col = visibleCols[colIndex];
+              if (!col || !col.field) return;
+
+              // Basic type conversion support (naive)
+              const field = col.field as string;
+              const originalValue = (node.data as any)[field];
+
+              if (typeof originalValue === 'number') {
+                (node.data as any)[field] = Number(value.replace(/[^0-9.-]+/g, ''));
+              } else if (typeof originalValue === 'boolean') {
+                (node.data as any)[field] = value.toLowerCase() === 'true';
+              } else {
+                (node.data as any)[field] = value;
+              }
+            });
+          });
+
+          this.applyFiltering(); // Re-sort/re-filter/re-group
+          this.gridStateChanged$.next({ type: 'rowDataChanged' });
         } catch (_e) {
-          // Ignore clipboard errors
+          console.error('Clipboard paste error', _e);
         }
       },
 
@@ -1118,6 +1280,17 @@ export class GridService<TData = any> {
       forEachNodeAfterFilterAndSort: (callback) => {
         this.displayedRowNodes.forEach((node) => callback(node));
       },
+
+      // Overlay API
+      showLoadingOverlay: () => {
+        this.gridStateChanged$.next({ type: 'overlayChanged', value: 'loading' });
+      },
+      showNoRowsOverlay: () => {
+        this.gridStateChanged$.next({ type: 'overlayChanged', value: 'noRows' });
+      },
+      hideOverlay: () => {
+        this.gridStateChanged$.next({ type: 'overlayChanged', value: null });
+      },
     });
 
     return api;
@@ -1243,6 +1416,8 @@ export class GridService<TData = any> {
 
   private applyFiltering(): void {
     this.groupingDirty = true;
+
+    // 1. Initial Filtering (Column Filters)
     if (Object.keys(this.filterModel).length === 0) {
       // No filters, use all data
       this.filteredRowData = [...this.rowData];
@@ -1258,6 +1433,22 @@ export class GridService<TData = any> {
 
           const value = (row as any)[column.field];
           return this.matchesFilter(value, filterItem);
+        });
+      });
+    }
+
+    // 2. Quick Filter (Global Search)
+    if (this.quickFilterText) {
+      const searchText = this.quickFilterText.toLowerCase();
+      const visibleColumns = Array.from(this.columns.values()).filter((c) => c.visible);
+
+      this.filteredRowData = this.filteredRowData.filter((row) => {
+        // Match if ANY visible column contains the text
+        return visibleColumns.some((col) => {
+          if (!col.field) return false;
+          const value = (row as any)[col.field];
+          if (value === null || value === undefined) return false;
+          return String(value).toLowerCase().includes(searchText);
         });
       });
     }

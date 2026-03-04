@@ -342,3 +342,56 @@ export const MultiFilter: Story = {
     },
   },
 };
+
+export const QuickFilter: Story = {
+  render: (args) => ({
+    props: args,
+    template: `
+      <div style="display: flex; flex-direction: column; gap: 10px; height: 100%;">
+        <div style="padding: 10px; background: #f8f9fa; border-bottom: 1px solid #ddd;">
+          <input 
+            #quickFilterInput
+            type="text" 
+            placeholder="Search all columns..." 
+            style="padding: 8px; width: 300px; border: 1px solid #ccc; border-radius: 4px;"
+            (input)="grid.getApi().setQuickFilter(quickFilterInput.value)"
+          />
+          <span style="margin-left: 10px; color: #666; font-size: 13px;">
+            Type here to filter Name, Dept, Role, and Location simultaneously.
+          </span>
+        </div>
+        <argent-grid 
+          #grid
+          [columnDefs]="columnDefs" 
+          [rowData]="rowData" 
+          [height]="height" 
+          [width]="width"
+          [theme]="theme">
+        </argent-grid>
+      </div>
+    `,
+  }),
+  args: {
+    columnDefs: [
+      { field: 'id', headerName: 'ID', width: 80 },
+      { field: 'name', headerName: 'Name', width: 200 },
+      { field: 'department', headerName: 'Department', width: 180, valueFormatter: departmentValueFormatter },
+      { field: 'role', headerName: 'Role', width: 250, valueFormatter: roleValueFormatter },
+      { field: 'location', headerName: 'Location', width: 150, valueFormatter: locationValueFormatter },
+    ],
+    rowData: generateStaticData(100),
+    height: 'calc(100vh - 120px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Quick Filter**: A global search that works across all visible columns. ' +
+          'This demo shows an external search input using `api.setQuickFilter(text)`. ' +
+          'The search is case-insensitive and updates the grid in real-time.',
+      },
+    },
+  },
+};

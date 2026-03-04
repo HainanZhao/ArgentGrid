@@ -360,6 +360,68 @@ describe('GridService', () => {
     });
   });
 
+  describe('Quick Filter', () => {
+    let quickApi: GridApi<TestData>;
+    const quickData: TestData[] = [
+      { id: 1, name: 'Apple', age: 10, email: 'fruit@example.com' },
+      { id: 2, name: 'Banana', age: 20, email: 'yellow@example.com' },
+      { id: 3, name: 'Cherry', age: 30, email: 'red@example.com' },
+    ];
+
+    beforeEach(() => {
+      quickApi = service.createApi(testColumnDefs, quickData);
+    });
+
+    it('should find text across multiple columns', () => {
+      // Matches 'Apple' in name
+      quickApi.setQuickFilter('apple');
+      expect(quickApi.getDisplayedRowCount()).toBe(1);
+      expect(quickApi.getDisplayedRowAtIndex(0)?.data.name).toBe('Apple');
+
+      // Matches 'example.com' in email (all rows)
+      quickApi.setQuickFilter('example.com');
+      expect(quickApi.getDisplayedRowCount()).toBe(3);
+
+      // Matches 'yellow' in email (Banana)
+      quickApi.setQuickFilter('yellow');
+      expect(quickApi.getDisplayedRowCount()).toBe(1);
+      expect(quickApi.getDisplayedRowAtIndex(0)?.data.name).toBe('Banana');
+    });
+
+    it('should be case-insensitive', () => {
+      quickApi.setQuickFilter('CHERRY');
+      expect(quickApi.getDisplayedRowCount()).toBe(1);
+      expect(quickApi.getDisplayedRowAtIndex(0)?.data.name).toBe('Cherry');
+    });
+
+    it('should combine with column filters (AND logic)', () => {
+      // Column filter for age > 15 (Banana and Cherry)
+      quickApi.setFilterModel({
+        age: { filterType: 'number', type: 'greaterThan', filter: 15 },
+      });
+      expect(quickApi.getDisplayedRowCount()).toBe(2);
+
+      // Quick filter for 'banana' (Only Banana should match both)
+      quickApi.setQuickFilter('banana');
+      expect(quickApi.getDisplayedRowCount()).toBe(1);
+      expect(quickApi.getDisplayedRowAtIndex(0)?.data.name).toBe('Banana');
+    });
+
+    it('should only search visible columns', () => {
+      // Hide 'email' column
+      quickApi.setColumnVisible('email', false);
+
+      // Search for 'yellow' (only exists in hidden email column)
+      quickApi.setQuickFilter('yellow');
+      expect(quickApi.getDisplayedRowCount()).toBe(0);
+
+      // Show it again
+      quickApi.setColumnVisible('email', true);
+      quickApi.setQuickFilter('yellow');
+      expect(quickApi.getDisplayedRowCount()).toBe(1);
+    });
+  });
+
   // Row Grouping Tests
   it('should group rows by column', () => {
     const groupData: any[] = [
@@ -1364,36 +1426,134 @@ describe('GridService', () => {
   });
 
   describe('Clipboard Operations', () => {
-    it('should copy to clipboard', () => {
+    it('should copy range selection to clipboard in TSV format', () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       // Mock navigator.clipboard
       const originalClipboard = navigator.clipboard;
+      const writeSpy = vi.fn().mockResolvedValue(undefined);
       Object.assign(navigator, {
-        clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+        clipboard: { writeText: writeSpy },
+      });
+
+      // Select a range: First 2 rows of 'name' and 'age' columns
+      const nameCol = api.getColumn('name')!;
+      const ageCol = api.getColumn('age')!;
+      api.addCellRange({
+        startRow: 0,
+        endRow: 1,
+        columns: [nameCol, ageCol],
+        startColumn: 'name',
+        endColumn: 'age',
       });
 
       api.copyToClipboard();
 
-      expect(navigator.clipboard.writeText).toHaveBeenCalled();
+      // Check if it contains headers and the data
+      const callArgs = writeSpy.mock.calls[0][0];
+      expect(callArgs).toContain('Name\tAge');
+      expect(callArgs).toContain('John Doe\t30');
+      expect(callArgs).toContain('Jane Smith\t25');
+      expect(callArgs).toContain('\t'); // TSV
 
       // Restore
       Object.assign(navigator, { clipboard: originalClipboard });
     });
 
-    it('should paste from clipboard', () => {
+    it('should paste TSV data into grid', async () => {
       const api = service.createApi(testColumnDefs, [...testRowData]);
       // Mock navigator.clipboard
       const originalClipboard = navigator.clipboard;
       Object.assign(navigator, {
-        clipboard: { readText: vi.fn().mockResolvedValue('test\tpaste') },
+        clipboard: { readText: vi.fn().mockResolvedValue('Pasted Name\t42') },
       });
 
-      api.pasteFromClipboard();
+      // Select start cell
+      const nameCol = api.getColumn('name')!;
+      api.addCellRange({
+        startRow: 0,
+        endRow: 0,
+        columns: [nameCol],
+        startColumn: 'name',
+        endColumn: 'name',
+      });
 
-      expect(navigator.clipboard.readText).toHaveBeenCalled();
+      await api.pasteFromClipboard();
+
+      const firstRow = api.getDisplayedRowAtIndex(0)?.data;
+      expect(firstRow.name).toBe('Pasted Name');
+      expect(firstRow.age).toBe(42);
 
       // Restore
       Object.assign(navigator, { clipboard: originalClipboard });
+    });
+
+    it('should ignore headers when pasting if heuristic matches', async () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const originalClipboard = navigator.clipboard;
+      // TSV with header row
+      const tsvData = 'Name\tAge\nHeuristic Name\t33';
+      Object.assign(navigator, {
+        clipboard: { readText: vi.fn().mockResolvedValue(tsvData) },
+      });
+
+      const nameCol = api.getColumn('name')!;
+      api.addCellRange({
+        startRow: 0,
+        endRow: 0,
+        columns: [nameCol],
+        startColumn: 'name',
+        endColumn: 'name',
+      });
+
+      await api.pasteFromClipboard();
+
+      const firstRow = api.getDisplayedRowAtIndex(0)?.data;
+      // Should have skipped the header "Name" and pasted "Heuristic Name"
+      expect(firstRow.name).toBe('Heuristic Name');
+      expect(firstRow.age).toBe(33);
+
+      Object.assign(navigator, { clipboard: originalClipboard });
+    });
+  });
+
+  describe('Overlay API', () => {
+    it('should emit overlayChanged event when showLoadingOverlay is called', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const stateChangeSpy = vi.fn();
+      service.gridStateChanged$.subscribe(stateChangeSpy);
+
+      api.showLoadingOverlay();
+
+      expect(stateChangeSpy).toHaveBeenCalledWith({
+        type: 'overlayChanged',
+        value: 'loading',
+      });
+    });
+
+    it('should emit overlayChanged event when showNoRowsOverlay is called', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const stateChangeSpy = vi.fn();
+      service.gridStateChanged$.subscribe(stateChangeSpy);
+
+      api.showNoRowsOverlay();
+
+      expect(stateChangeSpy).toHaveBeenCalledWith({
+        type: 'overlayChanged',
+        value: 'noRows',
+      });
+    });
+
+    it('should emit overlayChanged event when hideOverlay is called', () => {
+      const api = service.createApi(testColumnDefs, [...testRowData]);
+      const stateChangeSpy = vi.fn();
+      service.gridStateChanged$.subscribe(stateChangeSpy);
+
+      api.hideOverlay();
+
+      expect(stateChangeSpy).toHaveBeenCalledWith({
+        type: 'overlayChanged',
+        value: null,
+      });
     });
   });
 
