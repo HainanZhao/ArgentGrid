@@ -146,4 +146,175 @@ describe('ArgentGridComponent - Context Menu', () => {
       expect(component.hasRangeSelection()).toBe(true);
     });
   });
+
+  describe('stopEditing - Validation', () => {
+    const mockRowNode = {
+      data: { name: 'John', age: 25 },
+      displayedRowIndex: 0,
+    } as any;
+
+    const mockColDef = {
+      field: 'age',
+      colId: 'age',
+    };
+
+    const mockEditorInput = {
+      nativeElement: {
+        value: '30',
+        classList: {
+          add: vi.fn(),
+          remove: vi.fn(),
+        },
+      },
+    };
+
+    beforeEach(() => {
+      component.isEditing = true;
+      component.editingRowNode = mockRowNode;
+      component.editingColDef = mockColDef as any;
+      component.editorInputRef = mockEditorInput as any;
+      mockCdr.detectChanges.mockClear();
+      mockEditorInput.nativeElement.classList.add.mockClear();
+      mockEditorInput.nativeElement.classList.remove.mockClear();
+    });
+
+    it('should keep editing active when valueSetter returns false (legacy mode)', () => {
+      component.gridOptions = { invalidEditValueMode: 'legacy' } as any;
+      const valueSetter = vi.fn(() => false);
+      component.editingColDef = { ...mockColDef, valueSetter } as any;
+
+      component.stopEditing(true);
+
+      expect(valueSetter).toHaveBeenCalled();
+      expect(component.isEditing).toBe(true);
+      expect(mockEditorInput.nativeElement.classList.add).toHaveBeenCalledWith(
+        'ag-cell-editor-invalid'
+      );
+      expect(mockCdr.detectChanges).toHaveBeenCalled();
+    });
+
+    it('should keep editing active when valueSetter returns false (topScroll mode)', () => {
+      component.gridOptions = { invalidEditValueMode: 'topScroll' } as any;
+      const valueSetter = vi.fn(() => false);
+      component.editingColDef = { ...mockColDef, valueSetter } as any;
+
+      component.stopEditing(true);
+
+      expect(component.isEditing).toBe(true);
+      expect(mockEditorInput.nativeElement.classList.add).toHaveBeenCalledWith(
+        'ag-cell-editor-invalid'
+      );
+    });
+
+    it('should exit edit mode when valueSetter returns false (none mode)', () => {
+      component.gridOptions = { invalidEditValueMode: 'none' } as any;
+      const valueSetter = vi.fn(() => false);
+      component.editingColDef = { ...mockColDef, valueSetter } as any;
+
+      component.stopEditing(true);
+
+      expect(component.isEditing).toBe(false);
+      expect(component.editingRowNode).toBe(null);
+      expect(component.editingColDef).toBe(null);
+    });
+
+    it('should keep editing active when getValidationErrors returns errors (legacy mode)', () => {
+      component.gridOptions = { invalidEditValueMode: 'legacy' } as any;
+      const getValidationErrors = vi.fn(() => ['Invalid value']);
+      component.editingColDef = { ...mockColDef, getValidationErrors } as any;
+
+      component.stopEditing(true);
+
+      expect(getValidationErrors).toHaveBeenCalled();
+      expect(component.isEditing).toBe(true);
+      expect(mockEditorInput.nativeElement.classList.add).toHaveBeenCalledWith(
+        'ag-cell-editor-invalid'
+      );
+    });
+
+    it('should exit edit mode when getValidationErrors returns errors (none mode)', () => {
+      component.gridOptions = { invalidEditValueMode: 'none' } as any;
+      const getValidationErrors = vi.fn(() => ['Invalid value']);
+      component.editingColDef = { ...mockColDef, getValidationErrors } as any;
+
+      component.stopEditing(true);
+
+      expect(component.isEditing).toBe(false);
+      expect(component.editingRowNode).toBe(null);
+    });
+
+    it('should proceed normally when valueSetter returns true', () => {
+      component.gridOptions = {} as any;
+      const valueSetter = vi.fn(() => true);
+      const applyTransaction = vi.fn();
+      component.gridApi = { applyTransaction } as any;
+      component.editingColDef = { ...mockColDef, valueSetter } as any;
+
+      component.stopEditing(true);
+
+      expect(valueSetter).toHaveBeenCalled();
+      expect(applyTransaction).toHaveBeenCalledWith({ update: [mockRowNode.data] });
+      expect(component.isEditing).toBe(false);
+    });
+
+    it('should proceed normally when getValidationErrors returns null', () => {
+      component.gridOptions = {} as any;
+      const getValidationErrors = vi.fn(() => null);
+      const applyTransaction = vi.fn();
+      component.gridApi = { applyTransaction } as any;
+      component.editingColDef = { ...mockColDef, getValidationErrors } as any;
+
+      component.stopEditing(true);
+
+      expect(getValidationErrors).toHaveBeenCalled();
+      expect(applyTransaction).toHaveBeenCalledWith({ update: [mockRowNode.data] });
+      expect(component.isEditing).toBe(false);
+    });
+
+    it('should remove invalid class at start of stopEditing', () => {
+      component.gridOptions = { invalidEditValueMode: 'legacy' } as any;
+      const valueSetter = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+      const applyTransaction = vi.fn();
+      component.gridApi = { applyTransaction } as any;
+      component.editingColDef = { ...mockColDef, valueSetter } as any;
+
+      component.stopEditing(true);
+      expect(component.isEditing).toBe(true);
+      expect(mockEditorInput.nativeElement.classList.remove).toHaveBeenCalledWith(
+        'ag-cell-editor-invalid'
+      );
+
+      component.stopEditing(true);
+      expect(component.isEditing).toBe(false);
+    });
+
+    it('should use default legacy mode when invalidEditValueMode is not set', () => {
+      component.gridOptions = {} as any;
+      const valueSetter = vi.fn(() => false);
+      component.editingColDef = { ...mockColDef, valueSetter } as any;
+
+      component.stopEditing(true);
+
+      expect(component.isEditing).toBe(true);
+      expect(mockEditorInput.nativeElement.classList.add).toHaveBeenCalledWith(
+        'ag-cell-editor-invalid'
+      );
+    });
+
+    it('should do nothing when not editing', () => {
+      component.isEditing = false;
+
+      component.stopEditing(true);
+
+      expect(mockCdr.detectChanges).not.toHaveBeenCalled();
+    });
+
+    it('should do nothing when save is false', () => {
+      component.isEditing = true;
+
+      component.stopEditing(false);
+
+      expect(component.isEditing).toBe(false);
+    });
+  });
 });
