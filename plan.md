@@ -71,7 +71,7 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
   - [x] Arrow keys (clamp at edges), Tab/Shift-Tab (wrap rows), Home/End (row), Ctrl+Home/End (grid), PageUp/Down, Enter-to-edit, type-to-edit. Dispatch in `handleKeyDown` via shared `computeNextCell` helper (reused by editor-Tab `moveToNextCell`).
   - [x] Focused-cell state in `GridService` (`setFocusedCell`/`getFocusedCell`), mirroring the `cellRanges` pattern; visible focus ring drawn on canvas (`CanvasRenderer.drawFocusedCell` via `drawCellSelectionBorder`).
   - [x] `ensureIndexVisible` (auto/top/bottom) + `ensureColumnVisible`/`scrollToColumn` (center-column scroll math; pinned cols are no-ops). Click-to-focus via `onCellClick`.
-  - [x] Validated: `grid.service.spec.ts` (Focus + Scroll API) + `e2e/keyboard-nav.spec.ts` (8 cases) against the `Features/ArgentGrid/KeyboardNavigation` story.
+  - [x] Validated: `grid.service.spec.ts` (Focus + Scroll API) + Storybook interaction (`play`) tests on the `Components/ArgentGrid` `KeyboardNavigation` / `KeyboardEditing` stories (run via `@storybook/test-runner`).
   - [ ] Follow-ups: cell-to-cell range extension on Shift+Arrow; focus traversal into pinned rows (top/bottom); damage-tracked partial repaint of focus ring (currently full `render()`).
 - [ ] **T1.3 — Named cell-renderer registry**
   - `cellRenderer: 'myRenderer'` resolution; registration API. Enables T1.1 and AG Grid API compatibility.
