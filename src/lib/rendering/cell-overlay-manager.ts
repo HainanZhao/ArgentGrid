@@ -59,6 +59,13 @@ export class CellOverlayManager<TData = any> {
   /** Soft cap on idle instances kept per component type. */
   private static readonly MAX_FREE_PER_TYPE = 30;
 
+  /**
+   * When set (`rowIndex::colId`), that one cell is force-hidden — used while its
+   * inline editor is open so the live editor input owns the cell, not the
+   * component. Survives re-syncs until {@link showAll} clears it.
+   */
+  private hiddenKey: string | null = null;
+
   constructor(deps: CellOverlayDeps<TData>) {
     this.container = deps.container;
     this.gridApi = deps.gridApi;
@@ -122,6 +129,24 @@ export class CellOverlayManager<TData = any> {
       for (const entry of entries) entry.componentRef.destroy();
     }
     this.free.clear();
+  }
+
+  /**
+   * Force-hide the overlay cell at `rowIndex::colId` (e.g. while its inline
+   * editor is open). Stays hidden across re-syncs until {@link showAll}. A no-op
+   * for cells without an overlay (plain canvas cells).
+   */
+  hideCell(rowIndex: number, colId: string): void {
+    this.hiddenKey = `${rowIndex}::${colId}`;
+    const entry = this.active.get(this.hiddenKey);
+    if (entry) entry.hostEl.style.display = 'none';
+  }
+
+  /** Reveal whatever {@link hideCell} hid. */
+  showAll(): void {
+    if (this.hiddenKey === null) return;
+    this.hiddenKey = null;
+    for (const entry of this.active.values()) entry.hostEl.style.display = '';
   }
 
   // --------------------------------------------------------------------------
@@ -213,6 +238,8 @@ export class CellOverlayManager<TData = any> {
     }
 
     this.position(entry.hostEl, x, y, width, height);
+    // Respect an active hide (e.g. this cell is being edited) across re-syncs.
+    entry.hostEl.style.display = key === this.hiddenKey ? 'none' : '';
   }
 
   /** A pooled or fresh instance of `componentType`. */

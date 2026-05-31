@@ -2129,6 +2129,9 @@ export class ArgentGridComponent<TData = any>
 
     this.isEditing = true;
 
+    // Hide the component overlay for this cell (if any) so the editor owns it.
+    this.cellOverlayManager?.hideCell(rowIndex, colId);
+
     // Focus input after view update
     setTimeout(() => {
       if (this.editorInputRef) {
@@ -2202,6 +2205,7 @@ export class ArgentGridComponent<TData = any>
           this.editingRowNode = null;
           this.editingColDef = null;
           this.validationErrors = null;
+          this.cellOverlayManager?.showAll();
           this._cdr.detectChanges();
           return;
         }
@@ -2241,6 +2245,7 @@ export class ArgentGridComponent<TData = any>
           this.editingRowNode = null;
           this.editingColDef = null;
           this.validationErrors = null;
+          this.cellOverlayManager?.showAll();
           this._cdr.detectChanges();
           return;
         }
@@ -2283,6 +2288,7 @@ export class ArgentGridComponent<TData = any>
     this.editingRowNode = null;
     this.editingColDef = null;
     this.validationErrors = null;
+    this.cellOverlayManager?.showAll();
     this._cdr.detectChanges();
   }
 
