@@ -4,7 +4,14 @@
  * Handles drawing of individual cells with prep/draw cycle optimization.
  */
 
-import { ColDef, Column, GridApi, IRowNode } from '../../types/ag-grid-types';
+import type { Type } from '@angular/core';
+import {
+  ColDef,
+  Column,
+  GridApi,
+  type ICellRendererParams,
+  IRowNode,
+} from '../../types/ag-grid-types';
 import {
   drawBadge,
   drawButton,
@@ -15,6 +22,50 @@ import {
 } from './primitives';
 import { getFontFromTheme } from './theme';
 import { CellDrawContext, ColumnPrepResult, GridTheme } from './types';
+
+/** True when `x` is an Angular component class (has a compiled component def). */
+export function isAngularComponent(x: any): boolean {
+  return typeof x === 'function' && !!x?.ɵcmp;
+}
+
+/**
+ * True when a column *may* route any of its cells through the DOM/Angular
+ * overlay layer (a component `cellRenderer`, or a `cellRendererSelector` that
+ * could pick one). Column-level test used by the overlay to decide which
+ * columns to consider; the actual per-cell decision is {@link resolveCellComponent}.
+ */
+export function usesComponentRenderer<TData = any>(colDef: ColDef<TData> | null): boolean {
+  if (!colDef) return false;
+  return (
+    isAngularComponent(colDef.cellRenderer) || typeof colDef.cellRendererSelector === 'function'
+  );
+}
+
+/**
+ * Resolve the Angular component a *specific* cell routes to, or null when the
+ * cell is plain (canvas-drawn). This is the single source of truth shared by
+ * the canvas (to decide what NOT to paint) and the overlay (to decide what to
+ * mount), so the two never disagree and leave a cell blank or double-drawn.
+ *
+ * Honors `cellRendererSelector`: a selector that returns a non-Angular
+ * component (a built-in string renderer) or `undefined` (use the default)
+ * resolves to null, so the canvas keeps drawing that cell.
+ */
+export function resolveCellComponent<TData = any>(
+  colDef: ColDef<TData> | null,
+  params: ICellRendererParams<TData>
+): Type<any> | null {
+  if (!colDef) return null;
+  if (typeof colDef.cellRendererSelector === 'function') {
+    try {
+      const selected = colDef.cellRendererSelector(params);
+      return isAngularComponent(selected?.component) ? (selected?.component as Type<any>) : null;
+    } catch {
+      return null;
+    }
+  }
+  return isAngularComponent(colDef.cellRenderer) ? (colDef.cellRenderer as Type<any>) : null;
+}
 
 /**
  * Get value from object using path (e.g. 'pivotData.NY.salary')
@@ -126,6 +177,27 @@ export function drawCellContent<TData = any>(
 ): void {
   const { x, y, width, height, value, formattedValue, theme, colDef, rowNode, api } = context;
 
+  // 0. Cells that route to an Angular component are painted by the DOM overlay
+  // layer — the canvas only provides the (already-drawn) background, so skip
+  // all content. Resolved per-cell (not per-column) so a cellRendererSelector
+  // that falls back to a non-component branch is still drawn here, not left
+  // blank. Only pay the param build when the column could route to a component.
+  if (colDef && (colDef.cellRendererSelector || isAngularComponent(colDef.cellRenderer))) {
+    const overlayParams: ICellRendererParams<TData> = {
+      value,
+      valueFormatted: formattedValue,
+      data: rowNode?.data,
+      node: rowNode,
+      rowIndex: context.rowIndex,
+      colDef,
+      column: context.column,
+      api,
+    };
+    if (resolveCellComponent(colDef, overlayParams)) {
+      return;
+    }
+  }
+
   // 1. Check for dedicated checkbox renderer or internal selection column
   if (colDef?.cellRenderer === 'checkbox' || context.column.colId === 'ag-Grid-SelectionColumn') {
     const isChecked = colDef?.cellRenderer === 'checkbox' ? !!value : !!rowNode?.selected;
@@ -181,8 +253,17 @@ export function drawCellContent<TData = any>(
   // 7. Default: Text rendering
   if (!formattedValue) return;
 
+  // On the auto-group column, reserve room at the left for the tree indent +
+  // expand/collapse indicator (drawn by drawGroupIndicators) so the group/leaf
+  // label doesn't render on top of the toggle.
+  const isAutoGroupCol = context.column.colId === 'ag-Grid-AutoColumn';
+  const groupOffset =
+    isAutoGroupCol && rowNode && (rowNode.group || rowNode.level > 0)
+      ? groupIndicatorAreaWidth(rowNode.level, theme)
+      : 0;
+
   // Calculate text position with padding
-  const textX = x + theme.cellPadding;
+  const textX = x + theme.cellPadding + groupOffset;
   const textY = y + height / 2; // Centered vertically
 
   // Handle cellStyle color
@@ -205,8 +286,8 @@ export function drawCellContent<TData = any>(
   ctx.fillStyle = textColor;
   ctx.textBaseline = 'middle';
 
-  // Truncate text if needed
-  const maxWidth = width - theme.cellPadding * 2;
+  // Truncate text if needed (the group indent/indicator eats into the width).
+  const maxWidth = width - theme.cellPadding * 2 - groupOffset;
   const truncatedText = colDef?.suppressEllipsis
     ? formattedValue
     : truncateText(ctx, formattedValue, maxWidth);
@@ -214,6 +295,17 @@ export function drawCellContent<TData = any>(
   if (truncatedText) {
     ctx.fillText(truncatedText, Math.floor(textX), Math.floor(textY));
   }
+}
+
+/**
+ * Width (px) reserved at the left content edge of an auto-group cell for the
+ * tree indent plus the expand/collapse indicator (and a small gap). Group
+ * labels must start after this so they don't overlap the toggle, and it is the
+ * single source of truth shared with the click hit-test in CanvasRenderer so
+ * the drawn toggle, the label, and the clickable area all stay aligned.
+ */
+export function groupIndicatorAreaWidth(level: number, theme: GridTheme): number {
+  return level * theme.groupIndentWidth + theme.groupIndicatorSize + 3;
 }
 
 /**
@@ -375,8 +467,13 @@ export function getFormattedValue<TData = any>(
     return '';
   }
 
-  // Use custom cellRenderer if provided
-  if (colDef && typeof colDef.cellRenderer === 'function') {
+  // Use custom cellRenderer if provided (string-returning function only — an
+  // Angular component class is also a function but is handled by the overlay).
+  if (
+    colDef &&
+    typeof colDef.cellRenderer === 'function' &&
+    !isAngularComponent(colDef.cellRenderer)
+  ) {
     try {
       const result = colDef.cellRenderer({
         value,

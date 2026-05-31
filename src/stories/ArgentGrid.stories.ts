@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/angular';
 import { moduleMetadata } from '@storybook/angular';
+import { expect, userEvent, waitFor } from '@storybook/test';
 import { ArgentGridComponent, ArgentGridModule, themeQuartz } from '../public-api';
 import {
   departmentValueFormatter,
@@ -355,6 +356,199 @@ export const MultiColumnSorting: Story = {
           'For example, sort by Department first, then by Role.',
       },
     },
+  },
+};
+
+// --- Keyboard navigation stories + interaction (play) tests -----------------
+// The focused cell lives on the canvas (not the DOM), so the stories stash the
+// GridApi on window and the play functions read focus state through it.
+
+interface KbGridApi {
+  setFocusedCell(rowIndex: number, colKey: string): void;
+  getFocusedCell(): { rowIndex: number; column?: { colId: string } } | null;
+}
+
+const getKbGridApi = (): KbGridApi | undefined =>
+  (window as unknown as { __gridApi?: KbGridApi }).__gridApi;
+
+const focusedColId = () => getKbGridApi()?.getFocusedCell()?.column?.colId;
+const focusedRow = () => getKbGridApi()?.getFocusedCell()?.rowIndex;
+
+/**
+ * Wait for the grid to be ready and give its container DOM keyboard focus.
+ * Presence checks assert on booleans, never on the GridApi/Element objects —
+ * the Interactions instrumenter serializes expect() args over the channel via
+ * telejson, which throws on rich class instances (`e.replace is not a function`).
+ */
+async function focusGrid(canvasElement: HTMLElement): Promise<HTMLElement> {
+  await waitFor(() => expect(Boolean(getKbGridApi())).toBe(true));
+  const container = canvasElement.querySelector<HTMLElement>('.argent-grid-container');
+  await expect(Boolean(container)).toBe(true);
+  container?.focus();
+  return container as HTMLElement;
+}
+
+const keyboardRender = (args: Record<string, unknown>) => ({
+  props: {
+    ...args,
+    onGridReady: (gridApi: unknown) => {
+      (window as unknown as { __gridApi: unknown }).__gridApi = gridApi;
+    },
+  },
+  template: `
+    <argent-grid
+      [columnDefs]="columnDefs"
+      [rowData]="rowData"
+      [height]="height"
+      [width]="width"
+      [theme]="theme"
+      (gridReady)="onGridReady($event)">
+    </argent-grid>
+  `,
+});
+
+const keyboardArgs = {
+  columnDefs: [
+    { field: 'id', headerName: 'ID', width: 80, editable: true },
+    { field: 'name', headerName: 'Name', width: 200, editable: true },
+    { field: 'department', headerName: 'Department', width: 180, editable: true },
+    { field: 'role', headerName: 'Role', width: 200, editable: true },
+    { field: 'salary', headerName: 'Salary', width: 120, editable: true },
+  ],
+  rowData: generateStaticData(200),
+  height: 'calc(100vh - 60px)',
+  width: '100%',
+  theme: themeQuartz,
+};
+
+export const KeyboardNavigation: Story = {
+  render: keyboardRender,
+  args: keyboardArgs,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Keyboard navigation**: click a cell or use the arrow keys, Tab/Shift-Tab, Home/End ' +
+          '(Ctrl+Home / Ctrl+End for grid edges), PageUp/PageDown to move the focus ring. ' +
+          'Enter or any printable key starts editing the focused cell. ' +
+          'The **Interactions** panel runs an automated test of the movement keys.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const root = canvasElement as HTMLElement;
+    const container = await focusGrid(root);
+    const api = getKbGridApi();
+    if (!api) throw new Error('GridApi not available');
+
+    // Clicking a cell moves keyboard focus to it. (Dispatch with explicit
+    // coordinates — the focused cell is hit-tested from the canvas, not the DOM.)
+    const canvas = root.querySelector<HTMLCanvasElement>('canvas.argent-grid-canvas');
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      canvas.dispatchEvent(
+        new MouseEvent('click', { bubbles: true, clientX: rect.left + 100, clientY: rect.top + 60 })
+      );
+      // Assert with a primitive (the colId string) — never pass the rich Column
+      // object into an instrumented expect(); the Interactions channel serializes
+      // call args via telejson and can't round-trip class instances.
+      await expect(focusedColId()).toBeTruthy();
+      container.focus();
+    }
+
+    // PageDown scrolls the viewport down and advances the focused row.
+    const viewport = root.querySelector<HTMLElement>('.argent-grid-viewport');
+    api.setFocusedCell(0, 'name');
+    const beforeScroll = viewport?.scrollTop ?? 0;
+    await userEvent.keyboard('{PageDown}');
+    await waitFor(() => expect(viewport?.scrollTop ?? 0).toBeGreaterThan(beforeScroll));
+    await expect(focusedRow() ?? 0).toBeGreaterThan(0);
+
+    // Arrow keys move the focused cell.
+    api.setFocusedCell(5, 'name');
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(focusedRow()).toBe(6);
+    await expect(focusedColId()).toBe('name');
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(focusedColId()).toBe('department');
+    await userEvent.keyboard('{ArrowUp}');
+    await expect(focusedRow()).toBe(5);
+    await userEvent.keyboard('{ArrowLeft}');
+    await expect(focusedColId()).toBe('name');
+
+    // Arrows clamp at the grid edges (no wrap).
+    api.setFocusedCell(0, 'id');
+    await userEvent.keyboard('{ArrowUp}{ArrowLeft}');
+    await expect(focusedRow()).toBe(0);
+    await expect(focusedColId()).toBe('id');
+
+    // Tab wraps to the next row at the last column; Shift+Tab wraps back.
+    api.setFocusedCell(0, 'salary');
+    await userEvent.keyboard('{Tab}');
+    await expect(focusedRow()).toBe(1);
+    await expect(focusedColId()).toBe('id');
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    await expect(focusedRow()).toBe(0);
+    await expect(focusedColId()).toBe('salary');
+
+    // Home/End move within the row; Ctrl+Home/End to grid corners.
+    api.setFocusedCell(5, 'department');
+    await userEvent.keyboard('{Home}');
+    await expect(focusedColId()).toBe('id');
+    await userEvent.keyboard('{End}');
+    await expect(focusedColId()).toBe('salary');
+    await userEvent.keyboard('{Control>}{Home}{/Control}');
+    await expect(focusedRow()).toBe(0);
+    await expect(focusedColId()).toBe('id');
+    await userEvent.keyboard('{Control>}{End}{/Control}');
+    await expect(focusedRow()).toBe(199);
+    await expect(focusedColId()).toBe('salary');
+  },
+};
+
+export const KeyboardEditing: Story = {
+  render: keyboardRender,
+  args: keyboardArgs,
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Edit entry from the keyboard**: with a cell focused, press **Enter** to open the ' +
+          'editor, or type any printable character to start editing seeded with that character. ' +
+          'The **Interactions** panel runs an automated test of both paths.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const root = canvasElement as HTMLElement;
+    const container = await focusGrid(root);
+    const api = getKbGridApi();
+    if (!api) throw new Error('GridApi not available');
+
+    // Enter opens the editor on the focused cell.
+    api.setFocusedCell(2, 'name');
+    await userEvent.keyboard('{Enter}');
+    const editor = await waitFor(() => {
+      const el = root.querySelector<HTMLInputElement>('.argent-grid-cell-editor input');
+      if (!el) throw new Error('editor not open');
+      return el;
+    });
+    await expect(editor).toBeVisible();
+
+    // Close the editor and return focus to the grid.
+    await userEvent.keyboard('{Escape}');
+    container.focus();
+
+    // Type-to-edit: a printable character opens the editor seeded with it.
+    api.setFocusedCell(3, 'name');
+    await userEvent.keyboard('Z');
+    const typed = await waitFor(() => {
+      const el = root.querySelector<HTMLInputElement>('.argent-grid-cell-editor input');
+      if (!el) throw new Error('editor not open');
+      return el;
+    });
+    await expect(typed).toHaveValue('Z');
+    await userEvent.keyboard('{Escape}');
   },
 };
 

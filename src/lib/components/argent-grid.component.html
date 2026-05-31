@@ -294,11 +294,16 @@
       <!-- Canvas Layer for Data Viewport -->
       <div class="argent-grid-viewport" #viewport>
         <div class="argent-grid-scroll-spacer" [style.height.px]="totalHeight" [style.width.px]="totalWidth"></div>
+        <!-- DOM/Angular cell renderer overlay (recycled, visible cells only).
+             Placed before the canvas so it shares the sticky top-left origin;
+             lifted above the canvas via z-index. -->
+        <div class="argent-grid-cell-overlay-layer" #cellOverlayLayer></div>
+
         <canvas #gridCanvas class="argent-grid-canvas"
                 (contextmenu)="onCanvasContextMenu($event)"
                 (mousemove)="onCanvasMouseMove($event)"
                 (mouseleave)="onCanvasMouseLeave()"></canvas>
-        
+
         <!-- Cell Editor Overlay -->
         <div class="argent-grid-cell-editor" 
              *ngIf="isEditing"

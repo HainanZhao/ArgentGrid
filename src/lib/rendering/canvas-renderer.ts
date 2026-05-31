@@ -1,4 +1,4 @@
-import { Column, GridApi, IRowNode } from '../types/ag-grid-types';
+import { Column, GridApi, IRowNode, OverlayLayout } from '../types/ag-grid-types';
 import { LiveDataHandler } from './live-data-handler';
 // Import new rendering modules from the index
 import {
@@ -6,6 +6,7 @@ import {
   // Theme
   DEFAULT_THEME,
   drawCell,
+  drawCellSelectionBorder,
   drawColumnLines,
   drawRangeSelectionBorder,
   // Lines
@@ -23,6 +24,7 @@ import {
   getRowAtY,
   getValueByPath,
   getVisibleRowRange,
+  groupIndicatorAreaWidth,
   isColumnVisible,
   mergeTheme,
   PositionedColumn,
@@ -59,6 +61,9 @@ export class CanvasRenderer<TData = any> {
   get currentScrollLeft(): number {
     return this.scrollLeft;
   }
+  get currentViewportHeight(): number {
+    return this.viewportHeight;
+  }
 
   private animationFrameId: number | null = null;
   // When a render is already in-flight and another is requested, coalesce it here
@@ -87,6 +92,13 @@ export class CanvasRenderer<TData = any> {
   // Column prep results cache
   private columnPreps: Map<string, ColumnPrepResult<TData>> = new Map();
 
+  /**
+   * Set when a repaint is caused by a data/column change (vs scroll/resize) so
+   * the overlay layer knows to re-bind visible component cells. Consumed and
+   * reset by the next render. Starts true so the first paint binds.
+   */
+  private overlayDataDirty = true;
+
   // Event listener references for cleanup
   private scrollListener?: (e: Event) => void;
   private resizeListener?: () => void;
@@ -100,9 +112,17 @@ export class CanvasRenderer<TData = any> {
   // Callbacks
   onCellDoubleClick?: (rowIndex: number, colId: string) => void;
   onRowClick?: (rowIndex: number, event: MouseEvent) => void;
+  /** Fired on a left-click that resolves to a cell, with the resolved colId (for focus). */
+  onCellClick?: (rowIndex: number, colId: string) => void;
   onMouseDown?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
   onMouseMove?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
   onMouseUp?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
+  /**
+   * Fired at the end of every paint with the current layout so a DOM
+   * cell-overlay layer can stay in lockstep with the canvas. Runs inside the
+   * rAF render callback — must not trigger another synchronous render.
+   */
+  onAfterRender?: (layout: OverlayLayout) => void;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -153,22 +173,27 @@ export class CanvasRenderer<TData = any> {
   }
 
   addRowData(data: TData, immediate = false): void {
+    this.overlayDataDirty = true;
     this.liveDataHandler.addRowData(data, immediate, () => this.renderFrame());
   }
 
   flushUpdateBuffer(): void {
+    this.overlayDataDirty = true;
     this.liveDataHandler.flushUpdateBuffer(() => this.renderFrame());
   }
 
   markRowDirty(rowIndex: number): void {
+    this.overlayDataDirty = true;
     this.liveDataHandler.markRowDirty(rowIndex);
   }
 
   updateRowById(id: string, updates: Partial<TData>): boolean {
+    this.overlayDataDirty = true;
     return this.liveDataHandler.updateRowById(id, updates);
   }
 
   removeRowById(id: string): boolean {
+    this.overlayDataDirty = true;
     return this.liveDataHandler.removeRowById(id);
   }
 
@@ -332,6 +357,20 @@ export class CanvasRenderer<TData = any> {
   }
 
   render(): void {
+    // The public render() entry point is used for data/column changes (sort,
+    // filter, edit, transaction, theme); flag it so overlay cells re-bind.
+    this.overlayDataDirty = true;
+    this.damageTracker.markAllDirty();
+    this.scheduleRender();
+  }
+
+  /**
+   * Repaint the canvas WITHOUT flagging a data change. Use for view-only
+   * changes such as moving the keyboard-focus ring: the overlay then only
+   * repositions visible cells instead of re-binding (change-detecting) all of
+   * them, so holding an arrow key doesn't trigger a per-keystroke CD storm.
+   */
+  repaint(): void {
     this.damageTracker.markAllDirty();
     this.scheduleRender();
   }
@@ -384,6 +423,10 @@ export class CanvasRenderer<TData = any> {
     // Skip paint entirely if nothing has been marked dirty.
     if (!this.damageTracker.hasDamage()) return;
 
+    // Consume the data-change flag for this frame (reset for the next).
+    const dataChanged = this.overlayDataDirty;
+    this.overlayDataDirty = false;
+
     const startTime = performance.now();
     const width = this.viewportWidth || this.canvas.clientWidth;
     const height = this.viewportHeight || this.canvas.clientHeight;
@@ -402,6 +445,8 @@ export class CanvasRenderer<TData = any> {
     if (totalRows === 0) {
       this.damageTracker.clear();
       this.lastRenderDuration = performance.now() - startTime;
+      // Clear any overlay cells left over from a previous non-empty render.
+      this.emitAfterRender(0, 0, [], dataChanged);
       return;
     }
 
@@ -460,10 +505,40 @@ export class CanvasRenderer<TData = any> {
     // Draw range selections
     this.drawRangeSelections(positionedColumns, leftWidth, rightWidth, width);
 
+    // Draw the keyboard-focus ring on top of everything else
+    this.drawFocusedCell(positionedColumns);
+
     // Clear damage
     this.damageTracker.clear();
 
     this.lastRenderDuration = performance.now() - startTime;
+
+    // Notify the DOM cell-overlay layer with the geometry of this frame.
+    this.emitAfterRender(startRow, endRow, positionedColumns, dataChanged);
+  }
+
+  /** Build the OverlayLayout snapshot and notify any listener. */
+  private emitAfterRender(
+    startRow: number,
+    endRow: number,
+    positionedColumns: PositionedColumn[],
+    dataChanged: boolean
+  ): void {
+    if (!this.onAfterRender) return;
+    this.onAfterRender({
+      startRow,
+      endRow,
+      scrollTop: this.scrollTop,
+      rowHeight: this.theme.rowHeight,
+      dataChanged,
+      columns: positionedColumns.map((p) => ({
+        colId: p.column.colId,
+        x: p.x,
+        width: p.width,
+        isPinned: p.isPinned,
+        pinSide: p.pinSide,
+      })),
+    });
   }
 
   private drawRangeSelections(
@@ -509,6 +584,40 @@ export class CanvasRenderer<TData = any> {
         }
       );
     }
+  }
+
+  /**
+   * Top (in content coordinates, pre-scroll) of a row, honoring variable row
+   * heights via the API's cumulative model and falling back to a flat height.
+   */
+  private rowTopFor(rowIndex: number): number {
+    return typeof this.gridApi.getRowY === 'function'
+      ? this.gridApi.getRowY(rowIndex)
+      : rowIndex * this.theme.rowHeight;
+  }
+
+  /** Height of a specific row, honoring per-row heights when present. */
+  private rowHeightFor(rowIndex: number): number {
+    return this.gridApi.getDisplayedRowAtIndex(rowIndex)?.rowHeight || this.theme.rowHeight;
+  }
+
+  /** Draw the keyboard-focus ring around the currently focused cell, if any. */
+  private drawFocusedCell(positionedColumns: PositionedColumn[]): void {
+    const focused = this.gridApi.getFocusedCell();
+    if (!focused || !focused.column) return;
+
+    const rowCount = this.gridApi.getDisplayedRowCount();
+    if (focused.rowIndex < 0 || focused.rowIndex >= rowCount) return;
+
+    // Off-screen horizontally (center column scrolled out of view) → nothing to draw.
+    const pc = positionedColumns.find((p) => p.column.colId === focused.column!.colId);
+    if (!pc) return;
+
+    // Use the cumulative row model (not a flat rowHeight) so the ring lines up
+    // with the canvas rows and the DOM cell overlay under variable row heights.
+    const y = this.rowTopFor(focused.rowIndex) - this.scrollTop;
+    const height = this.rowHeightFor(focused.rowIndex);
+    drawCellSelectionBorder(this.ctx, pc.x, y, pc.width, height, '#2196f3');
   }
 
   private renderRow(
@@ -797,7 +906,9 @@ export class CanvasRenderer<TData = any> {
           textX += clickedCol.width;
         }
 
-        const indicatorAreaEnd = textX + indent + this.theme.groupIndicatorSize + 3;
+        // Shared geometry with the label offset in drawCellContent so the
+        // clickable toggle area matches where the indicator is actually drawn.
+        const indicatorAreaEnd = textX + groupIndicatorAreaWidth(rowNode.level, this.theme);
 
         if (x >= textX + indent && x < indicatorAreaEnd) {
           this.gridApi.setRowNodeExpanded(rowNode, !rowNode.expanded);
@@ -806,6 +917,10 @@ export class CanvasRenderer<TData = any> {
           return;
         }
       }
+    }
+
+    if (clickedCol && this.onCellClick) {
+      this.onCellClick(rowIndex, clickedCol.colId);
     }
 
     if (this.onRowClick) {
@@ -870,6 +985,71 @@ export class CanvasRenderer<TData = any> {
     this.scrollToRow(0);
   }
 
+  /**
+   * Scroll vertically so the given row is in view.
+   * `auto` only scrolls when the row is off-screen; `top`/`bottom` align the edge.
+   */
+  ensureIndexVisible(rowIndex: number, position: 'top' | 'bottom' | 'auto' = 'auto'): void {
+    const container = this.canvas.parentElement;
+    if (!container) return;
+
+    // Honor variable row heights so the target row is actually brought into
+    // view (a flat rowHeight scrolls to the wrong offset under variable heights).
+    const rowTop = this.rowTopFor(rowIndex);
+    const rowBottom = rowTop + this.rowHeightFor(rowIndex);
+    const viewHeight = this.viewportHeight || container.clientHeight;
+    const viewTop = this.scrollTop;
+    const viewBottom = this.scrollTop + viewHeight;
+
+    let newTop = this.scrollTop;
+    if (position === 'top') {
+      newTop = rowTop;
+    } else if (position === 'bottom') {
+      newTop = rowBottom - viewHeight;
+    } else {
+      if (rowTop < viewTop) newTop = rowTop;
+      else if (rowBottom > viewBottom) newTop = rowBottom - viewHeight;
+      else return; // already fully visible
+    }
+
+    newTop = Math.max(0, newTop);
+    if (newTop === this.scrollTop) return;
+    container.scrollTop = newTop;
+    this.scrollTop = newTop;
+    this.damageTracker.markAllDirty();
+    this.scheduleRender();
+  }
+
+  /**
+   * Scroll horizontally so the given (center) column is in view. Pinned columns
+   * are always visible, so this is a no-op for them.
+   */
+  scrollToColumn(colId: string): void {
+    const container = this.canvas.parentElement;
+    if (!container) return;
+
+    const columns = this.getVisibleColumns();
+    const col = columns.find((c) => c.colId === colId);
+    if (!col || col.pinned) return;
+
+    const { left: leftWidth, right: rightWidth } = getPinnedWidths(columns);
+    const centerViewport =
+      (this.viewportWidth || container.clientWidth) - this.scrollbarWidth - leftWidth - rightWidth;
+    const colStart = getCenterColumnOffset(col, columns);
+    const colEnd = colStart + col.width;
+
+    let newLeft = this.scrollLeft;
+    if (colStart < this.scrollLeft) newLeft = colStart;
+    else if (colEnd > this.scrollLeft + centerViewport) newLeft = colEnd - centerViewport;
+
+    newLeft = Math.max(0, newLeft);
+    if (newLeft === this.scrollLeft) return;
+    container.scrollLeft = newLeft;
+    this.scrollLeft = newLeft;
+    this.damageTracker.markAllDirty();
+    this.scheduleRender();
+  }
+
   scrollToBottom(): void {
     const container = this.canvas.parentElement;
     if (!container) return;
@@ -888,6 +1068,7 @@ export class CanvasRenderer<TData = any> {
    * Mark a specific cell as dirty
    */
   invalidateCell(colIndex: number, rowIndex: number): void {
+    this.overlayDataDirty = true;
     this.damageTracker.markCellDirty(colIndex, rowIndex);
     this.scheduleRender();
   }
@@ -896,6 +1077,7 @@ export class CanvasRenderer<TData = any> {
    * Mark a row as dirty
    */
   invalidateRow(rowIndex: number): void {
+    this.overlayDataDirty = true;
     this.damageTracker.markRowDirty(rowIndex);
     this.scheduleRender();
   }
@@ -904,6 +1086,7 @@ export class CanvasRenderer<TData = any> {
    * Mark entire grid as dirty
    */
   invalidateAll(): void {
+    this.overlayDataDirty = true;
     this.damageTracker.markAllDirty();
     this.scheduleRender();
   }

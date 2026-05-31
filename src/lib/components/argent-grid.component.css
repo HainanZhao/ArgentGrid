@@ -460,6 +460,26 @@
   left: 0;
 }
 
+/* DOM/Angular cell renderer overlay layer.
+   Sticky like the canvas so it stays pinned to the viewport while the spacer
+   scrolls. pointer-events:none lets the canvas keep receiving mouse events
+   everywhere except over an actual component cell (which re-enables them). */
+.argent-grid-cell-overlay-layer {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0; /* take no flow space; children overflow over the sticky canvas */
+  overflow: visible;
+  pointer-events: none;
+  /* Sit above the canvas even though it comes first in the DOM. */
+  z-index: 1;
+}
+
+/* NOTE: host cells (.argent-grid-cell-overlay-host) are created dynamically and
+   never carry this component's view-encapsulation attribute, so their critical
+   layout/pointer styles are set inline in CellOverlayManager, not here. */
+
 /* ============================================================================
    CELL EDITOR VALIDATION
    ============================================================================ */

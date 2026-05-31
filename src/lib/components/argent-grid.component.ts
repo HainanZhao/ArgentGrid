@@ -15,11 +15,13 @@ import {
   Output,
   type SimpleChanges,
   ViewChild,
+  ViewContainerRef,
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
-import { isColumnVisible } from '../rendering/render/column-utils';
+import { CellOverlayManager } from '../rendering/cell-overlay-manager';
+import { getColumnDef, isColumnVisible } from '../rendering/render/column-utils';
 import { GridService } from '../services/grid.service';
 import { applyThemeCSSVariables, convertThemeToGridTheme } from '../themes/theme-builder';
 import type {
@@ -65,6 +67,7 @@ export class ArgentGridComponent<TData = any>
   @ViewChild('headerScrollable') headerScrollableRef!: ElementRef<HTMLDivElement>;
   @ViewChild('headerScrollableFilter') headerScrollableFilterRef!: ElementRef<HTMLDivElement>;
   @ViewChild('editorInput') editorInputRef!: ElementRef<HTMLInputElement>;
+  @ViewChild('cellOverlayLayer') cellOverlayLayerRef!: ElementRef<HTMLDivElement>;
 
   canvasHeight = 0;
   showOverlay = false;
@@ -173,6 +176,7 @@ export class ArgentGridComponent<TData = any>
   public Math = Math;
   public scrollbarWidth = 0;
   private canvasRenderer!: CanvasRenderer;
+  private cellOverlayManager?: CellOverlayManager<TData>;
   private destroy$ = new Subject<void>();
   private gridService = new GridService<TData>();
   private horizontalScrollListener?: (e: Event) => void;
@@ -180,7 +184,8 @@ export class ArgentGridComponent<TData = any>
 
   constructor(
     @Inject(ChangeDetectorRef) private _cdr: ChangeDetectorRef,
-    private _elementRef: ElementRef<HTMLElement>
+    private _elementRef: ElementRef<HTMLElement>,
+    private _viewContainerRef: ViewContainerRef
   ) {}
 
   ngOnInit(): void {
@@ -265,6 +270,11 @@ export class ArgentGridComponent<TData = any>
         this.onRowClick(rowIndex, event);
       };
 
+      // Clicking a cell moves keyboard focus to it.
+      this.canvasRenderer.onCellClick = (rowIndex, colId) => {
+        this.gridApi.setFocusedCell(rowIndex, colId);
+      };
+
       // Range Selection Logic
       this.canvasRenderer.onMouseDown = (event, rowIndex, colId) => {
         if (event.button !== 0 || !colId || rowIndex === -1) return;
@@ -310,6 +320,26 @@ export class ArgentGridComponent<TData = any>
       this.canvasRenderer.onMouseUp = () => {
         this.isRangeSelecting = false;
       };
+
+      // DOM/Angular cell-renderer overlay: stays in lockstep with the canvas by
+      // syncing on every paint (which already covers scroll/resize/sort/filter).
+      if (this.cellOverlayLayerRef) {
+        this.cellOverlayManager = new CellOverlayManager<TData>({
+          container: this.cellOverlayLayerRef.nativeElement,
+          gridApi: this.gridApi,
+          viewContainerRef: this._viewContainerRef,
+          // Resolve the effective ColDef through the SAME helper the canvas uses
+          // for its skip decision (getColumnDef in renderer prep). Sharing one
+          // resolver is what guarantees the overlay's mount decision can never
+          // disagree with what the canvas chose not to paint — using a second
+          // resolver risks leaving a cell blank (canvas skipped, overlay didn't
+          // mount) or double-drawn.
+          getColDef: (col) => getColumnDef(col, this.gridApi),
+        });
+        this.canvasRenderer.onAfterRender = (layout) => {
+          this.cellOverlayManager?.sync(layout);
+        };
+      }
     }
 
     // Setup viewport dimensions and resize observer
@@ -398,6 +428,7 @@ export class ArgentGridComponent<TData = any>
       this.resizeObserver.disconnect();
     }
 
+    this.cellOverlayManager?.destroy();
     this.gridApi?.destroy();
     this.canvasRenderer?.destroy();
     this.onCanvasMouseLeave();
@@ -464,6 +495,14 @@ export class ArgentGridComponent<TData = any>
       } else if (event.type === 'overlayChanged') {
         this.activeOverlay = event.value;
         this.showOverlay = !!this.activeOverlay;
+      } else if (event.type === 'ensureIndexVisible') {
+        this.canvasRenderer?.ensureIndexVisible(event.value.index, event.value.position);
+      } else if (event.type === 'ensureColumnVisible') {
+        this.canvasRenderer?.scrollToColumn(event.value.colId);
+      } else if (event.type === 'focusChanged') {
+        // Focus only moves the ring — a view change, not a data change. Repaint
+        // without forcing every visible overlay cell to re-bind.
+        this.canvasRenderer?.repaint();
       } else {
         // All other state changes (sort, filter, rangeSelection, etc.) go through the
         // rAF-coalesced scheduler. Multiple rapid events (e.g. rangeSelectionChanged
@@ -1122,7 +1161,11 @@ export class ArgentGridComponent<TData = any>
 
   @HostListener('keydown', ['$event'])
   handleKeyDown(event: KeyboardEvent): void {
-    if (this.isEditing) return;
+    // The editor owns keys while editing; menus/overlays own them while open.
+    if (this.isEditing || this.activeContextMenu || this.activeHeaderMenu) return;
+    // Keys typed into the grid's own form controls (floating filters, popups,
+    // sidebar) belong to those inputs — don't hijack them for cell nav/editing.
+    if (this.isEditableTarget(event.target)) return;
 
     const isCtrlOrMeta = event.ctrlKey || event.metaKey;
 
@@ -1130,10 +1173,195 @@ export class ArgentGridComponent<TData = any>
       // Copy
       this.gridApi.copyToClipboard();
       event.preventDefault();
-    } else if (isCtrlOrMeta && event.key.toLowerCase() === 'v') {
+      return;
+    }
+    if (isCtrlOrMeta && event.key.toLowerCase() === 'v') {
       // Paste
       this.gridApi.pasteFromClipboard();
       event.preventDefault();
+      return;
+    }
+
+    const focused = this.gridApi.getFocusedCell();
+    const fc = focused?.column ? { rowIndex: focused.rowIndex, colId: focused.column.colId } : null;
+
+    switch (event.key) {
+      case 'ArrowDown':
+        this.moveFocus(0, 1, event);
+        return;
+      case 'ArrowUp':
+        this.moveFocus(0, -1, event);
+        return;
+      case 'ArrowRight':
+        this.moveFocus(1, 0, event);
+        return;
+      case 'ArrowLeft':
+        this.moveFocus(-1, 0, event);
+        return;
+      case 'Tab':
+        this.moveFocusTab(event.shiftKey, event);
+        return;
+      case 'Home':
+        this.moveFocusRowEdge(false, isCtrlOrMeta, event);
+        return;
+      case 'End':
+        this.moveFocusRowEdge(true, isCtrlOrMeta, event);
+        return;
+      case 'PageDown':
+        this.moveFocusPage(1, event);
+        return;
+      case 'PageUp':
+        this.moveFocusPage(-1, event);
+        return;
+      case 'Enter':
+        if (fc) {
+          this.startEditing(fc.rowIndex, fc.colId);
+          event.preventDefault();
+        }
+        return;
+      default:
+        // type-to-edit: a single printable character starts editing with that char.
+        if (fc && event.key.length === 1 && !isCtrlOrMeta && !event.altKey) {
+          this.startEditingWithChar(fc.rowIndex, fc.colId, event.key);
+          event.preventDefault();
+        }
+    }
+  }
+
+  // ============================================================================
+  // KEYBOARD NAVIGATION
+  // ============================================================================
+
+  /**
+   * True when a key event originates from an editable form control (input,
+   * textarea, select, or contenteditable). Such keys must reach that control
+   * instead of being captured for grid keyboard navigation/editing.
+   */
+  private isEditableTarget(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null;
+    if (!el || !el.tagName) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+  }
+
+  /** Visible columns in display order (excludes hidden columns). */
+  private getNavColumns(): Column[] {
+    return this.gridApi.getAllColumns().filter((c) => isColumnVisible(c));
+  }
+
+  /** Move keyboard focus to a cell, scrolling it into view. */
+  private setFocus(rowIndex: number, colId: string): void {
+    this.gridApi.setFocusedCell(rowIndex, colId);
+    this.gridApi.ensureIndexVisible(rowIndex);
+    this.gridApi.ensureColumnVisible(colId);
+  }
+
+  /** Focus the first cell of the grid (used when nav starts with no focus). */
+  private focusFirstCell(): void {
+    const cols = this.getNavColumns();
+    if (cols.length === 0 || this.gridApi.getDisplayedRowCount() === 0) return;
+    this.setFocus(0, cols[0].colId);
+  }
+
+  /**
+   * Compute the cell reached by stepping `dCol` columns / `dRow` rows from
+   * (rowIndex, colId). Arrow steps clamp at edges; `wrap` enables Tab-style
+   * wrap to the next/previous row. Returns null if the move leaves the grid.
+   */
+  private computeNextCell(
+    rowIndex: number,
+    colId: string,
+    dCol: number,
+    dRow: number,
+    wrap: boolean
+  ): { rowIndex: number; colId: string } | null {
+    const cols = this.getNavColumns();
+    const ci = cols.findIndex((c) => c.colId === colId);
+    if (ci === -1) return null;
+
+    let nci = ci + dCol;
+    let nri = rowIndex + dRow;
+
+    if (dCol !== 0 && wrap) {
+      if (nci >= cols.length) {
+        nci = 0;
+        nri++;
+      } else if (nci < 0) {
+        nci = cols.length - 1;
+        nri--;
+      }
+    } else {
+      nci = Math.max(0, Math.min(cols.length - 1, nci));
+    }
+
+    if (nri < 0 || nri >= this.gridApi.getDisplayedRowCount()) return null;
+    return { rowIndex: nri, colId: cols[nci].colId };
+  }
+
+  private moveFocus(dCol: number, dRow: number, event: KeyboardEvent): void {
+    event.preventDefault();
+    const focused = this.gridApi.getFocusedCell();
+    if (!focused?.column) {
+      this.focusFirstCell();
+      return;
+    }
+    const next = this.computeNextCell(focused.rowIndex, focused.column.colId, dCol, dRow, false);
+    if (next) this.setFocus(next.rowIndex, next.colId);
+  }
+
+  private moveFocusTab(backwards: boolean, event: KeyboardEvent): void {
+    const focused = this.gridApi.getFocusedCell();
+    if (!focused?.column) {
+      event.preventDefault();
+      this.focusFirstCell();
+      return;
+    }
+    const next = this.computeNextCell(
+      focused.rowIndex,
+      focused.column.colId,
+      backwards ? -1 : 1,
+      0,
+      true
+    );
+    // Only consume Tab when it actually moves within the grid; at the first/last
+    // cell let it bubble so keyboard focus can leave the grid (no focus trap).
+    if (next) {
+      event.preventDefault();
+      this.setFocus(next.rowIndex, next.colId);
+    }
+  }
+
+  private moveFocusRowEdge(end: boolean, ctrl: boolean, event: KeyboardEvent): void {
+    event.preventDefault();
+    const cols = this.getNavColumns();
+    const rowCount = this.gridApi.getDisplayedRowCount();
+    if (cols.length === 0 || rowCount === 0) return;
+
+    const focused = this.gridApi.getFocusedCell();
+    const rowIndex = ctrl ? (end ? rowCount - 1 : 0) : (focused?.rowIndex ?? 0);
+    const colId = end ? cols[cols.length - 1].colId : cols[0].colId;
+    this.setFocus(rowIndex, colId);
+  }
+
+  private moveFocusPage(direction: number, event: KeyboardEvent): void {
+    event.preventDefault();
+    const focused = this.gridApi.getFocusedCell();
+    if (!focused?.column) {
+      this.focusFirstCell();
+      return;
+    }
+    const viewportHeight = this.canvasRenderer?.currentViewportHeight || 0;
+    const pageRows = Math.max(1, Math.floor(viewportHeight / this.effectiveRowHeight));
+    const rowCount = this.gridApi.getDisplayedRowCount();
+    const nextRow = Math.max(0, Math.min(rowCount - 1, focused.rowIndex + direction * pageRows));
+    this.setFocus(nextRow, focused.column.colId);
+  }
+
+  /** Start editing a cell seeded with a single typed character (type-to-edit). */
+  private startEditingWithChar(rowIndex: number, colId: string, char: string): void {
+    this.startEditing(rowIndex, colId);
+    if (this.isEditing) {
+      this.editingValue = char;
     }
   }
 
@@ -2106,6 +2334,9 @@ export class ArgentGridComponent<TData = any>
 
     this.isEditing = true;
 
+    // Hide the component overlay for this cell (if any) so the editor owns it.
+    this.cellOverlayManager?.hideCell(rowIndex, colId);
+
     // Focus input after view update
     setTimeout(() => {
       if (this.editorInputRef) {
@@ -2179,6 +2410,7 @@ export class ArgentGridComponent<TData = any>
           this.editingRowNode = null;
           this.editingColDef = null;
           this.validationErrors = null;
+          this.cellOverlayManager?.showAll();
           this._cdr.detectChanges();
           return;
         }
@@ -2218,6 +2450,7 @@ export class ArgentGridComponent<TData = any>
           this.editingRowNode = null;
           this.editingColDef = null;
           this.validationErrors = null;
+          this.cellOverlayManager?.showAll();
           this._cdr.detectChanges();
           return;
         }
@@ -2260,6 +2493,7 @@ export class ArgentGridComponent<TData = any>
     this.editingRowNode = null;
     this.editingColDef = null;
     this.validationErrors = null;
+    this.cellOverlayManager?.showAll();
     this._cdr.detectChanges();
   }
 
@@ -2290,25 +2524,10 @@ export class ArgentGridComponent<TData = any>
   }
 
   private moveToNextCell(rowIndex: number, colId: string, backwards: boolean): void {
-    const columns = this.gridApi.getAllColumns().filter((c) => c.visible);
-    const colIndex = columns.findIndex((c) => c.colId === colId);
-
-    if (colIndex === -1) return;
-
-    let nextColIndex = backwards ? colIndex - 1 : colIndex + 1;
-    let nextRowIndex = rowIndex;
-
-    if (nextColIndex >= columns.length) {
-      nextColIndex = 0;
-      nextRowIndex++;
-    } else if (nextColIndex < 0) {
-      nextColIndex = columns.length - 1;
-      nextRowIndex--;
-    }
-
-    if (nextRowIndex >= 0 && nextRowIndex < this.gridApi.getDisplayedRowCount()) {
-      const nextCol = columns[nextColIndex];
-      this.startEditing(nextRowIndex, nextCol.colId);
+    const next = this.computeNextCell(rowIndex, colId, backwards ? -1 : 1, 0, true);
+    if (next) {
+      this.gridApi.setFocusedCell(next.rowIndex, next.colId);
+      this.startEditing(next.rowIndex, next.colId);
     }
   }
 

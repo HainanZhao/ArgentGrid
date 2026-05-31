@@ -29,6 +29,7 @@ export {
   getCellValue,
   getFormattedValue,
   getValueByPath,
+  groupIndicatorAreaWidth,
   measureText,
   prepColumn,
   prepColumns,

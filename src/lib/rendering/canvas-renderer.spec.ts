@@ -146,6 +146,7 @@ const createMockGridApi = (): GridApi => {
     getLocaleText: vi.fn(),
     getDocument: vi.fn(() => document),
     getGridOptions: vi.fn(),
+    getGridOption: vi.fn(),
     getRowPinned: vi.fn(),
     getTopLevelNodes: vi.fn(() => []),
     getRootNode: vi.fn(),

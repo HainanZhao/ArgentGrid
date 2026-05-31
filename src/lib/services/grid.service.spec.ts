@@ -2443,4 +2443,52 @@ describe('GridService', () => {
       expect(data.some((r) => r.name === 'Johnny Cash')).toBe(true);
     });
   });
+
+  describe('Focus API', () => {
+    it('returns null when no cell is focused', () => {
+      expect(api.getFocusedCell()).toBeNull();
+    });
+
+    it('sets and reads the focused cell', () => {
+      api.setFocusedCell(1, 'name');
+      const focused = api.getFocusedCell();
+      expect(focused).toBeTruthy();
+      expect(focused?.rowIndex).toBe(1);
+      expect(focused?.column?.colId).toBe('name');
+    });
+
+    it('emits a focusChanged event when focus is set', () => {
+      const events: string[] = [];
+      const sub = service.gridStateChanged$.subscribe((e) => events.push(e.type));
+      api.setFocusedCell(2, 'age');
+      sub.unsubscribe();
+      expect(events).toContain('focusChanged');
+    });
+
+    it('clears focus when called with empty column key', () => {
+      api.setFocusedCell(1, 'name');
+      api.setFocusedCell(null as unknown as number, '');
+      expect(api.getFocusedCell()).toBeNull();
+    });
+  });
+
+  describe('Scroll API events', () => {
+    it('emits ensureIndexVisible with index and default position', () => {
+      const events: { type: string; value?: any }[] = [];
+      const sub = service.gridStateChanged$.subscribe((e) => events.push(e));
+      api.ensureIndexVisible(10);
+      sub.unsubscribe();
+      const evt = events.find((e) => e.type === 'ensureIndexVisible');
+      expect(evt?.value).toEqual({ index: 10, position: 'auto' });
+    });
+
+    it('emits ensureColumnVisible with the column id', () => {
+      const events: { type: string; value?: any }[] = [];
+      const sub = service.gridStateChanged$.subscribe((e) => events.push(e));
+      api.ensureColumnVisible('email');
+      sub.unsubscribe();
+      const evt = events.find((e) => e.type === 'ensureColumnVisible');
+      expect(evt?.value).toEqual({ colId: 'email' });
+    });
+  });
 });
