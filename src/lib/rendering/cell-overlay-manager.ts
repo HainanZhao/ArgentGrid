@@ -23,9 +23,12 @@ import {
   type ICellRendererParams,
   type OverlayLayout,
 } from '../types/ag-grid-types';
-import { getCellValue, getFormattedValue, isAngularComponent } from './render/cells';
-
-export { isAngularComponent };
+import {
+  getCellValue,
+  getFormattedValue,
+  resolveCellComponent,
+  usesComponentRenderer,
+} from './render/cells';
 
 interface CellEntry {
   componentRef: ComponentRef<any>;
@@ -84,7 +87,7 @@ export class CellOverlayManager<TData = any> {
         const column = this.gridApi.getColumn(pos.colId);
         if (!column) return null;
         const colDef = this.getColDef(column);
-        if (!colDef || !this.usesComponentRenderer(colDef)) return null;
+        if (!colDef || !usesComponentRenderer(colDef)) return null;
         return { pos, column, colDef };
       })
       .filter((c): c is NonNullable<typeof c> => c !== null);
@@ -94,20 +97,32 @@ export class CellOverlayManager<TData = any> {
     if (overlayColumns.length > 0) {
       for (let rowIndex = layout.startRow; rowIndex < layout.endRow; rowIndex++) {
         const node = this.gridApi.getDisplayedRowAtIndex(rowIndex);
-        // Skip group/detail rows — component cells render against leaf data.
-        if (!node || (node as any).group) continue;
+        // Skip group and master-detail rows — component cells render against
+        // leaf data; a detail/group node has no real cell value here.
+        if (!node || (node as any).group || (node as any).detail) continue;
 
         const y = this.rowY(rowIndex, layout);
+        // Honor variable row heights; the canvas sizes each row to node.rowHeight.
+        const height = (node as any).rowHeight || layout.rowHeight;
 
         for (const { pos, column, colDef } of overlayColumns) {
           const value = getCellValue(column, colDef, node, this.gridApi);
           const params = this.buildParams(value, colDef, column, node, rowIndex);
-          const componentType = this.resolveComponentType(colDef, params);
+          const componentType = resolveCellComponent(colDef, params);
           if (!componentType) continue;
 
           const key = `${rowIndex}::${pos.colId}`;
           stillNeeded.add(key);
-          this.placeCell(key, componentType, params, pos.x, y, pos.width, layout.rowHeight);
+          this.placeCell(
+            key,
+            componentType,
+            params,
+            pos.x,
+            y,
+            pos.width,
+            height,
+            layout.dataChanged
+          );
         }
       }
     }
@@ -151,25 +166,6 @@ export class CellOverlayManager<TData = any> {
 
   // --------------------------------------------------------------------------
 
-  private usesComponentRenderer(colDef: ColDef<TData>): boolean {
-    return (
-      isAngularComponent(colDef.cellRenderer) || typeof colDef.cellRendererSelector === 'function'
-    );
-  }
-
-  /** Resolve the component type for a specific cell (supports cellRendererSelector). */
-  private resolveComponentType(
-    colDef: ColDef<TData>,
-    params: ICellRendererParams<TData>
-  ): Type<any> | null {
-    if (typeof colDef.cellRendererSelector === 'function') {
-      const selected = colDef.cellRendererSelector(params);
-      const component = selected?.component;
-      return isAngularComponent(component) ? component : null;
-    }
-    return isAngularComponent(colDef.cellRenderer) ? colDef.cellRenderer : null;
-  }
-
   private buildParams(
     value: any,
     colDef: ColDef<TData>,
@@ -208,7 +204,8 @@ export class CellOverlayManager<TData = any> {
     x: number,
     y: number,
     width: number,
-    height: number
+    height: number,
+    dataChanged: boolean
   ): void {
     const bindingKey = this.bindingKey(params);
     let entry = this.active.get(key);
@@ -225,8 +222,11 @@ export class CellOverlayManager<TData = any> {
       this.bind(entry, params, /* isNew */ entry.bindingKey === '');
       entry.bindingKey = bindingKey;
       this.active.set(key, entry);
-    } else if (entry.bindingKey !== bindingKey) {
-      // Same instance, new data — refresh in place (or recreate if it can't).
+    } else if (dataChanged || entry.bindingKey !== bindingKey) {
+      // Data may have changed (sort/filter/edit/transaction) even when the
+      // keyed `value` is unchanged — e.g. the component reads other fields of
+      // `data`. On a data frame always re-bind; on a scroll frame the bindingKey
+      // guard keeps it a cheap reposition. Recreate if it can't refresh.
       if (!this.refresh(entry, params)) {
         this.active.delete(key);
         this.release(entry);

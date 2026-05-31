@@ -87,6 +87,13 @@ export class CanvasRenderer<TData = any> {
   // Column prep results cache
   private columnPreps: Map<string, ColumnPrepResult<TData>> = new Map();
 
+  /**
+   * Set when a repaint is caused by a data/column change (vs scroll/resize) so
+   * the overlay layer knows to re-bind visible component cells. Consumed and
+   * reset by the next render. Starts true so the first paint binds.
+   */
+  private overlayDataDirty = true;
+
   // Event listener references for cleanup
   private scrollListener?: (e: Event) => void;
   private resizeListener?: () => void;
@@ -159,22 +166,27 @@ export class CanvasRenderer<TData = any> {
   }
 
   addRowData(data: TData, immediate = false): void {
+    this.overlayDataDirty = true;
     this.liveDataHandler.addRowData(data, immediate, () => this.renderFrame());
   }
 
   flushUpdateBuffer(): void {
+    this.overlayDataDirty = true;
     this.liveDataHandler.flushUpdateBuffer(() => this.renderFrame());
   }
 
   markRowDirty(rowIndex: number): void {
+    this.overlayDataDirty = true;
     this.liveDataHandler.markRowDirty(rowIndex);
   }
 
   updateRowById(id: string, updates: Partial<TData>): boolean {
+    this.overlayDataDirty = true;
     return this.liveDataHandler.updateRowById(id, updates);
   }
 
   removeRowById(id: string): boolean {
+    this.overlayDataDirty = true;
     return this.liveDataHandler.removeRowById(id);
   }
 
@@ -338,6 +350,9 @@ export class CanvasRenderer<TData = any> {
   }
 
   render(): void {
+    // The public render() entry point is used for data/column changes (sort,
+    // filter, edit, transaction, theme); flag it so overlay cells re-bind.
+    this.overlayDataDirty = true;
     this.damageTracker.markAllDirty();
     this.scheduleRender();
   }
@@ -390,6 +405,10 @@ export class CanvasRenderer<TData = any> {
     // Skip paint entirely if nothing has been marked dirty.
     if (!this.damageTracker.hasDamage()) return;
 
+    // Consume the data-change flag for this frame (reset for the next).
+    const dataChanged = this.overlayDataDirty;
+    this.overlayDataDirty = false;
+
     const startTime = performance.now();
     const width = this.viewportWidth || this.canvas.clientWidth;
     const height = this.viewportHeight || this.canvas.clientHeight;
@@ -409,7 +428,7 @@ export class CanvasRenderer<TData = any> {
       this.damageTracker.clear();
       this.lastRenderDuration = performance.now() - startTime;
       // Clear any overlay cells left over from a previous non-empty render.
-      this.emitAfterRender(0, 0, []);
+      this.emitAfterRender(0, 0, [], dataChanged);
       return;
     }
 
@@ -474,14 +493,15 @@ export class CanvasRenderer<TData = any> {
     this.lastRenderDuration = performance.now() - startTime;
 
     // Notify the DOM cell-overlay layer with the geometry of this frame.
-    this.emitAfterRender(startRow, endRow, positionedColumns);
+    this.emitAfterRender(startRow, endRow, positionedColumns, dataChanged);
   }
 
   /** Build the OverlayLayout snapshot and notify any listener. */
   private emitAfterRender(
     startRow: number,
     endRow: number,
-    positionedColumns: PositionedColumn[]
+    positionedColumns: PositionedColumn[],
+    dataChanged: boolean
   ): void {
     if (!this.onAfterRender) return;
     this.onAfterRender({
@@ -489,6 +509,7 @@ export class CanvasRenderer<TData = any> {
       endRow,
       scrollTop: this.scrollTop,
       rowHeight: this.theme.rowHeight,
+      dataChanged,
       columns: positionedColumns.map((p) => ({
         colId: p.column.colId,
         x: p.x,
@@ -921,6 +942,7 @@ export class CanvasRenderer<TData = any> {
    * Mark a specific cell as dirty
    */
   invalidateCell(colIndex: number, rowIndex: number): void {
+    this.overlayDataDirty = true;
     this.damageTracker.markCellDirty(colIndex, rowIndex);
     this.scheduleRender();
   }
@@ -929,6 +951,7 @@ export class CanvasRenderer<TData = any> {
    * Mark a row as dirty
    */
   invalidateRow(rowIndex: number): void {
+    this.overlayDataDirty = true;
     this.damageTracker.markRowDirty(rowIndex);
     this.scheduleRender();
   }
@@ -937,6 +960,7 @@ export class CanvasRenderer<TData = any> {
    * Mark entire grid as dirty
    */
   invalidateAll(): void {
+    this.overlayDataDirty = true;
     this.damageTracker.markAllDirty();
     this.scheduleRender();
   }

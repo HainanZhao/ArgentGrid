@@ -41,6 +41,14 @@ export function getColumnDef<TData = any>(
   const targetId = column.colId;
   const targetField = column.field?.toString();
 
+  // Merge defaultColDef beneath the matched def, mirroring how the grid
+  // component resolves effective ColDefs. Without this the canvas would ignore
+  // renderers/formatters declared on defaultColDef and disagree with the
+  // overlay (e.g. a defaultColDef.cellRenderer would be drawn AND overlaid).
+  const defaultColDef = gridApi.getGridOption('defaultColDef') as ColDef<TData> | undefined;
+  const withDefaults = (def: ColDef): ColDef<TData> =>
+    (defaultColDef ? { ...defaultColDef, ...def } : def) as ColDef<TData>;
+
   for (const def of allDefs) {
     if ('children' in def) {
       const found = def.children.find((c) => {
@@ -51,7 +59,7 @@ export function getColumnDef<TData = any>(
           (targetField && cDef.field?.toString() === targetField)
         );
       });
-      if (found) return found as ColDef<TData>;
+      if (found) return withDefaults(found as ColDef);
     } else {
       const cDef = def as ColDef;
       if (
@@ -59,7 +67,7 @@ export function getColumnDef<TData = any>(
         cDef.field?.toString() === targetId ||
         (targetField && cDef.field?.toString() === targetField)
       ) {
-        return def as ColDef<TData>;
+        return withDefaults(def as ColDef);
       }
     }
   }

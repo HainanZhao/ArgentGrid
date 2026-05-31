@@ -15,6 +15,7 @@ import type {
   OverlayLayout,
 } from '../types/ag-grid-types';
 import { CellOverlayManager } from './cell-overlay-manager';
+import { resolveCellComponent } from './render/cells';
 
 // ---------------------------------------------------------------------------
 // Test doubles
@@ -33,14 +34,20 @@ class TestRenderer implements ICellRendererAngularComp {
     instances.push(this);
   }
 
+  // Render both the keyed value AND a second data field, so tests can prove a
+  // refresh happens when only the non-keyed field changed.
+  private render(params: ICellRendererParams): void {
+    this.text = `${String(params.value)}/${(params.data as any)?.label ?? ''}`;
+  }
+
   agInit(params: ICellRendererParams): void {
     this.agInitCount++;
-    this.text = String(params.value);
+    this.render(params);
   }
 
   refresh(params: ICellRendererParams): boolean {
     this.refreshCount++;
-    this.text = String(params.value);
+    this.render(params);
     return true;
   }
 }
@@ -72,12 +79,17 @@ function makeApi(rowsByIndex: Map<number, IRowNode>, columnsById: Map<string, Co
   } as unknown as GridApi;
 }
 
-function layout(columns: Column[], rowCount: number, scrollTop = 0): OverlayLayout {
+function layout(
+  columns: Column[],
+  rowCount: number,
+  opts: { scrollTop?: number; dataChanged?: boolean; rowHeight?: number } = {}
+): OverlayLayout {
   return {
     startRow: 0,
     endRow: rowCount,
-    scrollTop,
-    rowHeight: 32,
+    scrollTop: opts.scrollTop ?? 0,
+    rowHeight: opts.rowHeight ?? 32,
+    dataChanged: opts.dataChanged ?? true,
     columns: columns.map((c) => ({
       colId: c.colId,
       x: 0,
@@ -183,6 +195,75 @@ describe('CellOverlayManager (claude)', () => {
     mgr.destroy();
   });
 
+  it('re-binds a cell on a data-change frame even when the keyed value is unchanged', () => {
+    const col = makeColumn('status');
+    const colDef = { field: 'status', cellRenderer: TestRenderer };
+    // Same node, same `value`, but a different (non-keyed) data field changes.
+    const node = makeNode('a', { status: 'A', label: 'L1' });
+    const rows = new Map([[0, node]]);
+    const mgr = makeManager(rows, new Map([['status', col]]), colDef);
+
+    mgr.sync(layout([col], 1, { dataChanged: true }));
+    expect(visibleHosts(container)[0].textContent).toContain('A/L1');
+
+    // Mutate a non-keyed field in place (as an edit/transaction would).
+    (node.data as any).label = 'L2';
+
+    // A pure scroll frame (dataChanged:false) must NOT refresh — bindingKey
+    // is unchanged (same node id + value), so it's a cheap reposition.
+    mgr.sync(layout([col], 1, { dataChanged: false }));
+    expect(visibleHosts(container)[0].textContent).toContain('A/L1');
+
+    // A data-change frame must re-bind and pick up the new field.
+    mgr.sync(layout([col], 1, { dataChanged: true }));
+    expect(visibleHosts(container)[0].textContent).toContain('A/L2');
+    expect(instances[0].refreshCount).toBeGreaterThanOrEqual(1);
+
+    mgr.destroy();
+  });
+
+  it('skips group and master-detail rows', () => {
+    const col = makeColumn('status');
+    const colDef = { field: 'status', cellRenderer: TestRenderer };
+    const groupNode = { id: 'g', data: {}, group: true } as unknown as IRowNode;
+    const detailNode = { id: 'd', data: {}, detail: true } as unknown as IRowNode;
+    const leafNode = makeNode('leaf', { status: 'Active' });
+    const rows = new Map([
+      [0, groupNode],
+      [1, detailNode],
+      [2, leafNode],
+    ]);
+    const mgr = makeManager(rows, new Map([['status', col]]), colDef);
+
+    mgr.sync({ ...layout([col], 3), startRow: 0, endRow: 3 });
+
+    // Only the leaf row gets an overlay; group/detail rows are skipped.
+    expect(visibleHosts(container)).toHaveLength(1);
+    expect(visibleHosts(container)[0].textContent).toContain('Active');
+
+    mgr.destroy();
+  });
+
+  it('sizes the host to the row variable height', () => {
+    const col = makeColumn('status');
+    const colDef = { field: 'status', cellRenderer: TestRenderer };
+    const node = {
+      id: 'a',
+      data: { status: 'A' },
+      group: false,
+      rowHeight: 64,
+    } as unknown as IRowNode;
+    const rows = new Map([[0, node]]);
+    const mgr = makeManager(rows, new Map([['status', col]]), colDef);
+
+    mgr.sync(layout([col], 1, { rowHeight: 32 }));
+
+    // Host height follows node.rowHeight (64), not the layout/theme height (32).
+    expect(visibleHosts(container)[0].style.height).toBe('64px');
+
+    mgr.destroy();
+  });
+
   it('recycles cells that scroll out of view (no leaked visible hosts)', () => {
     const col = makeColumn('status');
     const colDef = { field: 'status', cellRenderer: TestRenderer };
@@ -238,5 +319,45 @@ describe('CellOverlayManager (claude)', () => {
 
     mgr.destroy();
     expect(container.children.length).toBe(0);
+  });
+});
+
+describe('resolveCellComponent (canvas/overlay shared decision)', () => {
+  @Component({ standalone: true, template: '' })
+  class Comp implements ICellRendererAngularComp {
+    agInit(): void {}
+  }
+  const params = { value: 1 } as unknown as ICellRendererParams;
+
+  it('resolves a static Angular cellRenderer component', () => {
+    expect(resolveCellComponent({ cellRenderer: Comp } as any, params)).toBe(Comp);
+  });
+
+  it('returns null for a string renderer and a plain function renderer', () => {
+    expect(resolveCellComponent({ cellRenderer: 'agTextCellRenderer' } as any, params)).toBeNull();
+    expect(resolveCellComponent({ cellRenderer: () => 'x' } as any, params)).toBeNull();
+  });
+
+  it('resolves a cellRendererSelector that returns an Angular component', () => {
+    const colDef = { cellRendererSelector: () => ({ component: Comp }) } as any;
+    expect(resolveCellComponent(colDef, params)).toBe(Comp);
+  });
+
+  it('returns null when the selector picks a non-Angular component or undefined (so the canvas still draws)', () => {
+    expect(
+      resolveCellComponent({ cellRendererSelector: () => ({ component: 'agText' }) } as any, params)
+    ).toBeNull();
+    expect(
+      resolveCellComponent({ cellRendererSelector: () => undefined } as any, params)
+    ).toBeNull();
+  });
+
+  it('returns null (does not throw) when the selector throws', () => {
+    const colDef = {
+      cellRendererSelector: () => {
+        throw new Error('boom');
+      },
+    } as any;
+    expect(resolveCellComponent(colDef, params)).toBeNull();
   });
 });

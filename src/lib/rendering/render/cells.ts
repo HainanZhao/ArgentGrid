@@ -4,7 +4,14 @@
  * Handles drawing of individual cells with prep/draw cycle optimization.
  */
 
-import { ColDef, Column, GridApi, IRowNode } from '../../types/ag-grid-types';
+import type { Type } from '@angular/core';
+import {
+  ColDef,
+  Column,
+  GridApi,
+  type ICellRendererParams,
+  IRowNode,
+} from '../../types/ag-grid-types';
 import {
   drawBadge,
   drawButton,
@@ -22,15 +29,42 @@ export function isAngularComponent(x: any): boolean {
 }
 
 /**
- * True when a column renders through the DOM/Angular overlay layer rather than
- * the canvas. The canvas must NOT draw text for these cells — the overlay owns
- * their content.
+ * True when a column *may* route any of its cells through the DOM/Angular
+ * overlay layer (a component `cellRenderer`, or a `cellRendererSelector` that
+ * could pick one). Column-level test used by the overlay to decide which
+ * columns to consider; the actual per-cell decision is {@link resolveCellComponent}.
  */
 export function usesComponentRenderer<TData = any>(colDef: ColDef<TData> | null): boolean {
   if (!colDef) return false;
   return (
     isAngularComponent(colDef.cellRenderer) || typeof colDef.cellRendererSelector === 'function'
   );
+}
+
+/**
+ * Resolve the Angular component a *specific* cell routes to, or null when the
+ * cell is plain (canvas-drawn). This is the single source of truth shared by
+ * the canvas (to decide what NOT to paint) and the overlay (to decide what to
+ * mount), so the two never disagree and leave a cell blank or double-drawn.
+ *
+ * Honors `cellRendererSelector`: a selector that returns a non-Angular
+ * component (a built-in string renderer) or `undefined` (use the default)
+ * resolves to null, so the canvas keeps drawing that cell.
+ */
+export function resolveCellComponent<TData = any>(
+  colDef: ColDef<TData> | null,
+  params: ICellRendererParams<TData>
+): Type<any> | null {
+  if (!colDef) return null;
+  if (typeof colDef.cellRendererSelector === 'function') {
+    try {
+      const selected = colDef.cellRendererSelector(params);
+      return isAngularComponent(selected?.component) ? (selected?.component as Type<any>) : null;
+    } catch {
+      return null;
+    }
+  }
+  return isAngularComponent(colDef.cellRenderer) ? (colDef.cellRenderer as Type<any>) : null;
 }
 
 /**
@@ -143,10 +177,25 @@ export function drawCellContent<TData = any>(
 ): void {
   const { x, y, width, height, value, formattedValue, theme, colDef, rowNode, api } = context;
 
-  // 0. Component-rendered cells are painted by the DOM overlay layer — the
-  // canvas only provides the (already-drawn) background. Skip all content.
-  if (usesComponentRenderer(colDef)) {
-    return;
+  // 0. Cells that route to an Angular component are painted by the DOM overlay
+  // layer — the canvas only provides the (already-drawn) background, so skip
+  // all content. Resolved per-cell (not per-column) so a cellRendererSelector
+  // that falls back to a non-component branch is still drawn here, not left
+  // blank. Only pay the param build when the column could route to a component.
+  if (colDef && (colDef.cellRendererSelector || isAngularComponent(colDef.cellRenderer))) {
+    const overlayParams: ICellRendererParams<TData> = {
+      value,
+      valueFormatted: formattedValue,
+      data: rowNode?.data,
+      node: rowNode,
+      rowIndex: context.rowIndex,
+      colDef,
+      column: context.column,
+      api,
+    };
+    if (resolveCellComponent(colDef, overlayParams)) {
+      return;
+    }
   }
 
   // 1. Check for dedicated checkbox renderer or internal selection column

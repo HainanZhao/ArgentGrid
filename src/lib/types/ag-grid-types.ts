@@ -1624,6 +1624,13 @@ export interface OverlayLayout {
   scrollTop: number;
   /** Effective row height in pixels. */
   rowHeight: number;
+  /**
+   * True when this frame reflects a data/column change (sort, filter, edit,
+   * transaction) rather than a pure scroll/resize. On such frames the overlay
+   * re-binds every visible component cell, since a cell's underlying data may
+   * have changed without its keyed `value` changing.
+   */
+  dataChanged: boolean;
   /** Per-column screen geometry (x already accounts for pinning/scroll). */
   columns: OverlayColumnPosition[];
 }
