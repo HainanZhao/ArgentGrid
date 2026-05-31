@@ -21,7 +21,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
 import { CellOverlayManager } from '../rendering/cell-overlay-manager';
-import { isColumnVisible } from '../rendering/render/column-utils';
+import { getColumnDef, isColumnVisible } from '../rendering/render/column-utils';
 import { GridService } from '../services/grid.service';
 import { applyThemeCSSVariables, convertThemeToGridTheme } from '../themes/theme-builder';
 import type {
@@ -328,10 +328,13 @@ export class ArgentGridComponent<TData = any>
           container: this.cellOverlayLayerRef.nativeElement,
           gridApi: this.gridApi,
           viewContainerRef: this._viewContainerRef,
-          getColDef: (col) => {
-            const def = this.getColumnDefForColumn(col);
-            return def && this.isColDef(def) ? def : null;
-          },
+          // Resolve the effective ColDef through the SAME helper the canvas uses
+          // for its skip decision (getColumnDef in renderer prep). Sharing one
+          // resolver is what guarantees the overlay's mount decision can never
+          // disagree with what the canvas chose not to paint — using a second
+          // resolver risks leaving a cell blank (canvas skipped, overlay didn't
+          // mount) or double-drawn.
+          getColDef: (col) => getColumnDef(col, this.gridApi),
         });
         this.canvasRenderer.onAfterRender = (layout) => {
           this.cellOverlayManager?.sync(layout);
@@ -496,6 +499,10 @@ export class ArgentGridComponent<TData = any>
         this.canvasRenderer?.ensureIndexVisible(event.value.index, event.value.position);
       } else if (event.type === 'ensureColumnVisible') {
         this.canvasRenderer?.scrollToColumn(event.value.colId);
+      } else if (event.type === 'focusChanged') {
+        // Focus only moves the ring — a view change, not a data change. Repaint
+        // without forcing every visible overlay cell to re-bind.
+        this.canvasRenderer?.repaint();
       } else {
         // All other state changes (sort, filter, rangeSelection, etc.) go through the
         // rAF-coalesced scheduler. Multiple rapid events (e.g. rangeSelectionChanged
@@ -1156,6 +1163,9 @@ export class ArgentGridComponent<TData = any>
   handleKeyDown(event: KeyboardEvent): void {
     // The editor owns keys while editing; menus/overlays own them while open.
     if (this.isEditing || this.activeContextMenu || this.activeHeaderMenu) return;
+    // Keys typed into the grid's own form controls (floating filters, popups,
+    // sidebar) belong to those inputs — don't hijack them for cell nav/editing.
+    if (this.isEditableTarget(event.target)) return;
 
     const isCtrlOrMeta = event.ctrlKey || event.metaKey;
 
@@ -1221,6 +1231,18 @@ export class ArgentGridComponent<TData = any>
   // ============================================================================
   // KEYBOARD NAVIGATION
   // ============================================================================
+
+  /**
+   * True when a key event originates from an editable form control (input,
+   * textarea, select, or contenteditable). Such keys must reach that control
+   * instead of being captured for grid keyboard navigation/editing.
+   */
+  private isEditableTarget(target: EventTarget | null): boolean {
+    const el = target as HTMLElement | null;
+    if (!el || !el.tagName) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+  }
 
   /** Visible columns in display order (excludes hidden columns). */
   private getNavColumns(): Column[] {
@@ -1288,9 +1310,9 @@ export class ArgentGridComponent<TData = any>
   }
 
   private moveFocusTab(backwards: boolean, event: KeyboardEvent): void {
-    event.preventDefault();
     const focused = this.gridApi.getFocusedCell();
     if (!focused?.column) {
+      event.preventDefault();
       this.focusFirstCell();
       return;
     }
@@ -1301,7 +1323,12 @@ export class ArgentGridComponent<TData = any>
       0,
       true
     );
-    if (next) this.setFocus(next.rowIndex, next.colId);
+    // Only consume Tab when it actually moves within the grid; at the first/last
+    // cell let it bubble so keyboard focus can leave the grid (no focus trap).
+    if (next) {
+      event.preventDefault();
+      this.setFocus(next.rowIndex, next.colId);
+    }
   }
 
   private moveFocusRowEdge(end: boolean, ctrl: boolean, event: KeyboardEvent): void {

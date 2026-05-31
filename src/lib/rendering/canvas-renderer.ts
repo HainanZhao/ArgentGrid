@@ -364,6 +364,17 @@ export class CanvasRenderer<TData = any> {
   }
 
   /**
+   * Repaint the canvas WITHOUT flagging a data change. Use for view-only
+   * changes such as moving the keyboard-focus ring: the overlay then only
+   * repositions visible cells instead of re-binding (change-detecting) all of
+   * them, so holding an arrow key doesn't trigger a per-keystroke CD storm.
+   */
+  repaint(): void {
+    this.damageTracker.markAllDirty();
+    this.scheduleRender();
+  }
+
+  /**
    * Schedule a render on the next animation frame.
    * Coalesces: if a frame is already in-flight, marks a follow-up so the next
    * frame fires immediately after (no renders dropped, no pile-up).
@@ -574,6 +585,21 @@ export class CanvasRenderer<TData = any> {
     }
   }
 
+  /**
+   * Top (in content coordinates, pre-scroll) of a row, honoring variable row
+   * heights via the API's cumulative model and falling back to a flat height.
+   */
+  private rowTopFor(rowIndex: number): number {
+    return typeof this.gridApi.getRowY === 'function'
+      ? this.gridApi.getRowY(rowIndex)
+      : rowIndex * this.theme.rowHeight;
+  }
+
+  /** Height of a specific row, honoring per-row heights when present. */
+  private rowHeightFor(rowIndex: number): number {
+    return this.gridApi.getDisplayedRowAtIndex(rowIndex)?.rowHeight || this.theme.rowHeight;
+  }
+
   /** Draw the keyboard-focus ring around the currently focused cell, if any. */
   private drawFocusedCell(positionedColumns: PositionedColumn[]): void {
     const focused = this.gridApi.getFocusedCell();
@@ -586,8 +612,11 @@ export class CanvasRenderer<TData = any> {
     const pc = positionedColumns.find((p) => p.column.colId === focused.column!.colId);
     if (!pc) return;
 
-    const y = focused.rowIndex * this.theme.rowHeight - this.scrollTop;
-    drawCellSelectionBorder(this.ctx, pc.x, y, pc.width, this.theme.rowHeight, '#2196f3');
+    // Use the cumulative row model (not a flat rowHeight) so the ring lines up
+    // with the canvas rows and the DOM cell overlay under variable row heights.
+    const y = this.rowTopFor(focused.rowIndex) - this.scrollTop;
+    const height = this.rowHeightFor(focused.rowIndex);
+    drawCellSelectionBorder(this.ctx, pc.x, y, pc.width, height, '#2196f3');
   }
 
   private renderRow(
@@ -961,8 +990,10 @@ export class CanvasRenderer<TData = any> {
     const container = this.canvas.parentElement;
     if (!container) return;
 
-    const rowTop = rowIndex * this.theme.rowHeight;
-    const rowBottom = rowTop + this.theme.rowHeight;
+    // Honor variable row heights so the target row is actually brought into
+    // view (a flat rowHeight scrolls to the wrong offset under variable heights).
+    const rowTop = this.rowTopFor(rowIndex);
+    const rowBottom = rowTop + this.rowHeightFor(rowIndex);
     const viewHeight = this.viewportHeight || container.clientHeight;
     const viewTop = this.scrollTop;
     const viewBottom = this.scrollTop + viewHeight;
