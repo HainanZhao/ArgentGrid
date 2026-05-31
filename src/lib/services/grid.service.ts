@@ -39,6 +39,7 @@ export class GridService<TData = any> {
   private selectedRows: Set<string> = new Set();
   private expandedGroups: Set<string> = new Set();
   private cellRanges: CellRange[] = [];
+  private focusedCell: { rowIndex: number; colId: string } | null = null;
   private gridId: string = '';
   private gridOptions: GridOptions<TData> | null = null;
   public gridStateChanged$ = new Subject<{
@@ -915,8 +916,24 @@ export class GridService<TData = any> {
       getUniqueValues: (field: string) => this.getUniqueValues(field),
 
       // Focus API
-      setFocusedCell: () => {},
-      getFocusedCell: () => null,
+      setFocusedCell: (rowIndex, colKey) => {
+        if (rowIndex == null || !colKey) {
+          if (this.focusedCell) {
+            this.focusedCell = null;
+            this.gridStateChanged$.next({ type: 'focusChanged' });
+          }
+          return;
+        }
+        this.focusedCell = { rowIndex, colId: colKey };
+        this.gridStateChanged$.next({ type: 'focusChanged' });
+      },
+      getFocusedCell: () => {
+        if (!this.focusedCell) return null;
+        return {
+          rowIndex: this.focusedCell.rowIndex,
+          column: this.columns.get(this.focusedCell.colId),
+        };
+      },
 
       // Refresh API
       refreshCells: () => {},
@@ -930,8 +947,13 @@ export class GridService<TData = any> {
       refreshHeader: () => {},
 
       // Scroll API
-      ensureIndexVisible: () => {},
-      ensureColumnVisible: () => {},
+      ensureIndexVisible: (index, position) =>
+        this.gridStateChanged$.next({
+          type: 'ensureIndexVisible',
+          value: { index, position: position ?? 'auto' },
+        }),
+      ensureColumnVisible: (key) =>
+        this.gridStateChanged$.next({ type: 'ensureColumnVisible', value: { colId: key } }),
 
       // Destroy API
       destroy: () => {

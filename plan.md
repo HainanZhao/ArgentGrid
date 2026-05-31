@@ -33,7 +33,7 @@
 | **Tooltips** | Yes | Yes | **✅ DOM overlay** |
 | **State Persistence** | No | Yes | **✅ LocalStorage** |
 | **Overlays (loading/no-rows)** | Yes | Yes | **✅** |
-| **Keyboard Navigation** | Cell-level | Advanced | **⚠️ Editor + copy/paste only; no cell-to-cell nav** |
+| **Keyboard Navigation** | Cell-level | Advanced | **✅ Cell-to-cell nav (arrows/Tab/Home/End/PageUp-Down), Enter + type-to-edit, focus ring, ensureIndexVisible/ColumnVisible** |
 | **Auto / Dynamic Row Height** | Yes | Yes | **❌ Fixed heights only** |
 | **Accessibility (ARIA)** | Yes | Yes | **⚠️ Headers only — canvas content not exposed to AT** |
 | **Integrated Charts** | No | Yes | **❌ Planned** |
@@ -67,9 +67,12 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
   - [x] `cellRenderer: MyComponent` (Angular class) + `cellRendererSelector`; AG-Grid-style `ICellRendererParams` / `ICellRendererAngularComp` (`agInit`/`refresh`). Validated in `Features/CustomComponents` story (interactive pill + star rating, click + `applyTransaction` from a cell).
   - [ ] Follow-ups: **custom DOM headers/filters** over the canvas (same layer); **pinned component columns** edge cases; function-returns-`HTMLElement` renderers; reduce first-paint flash of overlay cells.
   - Unlocks links, buttons, images, framework components in cells.
-- [ ] **T1.2 — Full keyboard navigation**
-  - Arrow keys, Tab/Shift-Tab, Home/End, PageUp/Down, Enter-to-edit, type-to-edit.
-  - Visible focus ring on canvas; `ensureIndexVisible`/`ensureColumnVisible` integration.
+- [x] **T1.2 — Full keyboard navigation** — **landed**
+  - [x] Arrow keys (clamp at edges), Tab/Shift-Tab (wrap rows), Home/End (row), Ctrl+Home/End (grid), PageUp/Down, Enter-to-edit, type-to-edit. Dispatch in `handleKeyDown` via shared `computeNextCell` helper (reused by editor-Tab `moveToNextCell`).
+  - [x] Focused-cell state in `GridService` (`setFocusedCell`/`getFocusedCell`), mirroring the `cellRanges` pattern; visible focus ring drawn on canvas (`CanvasRenderer.drawFocusedCell` via `drawCellSelectionBorder`).
+  - [x] `ensureIndexVisible` (auto/top/bottom) + `ensureColumnVisible`/`scrollToColumn` (center-column scroll math; pinned cols are no-ops). Click-to-focus via `onCellClick`.
+  - [x] Validated: `grid.service.spec.ts` (Focus + Scroll API) + `e2e/keyboard-nav.spec.ts` (8 cases) against the `Features/ArgentGrid/KeyboardNavigation` story.
+  - [ ] Follow-ups: cell-to-cell range extension on Shift+Arrow; focus traversal into pinned rows (top/bottom); damage-tracked partial repaint of focus ring (currently full `render()`).
 - [ ] **T1.3 — Named cell-renderer registry**
   - `cellRenderer: 'myRenderer'` resolution; registration API. Enables T1.1 and AG Grid API compatibility.
 
@@ -117,7 +120,7 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
 
 - **Sparklines**: render correctly on canvas (previously a service helper looked stubbed — the real drawing lives in `render/primitives.ts`). Marked ✅.
 - **Master/Detail**: previously "✅ Complete" — actual detail rows render placeholder text only. Downgraded to ⚠️.
-- **Keyboard Navigation**: previously implied broad support — only editor keys + copy/paste exist. Downgraded to ⚠️.
+- **Keyboard Navigation**: re-baseline found only editor keys + copy/paste (downgraded to ⚠️). **Now resolved** — full cell-to-cell navigation implemented in T1.2, marked ✅.
 - **Custom Cell Renderers**: previously framed as supported — only canvas primitives + string-returning functions. No DOM/framework components. This is now Tier 1 priority.
 - **Column Virtualization (horizontal)**: not implemented; all visible columns are drawn each frame.
 - **Accessibility**: headers only; canvas content not exposed to assistive tech.

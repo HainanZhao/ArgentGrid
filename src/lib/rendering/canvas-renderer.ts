@@ -6,6 +6,7 @@ import {
   // Theme
   DEFAULT_THEME,
   drawCell,
+  drawCellSelectionBorder,
   drawColumnLines,
   drawRangeSelectionBorder,
   // Lines
@@ -59,6 +60,9 @@ export class CanvasRenderer<TData = any> {
   get currentScrollLeft(): number {
     return this.scrollLeft;
   }
+  get currentViewportHeight(): number {
+    return this.viewportHeight;
+  }
 
   private animationFrameId: number | null = null;
   // When a render is already in-flight and another is requested, coalesce it here
@@ -107,6 +111,8 @@ export class CanvasRenderer<TData = any> {
   // Callbacks
   onCellDoubleClick?: (rowIndex: number, colId: string) => void;
   onRowClick?: (rowIndex: number, event: MouseEvent) => void;
+  /** Fired on a left-click that resolves to a cell, with the resolved colId (for focus). */
+  onCellClick?: (rowIndex: number, colId: string) => void;
   onMouseDown?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
   onMouseMove?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
   onMouseUp?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
@@ -487,6 +493,9 @@ export class CanvasRenderer<TData = any> {
     // Draw range selections
     this.drawRangeSelections(positionedColumns, leftWidth, rightWidth, width);
 
+    // Draw the keyboard-focus ring on top of everything else
+    this.drawFocusedCell(positionedColumns);
+
     // Clear damage
     this.damageTracker.clear();
 
@@ -563,6 +572,22 @@ export class CanvasRenderer<TData = any> {
         }
       );
     }
+  }
+
+  /** Draw the keyboard-focus ring around the currently focused cell, if any. */
+  private drawFocusedCell(positionedColumns: PositionedColumn[]): void {
+    const focused = this.gridApi.getFocusedCell();
+    if (!focused || !focused.column) return;
+
+    const rowCount = this.gridApi.getDisplayedRowCount();
+    if (focused.rowIndex < 0 || focused.rowIndex >= rowCount) return;
+
+    // Off-screen horizontally (center column scrolled out of view) → nothing to draw.
+    const pc = positionedColumns.find((p) => p.column.colId === focused.column!.colId);
+    if (!pc) return;
+
+    const y = focused.rowIndex * this.theme.rowHeight - this.scrollTop;
+    drawCellSelectionBorder(this.ctx, pc.x, y, pc.width, this.theme.rowHeight, '#2196f3');
   }
 
   private renderRow(
@@ -862,6 +887,10 @@ export class CanvasRenderer<TData = any> {
       }
     }
 
+    if (clickedCol && this.onCellClick) {
+      this.onCellClick(rowIndex, clickedCol.colId);
+    }
+
     if (this.onRowClick) {
       this.onRowClick(rowIndex, event);
     }
@@ -922,6 +951,69 @@ export class CanvasRenderer<TData = any> {
 
   scrollToTop(): void {
     this.scrollToRow(0);
+  }
+
+  /**
+   * Scroll vertically so the given row is in view.
+   * `auto` only scrolls when the row is off-screen; `top`/`bottom` align the edge.
+   */
+  ensureIndexVisible(rowIndex: number, position: 'top' | 'bottom' | 'auto' = 'auto'): void {
+    const container = this.canvas.parentElement;
+    if (!container) return;
+
+    const rowTop = rowIndex * this.theme.rowHeight;
+    const rowBottom = rowTop + this.theme.rowHeight;
+    const viewHeight = this.viewportHeight || container.clientHeight;
+    const viewTop = this.scrollTop;
+    const viewBottom = this.scrollTop + viewHeight;
+
+    let newTop = this.scrollTop;
+    if (position === 'top') {
+      newTop = rowTop;
+    } else if (position === 'bottom') {
+      newTop = rowBottom - viewHeight;
+    } else {
+      if (rowTop < viewTop) newTop = rowTop;
+      else if (rowBottom > viewBottom) newTop = rowBottom - viewHeight;
+      else return; // already fully visible
+    }
+
+    newTop = Math.max(0, newTop);
+    if (newTop === this.scrollTop) return;
+    container.scrollTop = newTop;
+    this.scrollTop = newTop;
+    this.damageTracker.markAllDirty();
+    this.scheduleRender();
+  }
+
+  /**
+   * Scroll horizontally so the given (center) column is in view. Pinned columns
+   * are always visible, so this is a no-op for them.
+   */
+  scrollToColumn(colId: string): void {
+    const container = this.canvas.parentElement;
+    if (!container) return;
+
+    const columns = this.getVisibleColumns();
+    const col = columns.find((c) => c.colId === colId);
+    if (!col || col.pinned) return;
+
+    const { left: leftWidth, right: rightWidth } = getPinnedWidths(columns);
+    const centerViewport =
+      (this.viewportWidth || container.clientWidth) - this.scrollbarWidth - leftWidth - rightWidth;
+    const colStart = getCenterColumnOffset(col, columns);
+    const colEnd = colStart + col.width;
+
+    let newLeft = this.scrollLeft;
+    if (colStart < this.scrollLeft) newLeft = colStart;
+    else if (colEnd > this.scrollLeft + centerViewport) newLeft = colEnd - centerViewport;
+
+    newLeft = Math.max(0, newLeft);
+    if (newLeft === this.scrollLeft) return;
+    container.scrollLeft = newLeft;
+    this.scrollLeft = newLeft;
+    this.damageTracker.markAllDirty();
+    this.scheduleRender();
   }
 
   scrollToBottom(): void {

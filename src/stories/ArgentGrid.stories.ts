@@ -358,6 +358,50 @@ export const MultiColumnSorting: Story = {
   },
 };
 
+export const KeyboardNavigation: Story = {
+  render: (args) => ({
+    props: {
+      ...args,
+      onGridReady: (gridApi: unknown) => {
+        (window as unknown as { __gridApi: unknown }).__gridApi = gridApi;
+      },
+    },
+    template: `
+      <argent-grid
+        [columnDefs]="columnDefs"
+        [rowData]="rowData"
+        [height]="height"
+        [width]="width"
+        [theme]="theme"
+        (gridReady)="onGridReady($event)">
+      </argent-grid>
+    `,
+  }),
+  args: {
+    columnDefs: [
+      { field: 'id', headerName: 'ID', width: 80, editable: true },
+      { field: 'name', headerName: 'Name', width: 200, editable: true },
+      { field: 'department', headerName: 'Department', width: 180, editable: true },
+      { field: 'role', headerName: 'Role', width: 200, editable: true },
+      { field: 'salary', headerName: 'Salary', width: 120, editable: true },
+    ],
+    rowData: generateStaticData(200),
+    height: 'calc(100vh - 60px)',
+    width: '100%',
+    theme: themeQuartz,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '**Keyboard navigation**: click a cell or use the arrow keys, Tab/Shift-Tab, Home/End ' +
+          '(Ctrl+Home / Ctrl+End for grid edges), PageUp/PageDown to move the focus ring. ' +
+          'Enter or any printable key starts editing the focused cell.',
+      },
+    },
+  },
+};
+
 export const Overlays: Story = {
   render: (args) => ({
     props: {
