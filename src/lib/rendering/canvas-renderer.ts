@@ -24,6 +24,7 @@ import {
   getRowAtY,
   getValueByPath,
   getVisibleRowRange,
+  groupIndicatorAreaWidth,
   isColumnVisible,
   mergeTheme,
   PositionedColumn,
@@ -905,7 +906,9 @@ export class CanvasRenderer<TData = any> {
           textX += clickedCol.width;
         }
 
-        const indicatorAreaEnd = textX + indent + this.theme.groupIndicatorSize + 3;
+        // Shared geometry with the label offset in drawCellContent so the
+        // clickable toggle area matches where the indicator is actually drawn.
+        const indicatorAreaEnd = textX + groupIndicatorAreaWidth(rowNode.level, this.theme);
 
         if (x >= textX + indent && x < indicatorAreaEnd) {
           this.gridApi.setRowNodeExpanded(rowNode, !rowNode.expanded);

@@ -253,8 +253,17 @@ export function drawCellContent<TData = any>(
   // 7. Default: Text rendering
   if (!formattedValue) return;
 
+  // On the auto-group column, reserve room at the left for the tree indent +
+  // expand/collapse indicator (drawn by drawGroupIndicators) so the group/leaf
+  // label doesn't render on top of the toggle.
+  const isAutoGroupCol = context.column.colId === 'ag-Grid-AutoColumn';
+  const groupOffset =
+    isAutoGroupCol && rowNode && (rowNode.group || rowNode.level > 0)
+      ? groupIndicatorAreaWidth(rowNode.level, theme)
+      : 0;
+
   // Calculate text position with padding
-  const textX = x + theme.cellPadding;
+  const textX = x + theme.cellPadding + groupOffset;
   const textY = y + height / 2; // Centered vertically
 
   // Handle cellStyle color
@@ -277,8 +286,8 @@ export function drawCellContent<TData = any>(
   ctx.fillStyle = textColor;
   ctx.textBaseline = 'middle';
 
-  // Truncate text if needed
-  const maxWidth = width - theme.cellPadding * 2;
+  // Truncate text if needed (the group indent/indicator eats into the width).
+  const maxWidth = width - theme.cellPadding * 2 - groupOffset;
   const truncatedText = colDef?.suppressEllipsis
     ? formattedValue
     : truncateText(ctx, formattedValue, maxWidth);
@@ -286,6 +295,17 @@ export function drawCellContent<TData = any>(
   if (truncatedText) {
     ctx.fillText(truncatedText, Math.floor(textX), Math.floor(textY));
   }
+}
+
+/**
+ * Width (px) reserved at the left content edge of an auto-group cell for the
+ * tree indent plus the expand/collapse indicator (and a small gap). Group
+ * labels must start after this so they don't overlap the toggle, and it is the
+ * single source of truth shared with the click hit-test in CanvasRenderer so
+ * the drawn toggle, the label, and the clickable area all stay aligned.
+ */
+export function groupIndicatorAreaWidth(level: number, theme: GridTheme): number {
+  return level * theme.groupIndentWidth + theme.groupIndicatorSize + 3;
 }
 
 /**
