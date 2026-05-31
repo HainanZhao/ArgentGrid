@@ -15,10 +15,12 @@ import {
   Output,
   type SimpleChanges,
   ViewChild,
+  ViewContainerRef,
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
+import { CellOverlayManager } from '../rendering/cell-overlay-manager';
 import { isColumnVisible } from '../rendering/render/column-utils';
 import { GridService } from '../services/grid.service';
 import { applyThemeCSSVariables, convertThemeToGridTheme } from '../themes/theme-builder';
@@ -65,6 +67,7 @@ export class ArgentGridComponent<TData = any>
   @ViewChild('headerScrollable') headerScrollableRef!: ElementRef<HTMLDivElement>;
   @ViewChild('headerScrollableFilter') headerScrollableFilterRef!: ElementRef<HTMLDivElement>;
   @ViewChild('editorInput') editorInputRef!: ElementRef<HTMLInputElement>;
+  @ViewChild('cellOverlayLayer') cellOverlayLayerRef!: ElementRef<HTMLDivElement>;
 
   canvasHeight = 0;
   showOverlay = false;
@@ -173,6 +176,7 @@ export class ArgentGridComponent<TData = any>
   public Math = Math;
   public scrollbarWidth = 0;
   private canvasRenderer!: CanvasRenderer;
+  private cellOverlayManager?: CellOverlayManager<TData>;
   private destroy$ = new Subject<void>();
   private gridService = new GridService<TData>();
   private horizontalScrollListener?: (e: Event) => void;
@@ -180,7 +184,8 @@ export class ArgentGridComponent<TData = any>
 
   constructor(
     @Inject(ChangeDetectorRef) private _cdr: ChangeDetectorRef,
-    private _elementRef: ElementRef<HTMLElement>
+    private _elementRef: ElementRef<HTMLElement>,
+    private _viewContainerRef: ViewContainerRef
   ) {}
 
   ngOnInit(): void {
@@ -310,6 +315,23 @@ export class ArgentGridComponent<TData = any>
       this.canvasRenderer.onMouseUp = () => {
         this.isRangeSelecting = false;
       };
+
+      // DOM/Angular cell-renderer overlay: stays in lockstep with the canvas by
+      // syncing on every paint (which already covers scroll/resize/sort/filter).
+      if (this.cellOverlayLayerRef) {
+        this.cellOverlayManager = new CellOverlayManager<TData>({
+          container: this.cellOverlayLayerRef.nativeElement,
+          gridApi: this.gridApi,
+          viewContainerRef: this._viewContainerRef,
+          getColDef: (col) => {
+            const def = this.getColumnDefForColumn(col);
+            return def && this.isColDef(def) ? def : null;
+          },
+        });
+        this.canvasRenderer.onAfterRender = (layout) => {
+          this.cellOverlayManager?.sync(layout);
+        };
+      }
     }
 
     // Setup viewport dimensions and resize observer
@@ -398,6 +420,7 @@ export class ArgentGridComponent<TData = any>
       this.resizeObserver.disconnect();
     }
 
+    this.cellOverlayManager?.destroy();
     this.gridApi?.destroy();
     this.canvasRenderer?.destroy();
     this.onCanvasMouseLeave();

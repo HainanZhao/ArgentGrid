@@ -16,6 +16,23 @@ import {
 import { getFontFromTheme } from './theme';
 import { CellDrawContext, ColumnPrepResult, GridTheme } from './types';
 
+/** True when `x` is an Angular component class (has a compiled component def). */
+export function isAngularComponent(x: any): boolean {
+  return typeof x === 'function' && !!x?.ɵcmp;
+}
+
+/**
+ * True when a column renders through the DOM/Angular overlay layer rather than
+ * the canvas. The canvas must NOT draw text for these cells — the overlay owns
+ * their content.
+ */
+export function usesComponentRenderer<TData = any>(colDef: ColDef<TData> | null): boolean {
+  if (!colDef) return false;
+  return (
+    isAngularComponent(colDef.cellRenderer) || typeof colDef.cellRendererSelector === 'function'
+  );
+}
+
 /**
  * Get value from object using path (e.g. 'pivotData.NY.salary')
  */
@@ -125,6 +142,12 @@ export function drawCellContent<TData = any>(
   context: CellDrawContext<TData>
 ): void {
   const { x, y, width, height, value, formattedValue, theme, colDef, rowNode, api } = context;
+
+  // 0. Component-rendered cells are painted by the DOM overlay layer — the
+  // canvas only provides the (already-drawn) background. Skip all content.
+  if (usesComponentRenderer(colDef)) {
+    return;
+  }
 
   // 1. Check for dedicated checkbox renderer or internal selection column
   if (colDef?.cellRenderer === 'checkbox' || context.column.colId === 'ag-Grid-SelectionColumn') {
@@ -375,8 +398,13 @@ export function getFormattedValue<TData = any>(
     return '';
   }
 
-  // Use custom cellRenderer if provided
-  if (colDef && typeof colDef.cellRenderer === 'function') {
+  // Use custom cellRenderer if provided (string-returning function only — an
+  // Angular component class is also a function but is handled by the overlay).
+  if (
+    colDef &&
+    typeof colDef.cellRenderer === 'function' &&
+    !isAngularComponent(colDef.cellRenderer)
+  ) {
     try {
       const result = colDef.cellRenderer({
         value,

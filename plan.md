@@ -2,174 +2,124 @@
 
 > **Goal:** Build a free, high-performance alternative to AG Grid Enterprise using Canvas rendering and a headless logic layer.
 
-## ⚖️ AG Grid Comparison Matrix
+> **Note on this document:** The status below is a *code-verified* audit (re-baselined 2026-05-31), not an aspirational checklist. A feature is marked ✅ only when real working logic exists. ⚠️ means partial/stubbed. ❌ means missing. Where earlier versions of this plan over-claimed, the entry is corrected and annotated.
 
-| Feature Category | AG Grid Community | AG Grid Enterprise | **ArgentGrid (Current)** |
+## ⚖️ AG Grid Comparison Matrix (verified)
+
+| Feature Category | AG Grid Community | AG Grid Enterprise | **ArgentGrid (Verified)** |
 | :--- | :--- | :--- | :--- |
-| **Rendering Engine** | DOM-based | DOM-based | **Canvas-based (GPU Opt)** |
-| **Data Volume Limit** | ~100k rows | Millions (SSRM) | **1M+ rows (Client-side)** |
-| **Row Models** | Client-side only | Client, **SSRM, Infinite** | **Client-side only** |
-| **Custom Components** | Header, Cell, Filter | Header, Cell, Filter | **Hardcoded / String-based** |
-| **Sorting & Filtering**| Yes (Basic) | Yes (Advanced) | **Yes (Client-side)** |
-| **Filter Types** | Text, Num, Date | + **Set Filter**, Multi | **Text, Num, Date, Boolean, Set** ✅ |
-| **Row Grouping** | No | Yes | **Yes (Hierarchical)** |
-| **Aggregation** | No | Yes | **Yes (Sum/Avg/Min/Max/Cnt)** |
-| **Pivoting** | No | Yes | **Yes (Basic)** |
-| **Master/Detail** | No | Yes | **Yes (Basic)** |
-| **Tree Data** | Basic | Advanced | **Planned (Phase IV)** |
-| **Selection** | Row only | Row + **Range** | **Row + Range (Basic)** |
-| **Excel Export** | No (CSV only) | True .xlsx | **True .xlsx & CSV** |
-| **Context Menu** | No | Yes | **Yes (Basic)** |
-| **Header Menus** | Basic | Advanced | **Yes (Sort, Hide, Pin)** |
-| **Side Bar** | No | Yes | **Yes (Columns, Filters)** |
-| **Keyboard Nav** | Yes (Cell-level) | Yes (Advanced) | **🚧 Phase VI** |
-| **State Persistence** | No | Yes | **Yes** ✅ (LocalStorage) |
-| **Integrated Charts** | No | Yes | **Planned (Phase IX)** |
-| **Sparklines** | No | Yes | **Yes (Area, Line, Bar)** |
-| **Accessibility (ARIA)**| Yes | Yes | **Partial (Headers only)** |
-
-
-## 🚀 Status: Phase VI Underway - Advanced UX
-
-**Phases I-V**: ✅ Complete (100%)  
-**Phase VI**: 🚧 Active (Advanced UX & Validation)  
-**Phase VII**: ⏳ Next (SSRM & Data Scale)  
-**Phase VIII**: ⏳ Future (AI & Formulas)
-**Phase IX**: ⏳ Future (Enterprise Productivity)
-
-ArgentGrid now has feature parity with AG Grid Enterprise for core features, and has successfully migrated to a Storybook-driven development workflow.
+| **Rendering Engine** | DOM-based | DOM-based | **Canvas viewport + DOM headers** |
+| **Data Volume (client-side)** | ~100k rows | Millions (SSRM) | **1M+ rows** ✅ |
+| **Row Models** | Client-side | Client, SSRM, Infinite | **Client-side only** ❌ |
+| **Custom Cell Components** | Any framework component | Any framework component | **⚠️ Canvas primitives + string functions only — no DOM/Angular components** |
+| **Sorting** | Yes | Yes | **✅ Single + multi-column** |
+| **Filtering** | Text, Num, Date | + Set, Multi | **✅ Text, Num, Date, Boolean, Set; quick + floating filters** |
+| **Cell Editing** | Yes | Yes | **✅ Inline (DOM overlay), valueParser/Setter, validation** |
+| **Selection** | Row | Row + Range | **✅ Row + checkbox + Range** |
+| **Column Pin / Resize / Reorder** | Yes | Yes | **✅** |
+| **Row Pinning (top/bottom)** | Yes | Yes | **✅** |
+| **Column Virtualization (horizontal)** | Yes | Yes | **❌ Draws all visible columns** |
+| **Row Grouping** | No | Yes | **✅ Hierarchical** |
+| **Aggregation** | No | Yes | **✅ Logic complete; ⚠️ weak group-row visuals** |
+| **Pivoting** | No | Yes | **✅ Basic** |
+| **Master/Detail** | No | Yes | **⚠️ Placeholder rendering only** |
+| **Tree Data** | Basic | Advanced | **❌ Missing** |
+| **Pagination** | Yes | Yes | **✅ Full API** |
+| **Clipboard (copy/paste)** | Yes | Yes (range) | **✅ TSV, copy-with-headers** |
+| **Context / Header Menus** | Community basic | Advanced | **✅ Context + header menus** |
+| **Side Bar / Tool Panels** | No | Yes | **✅ Columns + Filters** |
+| **Excel / CSV Export** | CSV only | True .xlsx | **✅ True .xlsx (ExcelJS) + CSV** |
+| **Sparklines** | No | Yes | **✅ Line/Area/Bar/Column (canvas)** |
+| **Tooltips** | Yes | Yes | **✅ DOM overlay** |
+| **State Persistence** | No | Yes | **✅ LocalStorage** |
+| **Overlays (loading/no-rows)** | Yes | Yes | **✅** |
+| **Keyboard Navigation** | Cell-level | Advanced | **⚠️ Editor + copy/paste only; no cell-to-cell nav** |
+| **Auto / Dynamic Row Height** | Yes | Yes | **❌ Fixed heights only** |
+| **Accessibility (ARIA)** | Yes | Yes | **⚠️ Headers only — canvas content not exposed to AT** |
+| **Integrated Charts** | No | Yes | **❌ Planned** |
+| **Theming** | Yes | Yes | **✅ CSS-var driven (Quartz)** |
 
 ---
 
-## 🗺️ Roadmap
+## 🧭 The Core Architectural Tension
 
-### Phase I: API Extraction & Architecture ✅
-- [x] Map AG Grid `GridOptions`, `ColDef`, and `GridApi` interfaces.
-- [x] Bootstrap Angular library project.
-- [x] Hybrid Architecture: DOM Headers + Canvas Viewport.
-- [x] Virtual Scrolling engine (60fps at 1M rows).
+Canvas rendering buys the headline feature — **1M rows at 60fps** — but it directly fights the two things AG Grid users depend on most:
 
-### Phase II: Core Grid Logic ✅
-- [x] Client-side Sorting.
-- [x] Advanced Filtering (Text, Number, Date, Boolean).
-- [x] Cell Editing (Inline with valueParser/valueSetter).
-- [x] Selection (Single/Multi with Checkbox support).
-- [x] Column & Row Pinning (Left/Right, Top/Bottom).
+1. **Arbitrary custom components in cells / headers / filters** — the single most popular AG Grid capability. Canvas cannot host `<a>`, buttons with handlers, images, or framework components. ArgentGrid currently supports only canvas-drawn primitives (checkbox, badge, button, progress, rating, sparkline) plus `cellRenderer` functions that return *plain strings*.
+2. **Accessibility** — canvas content is invisible to screen readers; only DOM headers are exposed today.
 
-### Phase III: Enterprise Features ✅
-- [x] **Row Grouping**: Hierarchical data with expand/collapse.
-- [x] **Aggregation**: sum, avg, min, max, count, and custom functions.
-- [x] **Export**: CSV and HTML-based Excel export.
+**The pivotal decision:** introduce a recycled **DOM-overlay layer** that positions a small pool of real DOM/Angular components over the canvas for the handful of *visible* cells that opt into component rendering (mirroring how AG Grid virtualizes its own DOM). Everything in Tier 1 below flows from this. It is the highest-leverage work in the roadmap and a prerequisite for genuine parity and a11y.
 
-### Phase IV: UI Interactivity & UX ✅
-- [x] **Column Re-ordering (Drag & Drop)**:
-    - [x] Implement drag handle in DOM headers.
-    - [x] Sidebar column re-ordering via tool panel.
-    - [x] Update `columnDefs` and `GridApi` on drop.
-    - [x] Animate column movement on Canvas.
-- [x] **Column Resizing**:
-    - [x] Add resize handles to DOM header cells.
-    - [x] Implement drag-to-resize logic.
-    - [x] Update `columnDefs` and `GridApi` on resize completion.
-- [x] **Header Menus**:
-    - [x] Add "hamburger" or "ellipsis" menu to column headers.
-    - [x] Support Sort, Filter, and "Hide Column" actions from menu.
-    - [x] Integrate with existing `GridApi`.
-- [x] **Context Menus**:
-    - [x] Right-click cell interaction.
-    - [x] Default actions: Copy, Export, Reset Columns.
-    - [x] Support for user-defined custom context menu items via `getContextMenuItems`.
-- [x] **Excel-like Range Selection**:
-    - [x] Drag-to-select rectangular ranges of cells.
-    - [x] Visual selection box rendered on Canvas.
-    - [x] "Copy with Headers" support.
+---
 
-### Phase V: Advanced Data Analysis ✅
-- [x] **Pivoting**: Excel-style pivot tables (cross-tabulation).
-- [x] **Tool Panels & Sidebars**: Dedicated UI for column management and global filtering.
-- [x] **Master/Detail**: Expandable rows to reveal nested grids or custom templates.
-- [x] **True Excel Export**: Implementation using `exceljs` for native `.xlsx` files with styles.
-- [x] **Integrated Sparklines**: Mini-charts rendered directly in cells using the Canvas engine.
+## 🗺️ Reprioritized Roadmap
 
-### Phase VI: Advanced UX & Developer Experience 🚧
-- [x] **String-Based Cell Renderers**: Support for cellRenderer functions returning plain text.
-  - [x] Basic cellRenderer support
-  - [x] HTML tag stripping (plain text only)
-  - [ ] Registered renderer names (cellRenderer: 'myRenderer')
-- [x] **Context Menu API**: Full implementation of `getContextMenuItems`.
-- [x] **State Persistence**: Save/Restore user grid state to LocalStorage.
-- [x] **Advanced Filtering (Part 1)**: Set Filter (Excel-style checkboxes).
-- [x] **Tooltips**: High-performance tooltips for cells and headers.
-  - [x] Hover detection on Canvas coordinates.
-  - [x] Support for `tooltipField` and `tooltipValueGetter` in `ColDef`.
-- [x] **Quick Filter**: High-performance global search across all visible columns.
-- [x] **Multi-Column Sorting**: Support for sorting by multiple columns (Shift+Click).
-- [x] **Enhanced Clipboard Support**: Copy range selection with headers (TSV format) and paste support.
-- [ ] **Floating Filters**: Inline filter row below column headers for immediate access.
-- [x] **Client-side Pagination**: Efficiently manage and navigate large flat datasets.
-- [x] **Overlay API**: Built-in and customizable "Loading" and "No Rows" overlays.
+Ordered by **importance × popularity** (how often real AG Grid users depend on it) weighted against effort/risk. This supersedes the old Phase I–IX numbering.
 
-- [ ] **Auto-Height & Dynamic Row Height**: Row heights that adapt to cell content.
-- [x] **Multi-Filter Support**: Combine Set Filter with Text/Number filters.
-- [x] **Advanced Editing & Validation**:
-  - [x] **Cell Editor Validation**: Built-in constraints for user input.
-  - [ ] **Bulk Editing**: Drag-to-fill or copy-paste range of values.
-- [ ] **Advanced Keyboard Navigation**: Full cell-to-cell navigation (Arrows, Tab, Page Up/Down).
+### ✅ Done & verified (baseline)
+Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+validation, selection+range, pin/resize/reorder, grouping+aggregation logic, pivot (basic), pagination, menus, side bar, CSV/xlsx export, sparklines, tooltips, state persistence, overlays, theming.
 
-### Phase VII: Enterprise Data Scale ⏳ NEXT
-- [ ] **Server-Side Row Model (SSRM)**: Loading and aggregating millions of rows on the server.
-- [ ] **Infinite Row Model**: Standard lazy loading for large flat datasets.
-- [ ] **Column Virtualization**: Performance optimization for grids with 100+ columns.
-- [ ] **Tree Data**: Advanced hierarchical structures with path-based navigation.
+### Tier 1 — Closes the biggest adoption gaps (do first)
 
-### Phase VIII: Next-Gen Analytics & AI ⏳ FUTURE
-- [ ] **Formula Engine**: Excel-like formula support in cells.
-- [ ] **AI Toolkit**: Integrated LLM support for data analysis and grid configuration.
-- [ ] **Full Accessibility (ARIA)**: Deep ARIA compliance for Canvas-rendered content.
-- [ ] **Touch & Mobile Support**: Optimized touch interactions.
+- [~] **T1.1 — DOM-overlay cell & header renderer system** *(highest impact, highest effort)* — **cell renderers landed**
+  - [x] Recycled pool of absolutely-positioned Angular components composited over the canvas for visible component-cells only (`CellOverlayManager`).
+  - [x] Driven by `CanvasRenderer.onAfterRender` so it stays in lockstep on scroll/resize/sort/filter/data; `PositionedColumn.x` handles pinned offset.
+  - [x] `cellRenderer: MyComponent` (Angular class) + `cellRendererSelector`; AG-Grid-style `ICellRendererParams` / `ICellRendererAngularComp` (`agInit`/`refresh`). Validated in `Features/CustomComponents` story (interactive pill + star rating, click + `applyTransaction` from a cell).
+  - [ ] Follow-ups: **custom DOM headers/filters** over the canvas (same layer); **pinned component columns** edge cases; function-returns-`HTMLElement` renderers; reduce first-paint flash of overlay cells.
+  - Unlocks links, buttons, images, framework components in cells.
+- [ ] **T1.2 — Full keyboard navigation**
+  - Arrow keys, Tab/Shift-Tab, Home/End, PageUp/Down, Enter-to-edit, type-to-edit.
+  - Visible focus ring on canvas; `ensureIndexVisible`/`ensureColumnVisible` integration.
+- [ ] **T1.3 — Named cell-renderer registry**
+  - `cellRenderer: 'myRenderer'` resolution; registration API. Enables T1.1 and AG Grid API compatibility.
 
-### Phase IX: Enterprise Analysis & Productivity ⏳ FUTURE
-- [ ] **Integrated Charts**: Create Bar, Line, and Pie charts directly from range selection.
-- [ ] **Status Bar**: Display Count, Sum, Average, etc. for the currently selected range.
-- [ ] **Excel-style Fill Handle**: Drag-to-fill cell values and sequences.
-- [ ] **Column & Row Spanning**: Complex cell layouts for detailed reports.
-- [ ] **Master/Detail (Advanced)**: Support for multiple detail levels and custom detail components.
+### Tier 2 — High-frequency everyday features
 
-## 🎉 Project Milestone: PHASE VI COMPLETE!
+- [ ] **T2.1 — Auto-height rows + text wrapping** — measure wrapped text, variable row heights, viewport math.
+- [ ] **T2.2 — Horizontal column virtualization** — cull off-screen center columns (needed before wide-grid claims hold).
+- [ ] **T2.3 — Master/Detail (real)** — embed actual nested grid/component in expanded detail rows (depends on T1.1).
+- [ ] **T2.4 — Accessibility / ARIA pass** — off-screen DOM mirror of focused/visible rows with roles, so AT and a11y audits pass (often a procurement hard-requirement).
 
-**ArgentGrid Feature Parity with AG Grid Enterprise:**
+### Tier 3 — Scale & enterprise data
 
-| Feature | Status |
-|---------|--------|
-| Canvas Rendering (1M+ rows) | ✅ Complete |
-| Row Grouping & Aggregation | ✅ Complete |
-| Pivoting | ✅ Complete |
-| Master/Detail | ✅ Complete |
-| Excel Export (.xlsx) | ✅ Complete |
-| Sparklines | ✅ Complete |
-| Context Menu API | ✅ Complete |
-| State Persistence | ✅ Complete |
-| Set Filter | ✅ Complete |
-| Column Reorder/Resize | ✅ Complete |
-| Range Selection | ✅ Complete |
-| Side Bar / Tool Panels | ✅ Complete |
+- [ ] **T3.1 — Infinite Row Model** — lazy block loading; smaller than SSRM, high value.
+- [ ] **T3.2 — Server-Side Row Model (SSRM)** — server-side group/sort/filter, block cache. Gates "enterprise" positioning.
+- [ ] **T3.3 — Tree Data** — path-based hierarchy; reuses grouping infrastructure.
 
-**Next: Phase VII - Enterprise Row Models (SSRM, Infinite)**
+### Tier 4 — Polish & differentiation
 
+- [ ] **T4.1 — Group-row aggregation visuals** (inline agg values on group rows).
+- [ ] **T4.2 — Status bar** (selection sum/count/avg).
+- [ ] **T4.3 — Fill handle** (Excel-style drag-to-fill).
+- [ ] **T4.4 — Integrated charts** from range selection.
+- [ ] **T4.5 — Cell flashing** on data change.
 
 ---
 
 ## 🛠️ Implementation Strategy
 
-1. **Hybrid Rendering Strategy**:
-   - Keep headers as DOM elements for easy Drag-and-Drop implementation (using Angular CDK) and native browser menus.
-   - Maintain the data viewport on Canvas for infinite performance.
-   - Synchronize horizontal scroll between DOM header and Canvas viewport.
+1. **Hybrid Rendering**
+   - DOM headers for drag-and-drop (Angular CDK) and native menus.
+   - Canvas data viewport for performance; sync horizontal scroll between header and canvas.
+   - **New:** recycled DOM-overlay layer (Tier 1) for component cells and accessibility mirror.
 
-2. **State Management**:
-   - Use a centralized `GridService` to maintain the source of truth.
-   - Trigger partial Canvas repaints on state changes to maximize performance.
+2. **State Management**
+   - Centralized `GridService` as the single source of truth.
+   - Partial canvas repaints via the damage tracker on state changes.
 
-3. **Test-Driven Development (TDD)**:
-   - Every new UI feature must have a corresponding Playwright E2E test in the `e2e/` folder, running against isolated Storybook stories.
-   - Logic changes must be verified by Vitest unit tests in `src/lib/services/grid.service.spec.ts`.
+3. **Test-Driven Development**
+   - Every UI feature gets a Playwright E2E test against an isolated Storybook story.
+   - Logic changes verified by Vitest unit tests in `grid.service.spec.ts`.
+
+---
+
+## 📌 Known Discrepancies Corrected in This Re-baseline
+
+- **Sparklines**: render correctly on canvas (previously a service helper looked stubbed — the real drawing lives in `render/primitives.ts`). Marked ✅.
+- **Master/Detail**: previously "✅ Complete" — actual detail rows render placeholder text only. Downgraded to ⚠️.
+- **Keyboard Navigation**: previously implied broad support — only editor keys + copy/paste exist. Downgraded to ⚠️.
+- **Custom Cell Renderers**: previously framed as supported — only canvas primitives + string-returning functions. No DOM/framework components. This is now Tier 1 priority.
+- **Column Virtualization (horizontal)**: not implemented; all visible columns are drawn each frame.
+- **Accessibility**: headers only; canvas content not exposed to assistive tech.
+</content>
+</invoke>

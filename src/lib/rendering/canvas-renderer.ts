@@ -1,4 +1,4 @@
-import { Column, GridApi, IRowNode } from '../types/ag-grid-types';
+import { Column, GridApi, IRowNode, OverlayLayout } from '../types/ag-grid-types';
 import { LiveDataHandler } from './live-data-handler';
 // Import new rendering modules from the index
 import {
@@ -103,6 +103,12 @@ export class CanvasRenderer<TData = any> {
   onMouseDown?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
   onMouseMove?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
   onMouseUp?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
+  /**
+   * Fired at the end of every paint with the current layout so a DOM
+   * cell-overlay layer can stay in lockstep with the canvas. Runs inside the
+   * rAF render callback — must not trigger another synchronous render.
+   */
+  onAfterRender?: (layout: OverlayLayout) => void;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -402,6 +408,8 @@ export class CanvasRenderer<TData = any> {
     if (totalRows === 0) {
       this.damageTracker.clear();
       this.lastRenderDuration = performance.now() - startTime;
+      // Clear any overlay cells left over from a previous non-empty render.
+      this.emitAfterRender(0, 0, []);
       return;
     }
 
@@ -464,6 +472,31 @@ export class CanvasRenderer<TData = any> {
     this.damageTracker.clear();
 
     this.lastRenderDuration = performance.now() - startTime;
+
+    // Notify the DOM cell-overlay layer with the geometry of this frame.
+    this.emitAfterRender(startRow, endRow, positionedColumns);
+  }
+
+  /** Build the OverlayLayout snapshot and notify any listener. */
+  private emitAfterRender(
+    startRow: number,
+    endRow: number,
+    positionedColumns: PositionedColumn[]
+  ): void {
+    if (!this.onAfterRender) return;
+    this.onAfterRender({
+      startRow,
+      endRow,
+      scrollTop: this.scrollTop,
+      rowHeight: this.theme.rowHeight,
+      columns: positionedColumns.map((p) => ({
+        colId: p.column.colId,
+        x: p.x,
+        width: p.width,
+        isPinned: p.isPinned,
+        pinSide: p.pinSide,
+      })),
+    });
   }
 
   private drawRangeSelections(

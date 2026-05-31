@@ -1566,3 +1566,73 @@ export interface DataTypeDefinition<TData = any> {
   cellEditor?: any;
   cellEditorParams?: any;
 }
+
+// ============================================================================
+// CELL RENDERER (DOM / Angular component overlay)
+// ============================================================================
+
+/**
+ * Parameters passed to a DOM/Angular cell renderer component, mirroring
+ * AG Grid's `ICellRendererParams`. Delivered via `agInit(params)` (preferred)
+ * and/or set on a public `params` property.
+ */
+export interface ICellRendererParams<TData = any, TValue = any> {
+  /** The raw cell value (after `valueGetter`, before `valueFormatter`). */
+  value: TValue;
+  /** The formatted value (after `valueFormatter`), if any. */
+  valueFormatted?: string | null;
+  /** The row data object. */
+  data: TData | undefined;
+  /** The row node. */
+  node: IRowNode<TData>;
+  /** The displayed index of the row. */
+  rowIndex: number;
+  /** The column definition this cell belongs to. */
+  colDef: ColDef<TData>;
+  /** The column this cell belongs to. */
+  column: Column;
+  /** The grid API. */
+  api: GridApi<TData>;
+  /** Extra params supplied via `colDef.cellRendererParams`. */
+  [key: string]: any;
+}
+
+/**
+ * Interface an Angular component may implement to participate in the cell
+ * overlay lifecycle, mirroring AG Grid's `ICellRendererAngularComp`.
+ *
+ * - `agInit` is called once when the component is first bound to a cell.
+ * - `refresh` is called when a pooled instance is rebound to a new cell/value.
+ *   Return `false` (or omit the method) to have the grid destroy and recreate
+ *   the component instead of refreshing it in place.
+ */
+export interface ICellRendererAngularComp<TData = any, TValue = any> {
+  agInit(params: ICellRendererParams<TData, TValue>): void;
+  refresh?(params: ICellRendererParams<TData, TValue>): boolean;
+}
+
+/**
+ * Layout snapshot emitted by the canvas renderer after each paint so the
+ * DOM cell-overlay layer can stay in lockstep with the canvas.
+ */
+export interface OverlayLayout {
+  /** First rendered row index (inclusive). */
+  startRow: number;
+  /** Last rendered row index (exclusive). */
+  endRow: number;
+  /** Current vertical scroll offset in pixels. */
+  scrollTop: number;
+  /** Effective row height in pixels. */
+  rowHeight: number;
+  /** Per-column screen geometry (x already accounts for pinning/scroll). */
+  columns: OverlayColumnPosition[];
+}
+
+/** Screen geometry for a single visible column (subset of PositionedColumn). */
+export interface OverlayColumnPosition {
+  colId: string;
+  x: number;
+  width: number;
+  isPinned: boolean;
+  pinSide?: 'left' | 'right';
+}
