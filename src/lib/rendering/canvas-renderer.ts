@@ -87,6 +87,8 @@ export class CanvasRenderer<TData = any> {
   // Column prep results cache
   private columnPreps: Map<string, ColumnPrepResult<TData>> = new Map();
 
+  private overlayColumns: Set<string> = new Set();
+
   // Event listener references for cleanup
   private scrollListener?: (e: Event) => void;
   private resizeListener?: () => void;
@@ -103,6 +105,7 @@ export class CanvasRenderer<TData = any> {
   onMouseDown?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
   onMouseMove?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
   onMouseUp?: (event: MouseEvent, rowIndex: number, colId: string | null) => void;
+  onAfterRender?: (scrollTop: number, scrollLeft: number) => void;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -127,6 +130,14 @@ export class CanvasRenderer<TData = any> {
     this.theme = mergeTheme(DEFAULT_THEME, { rowHeight: this.theme.rowHeight }, theme);
     this.damageTracker.markAllDirty();
     this.scheduleRender();
+  }
+
+  setOverlayColumns(colIds: Set<string>): void {
+    this.overlayColumns = colIds;
+  }
+
+  isOverlayColumn(colId: string): boolean {
+    return this.overlayColumns.has(colId);
   }
 
   /**
@@ -464,6 +475,10 @@ export class CanvasRenderer<TData = any> {
     this.damageTracker.clear();
 
     this.lastRenderDuration = performance.now() - startTime;
+
+    if (this.onAfterRender) {
+      this.onAfterRender(this.scrollTop, this.scrollLeft);
+    }
   }
 
   private drawRangeSelections(
@@ -574,6 +589,23 @@ export class CanvasRenderer<TData = any> {
     rowNode: IRowNode<TData>,
     positionedColumns: PositionedColumn[]
   ): void {
+    if (this.overlayColumns.has(column.colId)) {
+      const isEvenRow = rowNode.displayedRowIndex % 2 === 0;
+      const bgColor = rowNode.selected
+        ? this.theme.bgSelection
+        : isEvenRow
+          ? this.theme.bgCellEven
+          : this.theme.bgCell;
+      this.ctx.fillStyle = bgColor;
+      this.ctx.fillRect(
+        Math.floor(x),
+        Math.floor(y),
+        Math.floor(width),
+        rowNode.rowHeight || this.theme.rowHeight
+      );
+      return;
+    }
+
     const prep = this.columnPreps.get(column.colId);
     if (!prep) return;
 

@@ -16,6 +16,8 @@ export { AgGridCompatibilityDirective } from './lib/directives/ag-grid-compatibi
 export { ClickOutsideDirective } from './lib/directives/click-outside.directive';
 // Canvas renderer
 export { CanvasRenderer } from './lib/rendering/canvas-renderer';
+// Cell Overlay Manager
+export { CellOverlayManager } from './lib/rendering/cell-overlay-manager';
 // Live Data Optimizations
 export { LiveDataOptimizations } from './lib/rendering/live-data-optimizations';
 // Services

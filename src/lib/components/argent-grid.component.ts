@@ -1,10 +1,12 @@
 import { type CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import {
   type AfterViewInit,
+  ApplicationRef,
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
   ElementRef,
+  EnvironmentInjector,
   EventEmitter,
   HostListener,
   Inject,
@@ -14,11 +16,13 @@ import {
   type OnInit,
   Output,
   type SimpleChanges,
+  Type,
   ViewChild,
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
+import { CellOverlayManager } from '../rendering/cell-overlay-manager';
 import { isColumnVisible } from '../rendering/render/column-utils';
 import { GridService } from '../services/grid.service';
 import { applyThemeCSSVariables, convertThemeToGridTheme } from '../themes/theme-builder';
@@ -33,6 +37,7 @@ import type {
   GetContextMenuItemsParams,
   GridApi,
   GridOptions,
+  ICellRendererAngularComp,
   IRowNode,
   MenuItemDef,
   RowSelectionOptions,
@@ -65,6 +70,7 @@ export class ArgentGridComponent<TData = any>
   @ViewChild('headerScrollable') headerScrollableRef!: ElementRef<HTMLDivElement>;
   @ViewChild('headerScrollableFilter') headerScrollableFilterRef!: ElementRef<HTMLDivElement>;
   @ViewChild('editorInput') editorInputRef!: ElementRef<HTMLInputElement>;
+  @ViewChild('cellOverlayContainer') cellOverlayContainerRef!: ElementRef<HTMLDivElement>;
 
   canvasHeight = 0;
   showOverlay = false;
@@ -173,6 +179,7 @@ export class ArgentGridComponent<TData = any>
   public Math = Math;
   public scrollbarWidth = 0;
   private canvasRenderer!: CanvasRenderer;
+  private cellOverlayManager = new CellOverlayManager<TData>();
   private destroy$ = new Subject<void>();
   private gridService = new GridService<TData>();
   private horizontalScrollListener?: (e: Event) => void;
@@ -180,7 +187,9 @@ export class ArgentGridComponent<TData = any>
 
   constructor(
     @Inject(ChangeDetectorRef) private _cdr: ChangeDetectorRef,
-    private _elementRef: ElementRef<HTMLElement>
+    private _elementRef: ElementRef<HTMLElement>,
+    private _appRef: ApplicationRef,
+    private _envInjector: EnvironmentInjector
   ) {}
 
   ngOnInit(): void {
@@ -310,6 +319,14 @@ export class ArgentGridComponent<TData = any>
       this.canvasRenderer.onMouseUp = () => {
         this.isRangeSelecting = false;
       };
+
+      // Wire up overlay sync after each canvas render
+      this.canvasRenderer.onAfterRender = (scrollTop, scrollLeft) => {
+        this.syncCellOverlays(scrollTop, scrollLeft);
+      };
+
+      // Register overlay columns
+      this.registerOverlayColumns();
     }
 
     // Setup viewport dimensions and resize observer
@@ -383,6 +400,18 @@ export class ArgentGridComponent<TData = any>
         }
       });
     }
+
+    // Initialize cell overlay manager
+    if (this.cellOverlayContainerRef && this.gridApi) {
+      this.cellOverlayManager.initialize(
+        this.cellOverlayContainerRef.nativeElement,
+        this._envInjector,
+        this._appRef,
+        this.gridApi,
+        this.effectiveRowHeight
+      );
+      this.registerOverlayColumns();
+    }
   }
 
   ngOnDestroy(): void {
@@ -400,6 +429,7 @@ export class ArgentGridComponent<TData = any>
 
     this.gridApi?.destroy();
     this.canvasRenderer?.destroy();
+    this.cellOverlayManager.destroy();
     this.onCanvasMouseLeave();
   }
 
@@ -516,6 +546,7 @@ export class ArgentGridComponent<TData = any>
 
     if (this.gridApi) {
       this.gridApi.setColumnDefs(newColumnDefs);
+      this.registerOverlayColumns();
       this.canvasRenderer?.render();
     }
 
@@ -2106,6 +2137,8 @@ export class ArgentGridComponent<TData = any>
 
     this.isEditing = true;
 
+    this.cellOverlayManager.hideOverlayAt(rowIndex, column.colId);
+
     // Focus input after view update
     setTimeout(() => {
       if (this.editorInputRef) {
@@ -2260,6 +2293,8 @@ export class ArgentGridComponent<TData = any>
     this.editingRowNode = null;
     this.editingColDef = null;
     this.validationErrors = null;
+
+    this.cellOverlayManager.showAllOverlays();
     this._cdr.detectChanges();
   }
 
@@ -2405,5 +2440,93 @@ export class ArgentGridComponent<TData = any>
 
     this.isAllSelected = selectedCount === totalCount && totalCount > 0;
     this.isIndeterminateSelection = selectedCount > 0 && selectedCount < totalCount;
+  }
+
+  // ============================================================================
+  // DOM CELL OVERLAY MANAGEMENT
+  // ============================================================================
+
+  private registerOverlayColumns(): void {
+    if (!this.columnDefs || !this.canvasRenderer) return;
+
+    const overlayCols = new Set<string>();
+    const findOverlayCols = (defs: (ColDef<TData> | ColGroupDef<TData>)[]): void => {
+      for (const def of defs) {
+        if ('children' in def) {
+          findOverlayCols(def.children);
+          continue;
+        }
+        const colDef = def as ColDef<TData>;
+        const cellRenderer = colDef.cellRenderer;
+        if (
+          cellRenderer &&
+          typeof cellRenderer === 'function' &&
+          this.isAngularComponent(cellRenderer)
+        ) {
+          const colId = colDef.colId || colDef.field?.toString();
+          if (colId) {
+            overlayCols.add(colId);
+            this.cellOverlayManager.registerRendererColumn(
+              colId,
+              cellRenderer as Type<ICellRendererAngularComp>
+            );
+          }
+        }
+      }
+    };
+
+    findOverlayCols(this.columnDefs);
+    this.canvasRenderer.setOverlayColumns(overlayCols);
+  }
+
+  private isAngularComponent(cls: any): boolean {
+    if (typeof cls !== 'function') return false;
+    if (typeof cls === 'string') return false;
+    return (
+      !!cls.ɵcmp ||
+      !!cls.ɵfac ||
+      !!cls.decorators ||
+      cls.prototype?.ngOnChanges !== undefined ||
+      cls.prototype?.agInit !== undefined
+    );
+  }
+
+  private syncCellOverlays(scrollTop: number, scrollLeft: number): void {
+    if (!this.gridApi || !this.canvasRenderer) return;
+
+    this.cellOverlayManager.updateScroll(scrollTop, scrollLeft);
+
+    const allVisibleColumns = this.gridApi.getAllColumns().filter((col) => isColumnVisible(col));
+    const overlayCols = allVisibleColumns.filter((col) =>
+      this.cellOverlayManager.hasOverlayColumn(col.colId)
+    );
+
+    if (overlayCols.length === 0) return;
+
+    const viewport = this.viewportRef?.nativeElement;
+    if (!viewport) return;
+
+    const allCols = this.gridApi.getAllColumns().filter((c) => isColumnVisible(c));
+    const { left: allLeftWidth, right: allRightWidth } = allCols.reduce(
+      (acc, col) => {
+        if (col.pinned === 'left') acc.left += col.width || 150;
+        else if (col.pinned === 'right') acc.right += col.width || 150;
+        return acc;
+      },
+      { left: 0, right: 0 }
+    );
+
+    const positions = this.cellOverlayManager.computeVisibleOverlayPositions(
+      overlayCols,
+      allCols,
+      scrollTop,
+      scrollLeft,
+      viewport.clientHeight,
+      viewport.clientWidth,
+      allLeftWidth,
+      allRightWidth
+    );
+
+    this.cellOverlayManager.updatePositions(positions);
   }
 }

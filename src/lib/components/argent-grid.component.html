@@ -299,6 +299,9 @@
                 (mousemove)="onCanvasMouseMove($event)"
                 (mouseleave)="onCanvasMouseLeave()"></canvas>
         
+        <!-- Cell Overlay Container (for custom DOM cell renderers) -->
+        <div #cellOverlayContainer class="argent-grid-cell-overlay-container"></div>
+
         <!-- Cell Editor Overlay -->
         <div class="argent-grid-cell-editor" 
              *ngIf="isEditing"

@@ -454,6 +454,26 @@
   display: block;
 }
 
+.argent-grid-cell-overlay-container {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.ag-cell-overlay {
+  pointer-events: auto;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  overflow: hidden;
+}
+
 .argent-grid-scroll-spacer {
   position: absolute;
   top: 0;

@@ -310,6 +310,11 @@ export function measureText(ctx: CanvasRenderingContext2D, text: string): number
   return ctx.measureText(text).width;
 }
 
+function isAngularComponentClass(cls: any): boolean {
+  if (typeof cls !== 'function') return false;
+  return !!cls.ɵcmp || !!cls.ɵfac || !!cls.decorators || cls.prototype?.agInit !== undefined;
+}
+
 /**
  * Calculate optimal column width based on content
  */
@@ -375,8 +380,13 @@ export function getFormattedValue<TData = any>(
     return '';
   }
 
-  // Use custom cellRenderer if provided
-  if (colDef && typeof colDef.cellRenderer === 'function') {
+  // Use custom cellRenderer if provided (only plain function renderers; Angular component
+  // renderers are handled by the DOM overlay system)
+  if (
+    colDef &&
+    typeof colDef.cellRenderer === 'function' &&
+    !isAngularComponentClass(colDef.cellRenderer)
+  ) {
     try {
       const result = colDef.cellRenderer({
         value,

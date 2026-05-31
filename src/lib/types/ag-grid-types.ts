@@ -1566,3 +1566,40 @@ export interface DataTypeDefinition<TData = any> {
   cellEditor?: any;
   cellEditorParams?: any;
 }
+
+// ============================================================================
+// CUSTOM CELL RENDERER (DOM OVERLAY)
+// ============================================================================
+
+export interface ICellRendererParams<TData = any, TValue = any> {
+  value: TValue;
+  formattedValue?: string;
+  data: TData;
+  node: IRowNode<TData>;
+  colDef: ColDef<TData>;
+  column: Column;
+  api: GridApi<TData>;
+  context?: any;
+}
+
+export interface ICellRendererAngularComp<TData = any, TValue = any> {
+  agInit(params: ICellRendererParams<TData, TValue>): void;
+  refresh?(params: ICellRendererParams<TData, TValue>): boolean;
+}
+
+export interface CellOverlayPosition {
+  rowIndex: number;
+  colId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface CellOverlayInstance {
+  rowIndex: number;
+  colId: string;
+  element: HTMLElement;
+  componentRef: any;
+  params: ICellRendererParams<any>;
+}
