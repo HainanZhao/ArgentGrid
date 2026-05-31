@@ -374,11 +374,16 @@ const getKbGridApi = (): KbGridApi | undefined =>
 const focusedColId = () => getKbGridApi()?.getFocusedCell()?.column?.colId;
 const focusedRow = () => getKbGridApi()?.getFocusedCell()?.rowIndex;
 
-/** Wait for the grid to be ready and give its container DOM keyboard focus. */
+/**
+ * Wait for the grid to be ready and give its container DOM keyboard focus.
+ * Presence checks assert on booleans, never on the GridApi/Element objects —
+ * the Interactions instrumenter serializes expect() args over the channel via
+ * telejson, which throws on rich class instances (`e.replace is not a function`).
+ */
 async function focusGrid(canvasElement: HTMLElement): Promise<HTMLElement> {
-  await waitFor(() => expect(getKbGridApi()).toBeTruthy());
+  await waitFor(() => expect(Boolean(getKbGridApi())).toBe(true));
   const container = canvasElement.querySelector<HTMLElement>('.argent-grid-container');
-  await expect(container).toBeTruthy();
+  await expect(Boolean(container)).toBe(true);
   container?.focus();
   return container as HTMLElement;
 }
@@ -444,7 +449,10 @@ export const KeyboardNavigation: Story = {
       canvas.dispatchEvent(
         new MouseEvent('click', { bubbles: true, clientX: rect.left + 100, clientY: rect.top + 60 })
       );
-      await expect(getKbGridApi()?.getFocusedCell()).toBeTruthy();
+      // Assert with a primitive (the colId string) — never pass the rich Column
+      // object into an instrumented expect(); the Interactions channel serializes
+      // call args via telejson and can't round-trip class instances.
+      await expect(focusedColId()).toBeTruthy();
       container.focus();
     }
 

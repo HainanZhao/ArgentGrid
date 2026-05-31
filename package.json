@@ -46,7 +46,7 @@
     "@storybook/addon-essentials": "^8.6.17",
     "@storybook/angular": "^8.6.17",
     "@storybook/test": "^8.6.17",
-    "@storybook/test-runner": "^0.24.4",
+    "@storybook/test-runner": "^0.22.0",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^3.0.0",
     "jsdom": "^26.0.0",
