@@ -42,8 +42,8 @@ These are inherent to the canvas + client-side design. No config flag changes th
 
 | Area | What breaks | What to do instead |
 |---|---|---|
-| **Cell DOM** ❌ | Cells are painted on canvas — there are **no `.ag-cell` DOM nodes**. Code/tests using `document.querySelector('.ag-cell')`, `[col-id=…]`, etc. find nothing. | Test via the **DOM header** (it's real DOM), via **component cells** (renderers/editors mount real DOM in the overlay layer), or via the public `GridApi`. |
-| **Accessibility** ⚠️ | Canvas cell content is **invisible to screen readers**. Only headers are exposed. | Treat AT/a11y audits of cell data as unmet for now (header is accessible). |
+| **Cell DOM** ❌ | Cells are painted on canvas — there are **no `.ag-cell` DOM nodes**. Code/tests using `document.querySelector('.ag-cell')`, `[col-id=…]`, etc. find nothing. | Test via the **DOM header** (it's real DOM), via **component cells** (renderers/editors mount real DOM in the overlay layer), via the off-screen **`[role="gridcell"]` ARIA mirror** of visible cells, or via the public `GridApi`. |
+| **Accessibility** ✅ | Canvas cells aren't real DOM, but the grid maintains an **off-screen ARIA mirror** of the visible rows (`role="row"`/`role="gridcell"` with `aria-rowindex`/`aria-colindex`/`aria-selected`), alongside `role="columnheader"` headers (`aria-sort`/`aria-colindex`) and a `role="grid"` root (`aria-rowcount`/`aria-colcount`/`aria-activedescendant`). Screen readers read cell values and keyboard nav announces the focused cell. | Works out of the box; set `gridOptions.ariaLabel` for a meaningful name. ⚠️ Grouped (multi-row) header nesting and horizontally-virtualized off-screen columns are follow-ups; opt out entirely with `gridOptions.suppressAccessibility`. |
 | **Cell CSS** ❌ | `cellClass`, `cellClassRules`, full `cellStyle`, `::before/::after`, per-cell fonts/borders/backgrounds do not apply (canvas, not DOM). **Only `cellStyle.color` is read.** | Dynamic text color → `cellStyle: (p) => ({ color: … })`. Anything richer → a **component cell renderer** (real DOM in the overlay). |
 | **Theming** | `ag-theme-*.css` and CSS-variable overrides don't apply. | Rebuild theming with the **theme object** (`themeQuartz.withParams(...)` / `withPart(...)`). |
 | **Row models** ❌ | `rowModelType: 'serverSide' \| 'infinite' \| 'viewport'` are declared but **not implemented** — only `'clientSide'` works. No SSRM/infinite lazy loading; sort/filter/group are all client-side. | Load the dataset client-side (the canvas handles 1M+ rows), or page/chunk it yourself with `pagination`. Delegating to a backend isn't available. |
@@ -201,6 +201,7 @@ These work with the same config as AG Grid:
 - CSV / true `.xlsx` export; LocalStorage state persistence
 - Built-in canvas renderers usable by name: `checkbox`, `rating`, `button`, `badge`, `sparkline`, `progressBar`
 - Custom **cell renderers**, **cell editors**, **header components**, **filter components**, and **master/detail** components (see [§5](#5-writing-components-renderers-editors-detail))
+- **Accessibility**: `role="grid"`/`columnheader`/`row`/`gridcell` semantics via DOM headers + an off-screen ARIA row mirror — no extra config beyond `gridOptions.ariaLabel`
 
 ---
 
@@ -213,5 +214,6 @@ These work with the same config as AG Grid:
 - [ ] Port custom **header components** to `IHeaderAngularComp` and custom **filter components** to `IFilterAngularComp` (both now supported); custom **sort `comparator`s** work as-is. (Custom *floating-filter* components remain a gap.)
 - [ ] Port custom **cell editors** to `ICellEditorAngularComp` (now supported).
 - [ ] Rewire events: `api.addEventListener` → `gridOptions.on*` callbacks / component `@Output()`s; drop reliance on un-emitted events.
-- [ ] Re-point DOM-selector E2E tests (cells are canvas; assert via header / component cells / `GridApi`).
+- [ ] Re-point DOM-selector E2E tests (cells are canvas; assert via header / component cells / the off-screen `[role="gridcell"]` ARIA mirror / `GridApi`).
+- [ ] Set `gridOptions.ariaLabel` for a meaningful accessible name (a11y otherwise works out of the box; `suppressAccessibility` opts out).
 - [ ] Drop `refreshCells`/`refreshRows` calls — push data via `applyTransaction` instead.

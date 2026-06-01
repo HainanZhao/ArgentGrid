@@ -21,6 +21,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { AriaRowMirror } from '../rendering/aria-row-mirror';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
 import { CellOverlayManager } from '../rendering/cell-overlay-manager';
 import {
@@ -91,6 +92,7 @@ export class ArgentGridComponent<TData = any>
   @ViewChild('editorContainer') editorContainerRef?: ElementRef<HTMLDivElement>;
   @ViewChild('customFilterContainer') customFilterContainerRef?: ElementRef<HTMLDivElement>;
   @ViewChild('cellOverlayLayer') cellOverlayLayerRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('ariaLayer') ariaLayerRef?: ElementRef<HTMLDivElement>;
 
   canvasHeight = 0;
   showOverlay = false;
@@ -123,6 +125,63 @@ export class ArgentGridComponent<TData = any>
       .getAllColumns()
       .filter((col) => isColumnVisible(col))
       .reduce((sum, col) => sum + Math.floor(col.width || 150), 0);
+  }
+
+  // --- Accessibility (T2.4) ---
+  /** Whether to emit grid/header/row ARIA semantics at all. */
+  get accessibilityEnabled(): boolean {
+    return !this.gridApi?.getGridOption('suppressAccessibility');
+  }
+
+  /** `treegrid` when the grid is hierarchical (tree data or row grouping), else `grid`. */
+  get gridRole(): string | null {
+    if (!this.accessibilityEnabled) return null;
+    const treeData = this.gridApi?.getGridOption('treeData');
+    return treeData || this.rowGroupColumns.length > 0 ? 'treegrid' : 'grid';
+  }
+
+  /** Accessible name for the grid root. */
+  get ariaLabel(): string | null {
+    if (!this.accessibilityEnabled) return null;
+    return (this.gridApi?.getGridOption('ariaLabel') as string) || 'Data grid';
+  }
+
+  /** Total displayed rows + header rows (1-based ARIA convention). */
+  get ariaRowCount(): number | null {
+    if (!this.accessibilityEnabled || !this.gridApi) return null;
+    return this.gridApi.getDisplayedRowCount() + this.gridApi.getHeaderDepth();
+  }
+
+  /** Total displayed (visible) columns. */
+  get ariaColCount(): number | null {
+    if (!this.accessibilityEnabled || !this.gridApi) return null;
+    return this.gridApi.getAllColumns().filter((col) => isColumnVisible(col)).length;
+  }
+
+  /** `aria-activedescendant` target id — the focused cell's mirror node. */
+  activeDescendantId: string | null = null;
+
+  /** Map a column's sort state to the `aria-sort` token (none/ascending/descending). */
+  getAriaSort(col: Column | ColDef<TData> | ColGroupDef<TData>): string | null {
+    if (!this.accessibilityEnabled || 'children' in col || !this.isSortable(col)) return null;
+    return col.sort === 'asc' ? 'ascending' : col.sort === 'desc' ? 'descending' : 'none';
+  }
+
+  /** Absolute 1-based ARIA column index for a header item, in displayed order. */
+  getAriaColIndex(item: Column | ColumnGroup): number | null {
+    if (!this.accessibilityEnabled || !this.gridApi) return null;
+    const cols = this.gridApi.getAllColumns().filter((c) => isColumnVisible(c));
+    const colId = (item as any).colId;
+    const idx = cols.findIndex((c) => c.colId === colId);
+    return idx >= 0 ? idx + 1 : null;
+  }
+
+  /** Recompute `aria-activedescendant` from the current focused cell. */
+  private updateActiveDescendant(): void {
+    const focused = this.gridApi?.getFocusedCell();
+    this.activeDescendantId = focused?.column
+      ? (this.ariaRowMirror?.getActiveDescendantId(focused.rowIndex, focused.column.colId) ?? null)
+      : null;
   }
 
   // Selection state
@@ -225,6 +284,7 @@ export class ArgentGridComponent<TData = any>
   public scrollbarWidth = 0;
   private canvasRenderer!: CanvasRenderer;
   private cellOverlayManager?: CellOverlayManager<TData>;
+  private ariaRowMirror?: AriaRowMirror<TData>;
   private destroy$ = new Subject<void>();
   private gridService = new GridService<TData>();
   private horizontalScrollListener?: (e: Event) => void;
@@ -386,12 +446,28 @@ export class ArgentGridComponent<TData = any>
           // mount) or double-drawn.
           getColDef: (col) => getColumnDef(col, this.gridApi),
         });
-        this.canvasRenderer.onAfterRender = (layout) => {
-          this.cellOverlayManager?.sync(layout);
-        };
         // Now that the renderer (and its theme) exists, wire up auto-height.
         this.setupAutoRowHeight();
       }
+
+      // Off-screen ARIA mirror of the visible rows (a11y counterpart to the cell
+      // overlay). Created independently of the cell overlay so it works even
+      // when no component cells are present; skipped when accessibility is off.
+      if (this.ariaLayerRef && !this.gridApi.getGridOption('suppressAccessibility')) {
+        this.ariaRowMirror = new AriaRowMirror<TData>({
+          container: this.ariaLayerRef.nativeElement,
+          gridApi: this.gridApi,
+          getColDef: (col) => getColumnDef(col, this.gridApi),
+          headerRowCount: () => this.gridApi.getHeaderDepth(),
+        });
+      }
+
+      // Single per-paint callback fans out to both DOM layers so they stay in
+      // lockstep with the canvas (scroll/resize/sort/filter/data).
+      this.canvasRenderer.onAfterRender = (layout) => {
+        this.cellOverlayManager?.sync(layout);
+        this.ariaRowMirror?.sync(layout);
+      };
     }
 
     // Setup viewport dimensions and resize observer
@@ -482,6 +558,7 @@ export class ArgentGridComponent<TData = any>
 
     this.destroyCustomFilters();
     this.cellOverlayManager?.destroy();
+    this.ariaRowMirror?.destroy();
     this.gridApi?.destroy();
     this.canvasRenderer?.destroy();
     this.onCanvasMouseLeave();
@@ -636,6 +713,10 @@ export class ArgentGridComponent<TData = any>
         // Focus only moves the ring — a view change, not a data change. Repaint
         // without forcing every visible overlay cell to re-bind.
         this.canvasRenderer?.repaint();
+        // Point aria-activedescendant at the focused cell's mirror node so AT
+        // announces it. The id is computed (not a DOM lookup), so it's valid
+        // even before the mirror's next frame mounts the cell.
+        this.updateActiveDescendant();
       } else {
         // All other state changes (sort, filter, rangeSelection, etc.) go through the
         // rAF-coalesced scheduler. Multiple rapid events (e.g. rangeSelectionChanged

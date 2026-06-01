@@ -256,6 +256,19 @@ export interface GridOptions<TData = any> {
   /** Show loading overlay. */
   loading?: boolean;
 
+  // === ACCESSIBILITY ===
+  /**
+   * Accessible name for the grid, applied as `aria-label` on the grid root.
+   * Defaults to `'Data grid'` when unset.
+   */
+  ariaLabel?: string;
+  /**
+   * Set to true to suppress all accessibility output — the off-screen ARIA row
+   * mirror is not built and the grid/header role + aria-* attributes are omitted.
+   * Use only as a performance escape hatch for very wide viewports.
+   */
+  suppressAccessibility?: boolean;
+
   // === CONTEXT ===
   /** Custom context object available in callbacks. */
   context?: any;
