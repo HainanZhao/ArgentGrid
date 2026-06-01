@@ -323,8 +323,25 @@ export function drawCellContent<TData = any>(
   ctx.fillStyle = textColor;
   ctx.textBaseline = 'middle';
 
-  // Truncate text if needed (the group indent/indicator eats into the width).
   const maxWidth = width - theme.cellPadding * 2 - groupOffset;
+
+  // Wrapped / auto-height text: lay out multiple lines, vertically centered in
+  // the cell (top-aligned when the block is taller than the row), clipping any
+  // lines that fall past the bottom edge.
+  if (colDef?.wrapText || colDef?.autoHeight) {
+    const lines = wrapLines(ctx, formattedValue, maxWidth);
+    const lineH = getTextLineHeight(theme);
+    const blockH = lines.length * lineH;
+    const top = y + Math.max(theme.cellPadding, (height - blockH) / 2);
+    for (let i = 0; i < lines.length; i++) {
+      const lineMidY = top + i * lineH + lineH / 2;
+      if (lineMidY + lineH / 2 > y + height + 1) break; // would overflow the row
+      ctx.fillText(lines[i], Math.floor(textX), Math.floor(lineMidY));
+    }
+    return;
+  }
+
+  // Truncate text if needed (the group indent/indicator eats into the width).
   const truncatedText = colDef?.suppressEllipsis
     ? formattedValue
     : truncateText(ctx, formattedValue, maxWidth);
@@ -430,6 +447,73 @@ export function truncateText(
   }
 
   return `${text.slice(0, Math.max(0, start - 1))}...`;
+}
+
+/**
+ * Line height (px) used for wrapped/auto-height text. Shared by the canvas
+ * renderer (drawing) and the auto-height measurement pass so a measured row is
+ * tall enough for exactly the lines that get drawn.
+ */
+export function getTextLineHeight(theme: GridTheme): number {
+  return Math.ceil(theme.fontSize * 1.4);
+}
+
+/**
+ * Greedy word-wrap `text` into lines that each fit within `maxWidth` for the
+ * current `ctx` font. Honors explicit newlines; a single word wider than
+ * `maxWidth` is character-broken so it can never overflow horizontally.
+ */
+export function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const result: string[] = [];
+  if (text == null || text === '') return result;
+  const str = String(text);
+  if (maxWidth <= 0) return [str];
+
+  for (const paragraph of str.split('\n')) {
+    const words = paragraph.split(/\s+/).filter((w) => w.length > 0);
+    if (words.length === 0) {
+      result.push('');
+      continue;
+    }
+    let line = '';
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (ctx.measureText(candidate).width <= maxWidth) {
+        line = candidate;
+        continue;
+      }
+      if (line) {
+        result.push(line);
+        line = '';
+      }
+      if (ctx.measureText(word).width <= maxWidth) {
+        line = word;
+      } else {
+        // A single word too wide for the cell — break it across lines.
+        const pieces = breakWord(ctx, word, maxWidth);
+        for (let i = 0; i < pieces.length - 1; i++) result.push(pieces[i]);
+        line = pieces[pieces.length - 1];
+      }
+    }
+    result.push(line);
+  }
+  return result;
+}
+
+/** Character-break a single over-long word into chunks that fit `maxWidth`. */
+function breakWord(ctx: CanvasRenderingContext2D, word: string, maxWidth: number): string[] {
+  const pieces: string[] = [];
+  let cur = '';
+  for (const ch of word) {
+    if (cur && ctx.measureText(cur + ch).width > maxWidth) {
+      pieces.push(cur);
+      cur = ch;
+    } else {
+      cur += ch;
+    }
+  }
+  if (cur) pieces.push(cur);
+  return pieces.length ? pieces : [word];
 }
 
 /**

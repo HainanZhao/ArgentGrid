@@ -3,11 +3,18 @@ import { ColDef, GridApi, ICellRendererParams, IRowNode } from '../../types/ag-g
 import { clearCellRendererRegistry, registerCellRenderer } from './cell-renderer-registry';
 import {
   getFormattedValue,
+  getTextLineHeight,
   getValueByPath,
   resolveCellComponent,
   stripHtmlTags,
   usesComponentRenderer,
+  wrapLines,
 } from './cells';
+
+/** A ctx whose measureText is deterministic: 10px per character. */
+function measuringCtx(): CanvasRenderingContext2D {
+  return { measureText: (s: string) => ({ width: s.length * 10 }) } as any;
+}
 
 /** A stand-in for an Angular component class — `isAngularComponent` checks `ɵcmp`. */
 function fakeComponent(name: string): any {
@@ -277,6 +284,44 @@ describe('cells.ts', () => {
         } as ColDef;
         expect(resolveCellComponent(colDef, params(apiWithComponents()))).toBeNull();
       });
+    });
+  });
+
+  describe('text wrapping (auto-height)', () => {
+    it('getTextLineHeight scales with font size', () => {
+      expect(getTextLineHeight({ fontSize: 10 } as any)).toBe(14); // ceil(10 * 1.4)
+      expect(getTextLineHeight({ fontSize: 13 } as any)).toBe(19); // ceil(13 * 1.4)
+    });
+
+    it('wraps on word boundaries to fit the width (10px/char)', () => {
+      // 'hello'=50 fits 50; 'hello world'=110 doesn't → break before 'world'.
+      expect(wrapLines(measuringCtx(), 'hello world', 50)).toEqual(['hello', 'world']);
+    });
+
+    it('keeps as many words per line as fit', () => {
+      // width 120 fits 'aa bb' (50) but not 'aa bb cc' (80? 'aa bb cc'=8chars=80<=120) →
+      // actually all fit on one line at 120.
+      expect(wrapLines(measuringCtx(), 'aa bb cc', 120)).toEqual(['aa bb cc']);
+      // width 50 only fits one 2-char word at a time ('aa bb'=50 fits, +cc=80>50).
+      expect(wrapLines(measuringCtx(), 'aa bb cc', 50)).toEqual(['aa bb', 'cc']);
+    });
+
+    it('honors explicit newlines', () => {
+      expect(wrapLines(measuringCtx(), 'a\nb', 100)).toEqual(['a', 'b']);
+    });
+
+    it('character-breaks a single word wider than the cell', () => {
+      // 30px width = 3 chars per chunk.
+      expect(wrapLines(measuringCtx(), 'abcdefgh', 30)).toEqual(['abc', 'def', 'gh']);
+    });
+
+    it('returns no lines for empty/null text', () => {
+      expect(wrapLines(measuringCtx(), '', 100)).toEqual([]);
+      expect(wrapLines(measuringCtx(), null as any, 100)).toEqual([]);
+    });
+
+    it('returns the whole string when width is non-positive', () => {
+      expect(wrapLines(measuringCtx(), 'abc', 0)).toEqual(['abc']);
     });
   });
 });

@@ -34,7 +34,7 @@
 | **State Persistence** | No | Yes | **✅ LocalStorage** |
 | **Overlays (loading/no-rows)** | Yes | Yes | **✅** |
 | **Keyboard Navigation** | Cell-level | Advanced | **✅ Cell-to-cell nav (arrows/Tab/Home/End/PageUp-Down), Enter + type-to-edit, focus ring, ensureIndexVisible/ColumnVisible** |
-| **Auto / Dynamic Row Height** | Yes | Yes | **❌ Fixed heights only** |
+| **Auto / Dynamic Row Height** | Yes | Yes | **✅ `wrapText` + `autoHeight` (measured), `getRowHeight` callback; cumulative offset model** |
 | **Accessibility (ARIA)** | Yes | Yes | **⚠️ Headers only — canvas content not exposed to AT** |
 | **Integrated Charts** | No | Yes | **❌ Planned** |
 | **Theming** | Yes | Yes | **✅ CSS-var driven (Quartz)** |
@@ -80,7 +80,12 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
 
 ### Tier 2 — High-frequency everyday features
 
-- [ ] **T2.1 — Auto-height rows + text wrapping** — measure wrapped text, variable row heights, viewport math.
+- [x] **T2.1 — Auto-height rows + text wrapping** — **landed**
+  - [x] Canvas text wrapping: `colDef.wrapText`/`autoHeight` draw greedy word-wrapped lines (newline-aware, long words char-broken) vertically centered and clipped to the row (`wrapLines`/`getTextLineHeight` in `render/cells.ts`); plain columns keep single-line + ellipsis.
+  - [x] Variable row heights reuse the existing cumulative offset model: `updateRowHeightCache` now resolves each non-detail row's height fresh from the `gridOptions.getRowHeight` callback (AG-Grid-compatible), then an injected auto-height measurer, else the default; detail-row heights are preserved.
+  - [x] Auto-height measurer wired in the component (`setupAutoRowHeight`): an offscreen 2D context measures the tallest wrapped `autoHeight` column per row (live column widths, clamped to ≥ default height), reusing `getCellValue`/`getFormattedValue`/`wrapLines`. Re-measures on column resize, theme change, and column-visibility re-init; the scrollbar/virtualization stay correct via `getTotalHeight`.
+  - [x] Validated: `cells.spec.ts` (wrap word-boundary/newline/long-word/empty/zero-width + line-height); `grid.service.spec.ts` (getRowHeight callback, injected calculator, callback-over-calculator precedence, `recalculateRowHeights`, clearing). `Features/AutoHeightRows` story (wrapped summary/tags columns, resizable). Full suite 558 passing; build clean.
+  - [ ] Follow-up: auto-height currently measures all displayed rows on each rebuild (fine for the client-side model / moderate data); lazy per-viewport measurement would be needed to pair auto-height with 1M-row datasets.
 - [x] **T2.2 — Horizontal column virtualization** — **landed**
   - [x] `walkColumns` computes every center column's x in one pass and emits only the visible window plus a `columnBuffer` (renderer default 1) each side, so off-screen center columns are never drawn and fast horizontal scroll doesn't pop a blank column at the leading edge. (Re-baseline note: the unbuffered cull already existed but was untested and undocumented; this hardens it.)
   - [x] Center cells are now clipped to the center region in `renderRow` (drawn before the pinned columns), fixing a latent bug where a center column straddling/buffered under the pinned edge overdrew the pinned cells.
