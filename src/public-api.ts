@@ -14,6 +14,7 @@ export { SetFilterComponent } from './lib/components/set-filter/set-filter.compo
 // Directives
 export { AgGridCompatibilityDirective } from './lib/directives/ag-grid-compatibility.directive';
 export { ClickOutsideDirective } from './lib/directives/click-outside.directive';
+export { ArgentHeaderOutletDirective } from './lib/directives/header-outlet.directive';
 // Canvas renderer
 export { CanvasRenderer } from './lib/rendering/canvas-renderer';
 // Cell overlay manager (DOM/Angular custom cell renderers)

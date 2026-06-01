@@ -956,12 +956,15 @@ export interface FilterModel {
 }
 
 export interface FilterModelItem {
-  filterType: 'text' | 'number' | 'date' | 'boolean' | 'set' | 'multiFilter';
+  filterType: 'text' | 'number' | 'date' | 'boolean' | 'set' | 'multiFilter' | 'custom';
   type?: string;
   filter?: any;
   filterTo?: any;
   values?: any[];
   filterModels?: FilterModelItem[];
+  /** Serializable model returned by a custom filter's `getModel()`. The live
+   * predicate is evaluated via the registered filter instance, not this value. */
+  model?: any;
 }
 
 export interface SortModelItem {
@@ -1558,6 +1561,108 @@ export interface HeaderValueGetterParams<TData = any> {
   api: GridApi<TData>;
 }
 
+/**
+ * Params passed to a custom header component (`colDef.headerComponent`).
+ * Mirrors AG Grid's `IHeaderParams`. The component reads the current sort
+ * direction from the live `column` object (its `sort`/`sortIndex` fields are
+ * kept up to date) and re-reads it whenever `refresh` is called.
+ */
+export interface IHeaderParams<TData = any, TValue = any> {
+  /** The live grid column. `column.sort` reflects the current sort direction. */
+  column: Column;
+  /** The column definition (merged with `defaultColDef`). */
+  colDef: ColDef<TData, TValue>;
+  /** The resolved display name (`headerName` ?? `field`). */
+  displayName: string;
+  /** The grid API. */
+  api: GridApi<TData>;
+  /** True if the column is sortable. */
+  enableSorting: boolean;
+  /** True if the column shows a header menu button. */
+  enableMenu: boolean;
+  /** True if the column shows a header filter button. */
+  enableFilterButton: boolean;
+  /** Advance the sort to the next state (asc → desc → none). */
+  progressSort(multiSort?: boolean): void;
+  /** Set the sort direction explicitly. */
+  setSort(sort: SortDirection, multiSort?: boolean): void;
+  /** Open the column menu, anchored to the given element. */
+  showColumnMenu(source: HTMLElement): void;
+  /** Open the column filter, anchored to the given element. */
+  showFilter(source: HTMLElement): void;
+  /** Any extra values supplied via `colDef.headerComponentParams`. */
+  [key: string]: any;
+}
+
+/**
+ * Contract implemented by a custom header Angular component
+ * (`colDef.headerComponent`). Mirrors AG Grid's `IHeaderAngularComp`.
+ */
+export interface IHeaderAngularComp<TData = any, TValue = any> {
+  /** Called once when the header is created. */
+  agInit(params: IHeaderParams<TData, TValue>): void;
+  /** Called when header-affecting state (sort/filter/columns) changes. */
+  refresh?(params: IHeaderParams<TData, TValue>): void;
+}
+
+/**
+ * Params passed to a custom filter component (`colDef.filter` = a component).
+ * Mirrors AG Grid's `IFilterParams`. Call `filterChangedCallback()` whenever the
+ * filter's state changes so the grid re-runs filtering (and re-reads
+ * `isFilterActive` / `doesFilterPass`).
+ */
+export interface IFilterParams<TData = any, TValue = any> {
+  /** The column definition (merged with `defaultColDef`). */
+  colDef: ColDef<TData, TValue>;
+  /** The grid column. */
+  column: Column;
+  /** The grid API. */
+  api: GridApi<TData>;
+  /** `gridOptions.context`, if any. */
+  context?: any;
+  /** Tell the grid the filter changed → it re-filters the rows. */
+  filterChangedCallback(): void;
+  /** Optional: tell the grid the filter UI changed but isn't applied yet. */
+  filterModifiedCallback?(): void;
+  /** Read the column's value for a row node (honors valueGetter/field). */
+  valueGetter(node: IRowNode<TData>): TValue;
+  /** Alias of `valueGetter` for AG-Grid compatibility. */
+  getValue(node: IRowNode<TData>): TValue;
+  /** Any extra values supplied via `colDef.filterParams`. */
+  [key: string]: any;
+}
+
+/** Params passed to `doesFilterPass` for each candidate row. */
+export interface IDoesFilterPassParams<TData = any> {
+  node: IRowNode<TData>;
+  data: TData;
+}
+
+/**
+ * Contract implemented by a custom filter Angular component
+ * (`colDef.filter`). Mirrors AG Grid's `IFilterAngularComp`. The instance is
+ * created lazily and kept alive for the column's lifetime, so its state
+ * persists across popup opens.
+ */
+export interface IFilterAngularComp<TData = any, TValue = any> {
+  /** Called once when the filter is created. */
+  agInit(params: IFilterParams<TData, TValue>): void;
+  /** True when the filter is constraining rows (drives the active indicator). */
+  isFilterActive(): boolean;
+  /** Return true to keep the row. Only called while `isFilterActive()`. */
+  doesFilterPass(params: IDoesFilterPassParams<TData>): boolean;
+  /** Serializable filter state (persisted in the grid filter model). */
+  getModel(): any;
+  /** Restore filter state from a model (or null to clear). */
+  setModel(model: any): void | Promise<void>;
+  /** Called when the filter GUI is (re)attached to the popup. */
+  afterGuiAttached?(params?: { suppressFocus?: boolean }): void;
+  /** Optional short string form of the active filter (e.g. for tooltips). */
+  getModelAsString?(): string;
+  /** Optional: notified when the underlying row set changes. */
+  onNewRowsLoaded?(): void;
+}
+
 export interface GetRowIdParams<TData = any> {
   data: TData;
 }
@@ -1658,6 +1763,62 @@ export interface ICellRendererAngularComp<TData = any, TValue = any> {
 export interface IDetailCellRendererAngularComp<TData = any> {
   agInit(params: IDetailCellRendererParams<TData>): void;
   refresh?(params: IDetailCellRendererParams<TData>): boolean;
+}
+
+/**
+ * Params passed to a custom `cellEditor` component's `agInit`. Mirrors AG Grid's
+ * `ICellEditorParams`: the starting `value`, the row context, and a `stopEditing`
+ * callback the editor can call to commit (or cancel) itself (e.g. a `<select>`
+ * committing on change). `charPress`/`eventKey` carry the key that triggered
+ * type-to-edit so the editor can seed itself.
+ */
+export interface ICellEditorParams<TData = any, TValue = any> {
+  /** The current cell value at the moment editing started. */
+  value: TValue;
+  /** The row data object. */
+  data: TData | undefined;
+  /** The row node being edited. */
+  node: IRowNode<TData>;
+  /** The displayed row index. */
+  rowIndex: number;
+  /** The column definition. */
+  colDef: ColDef<TData>;
+  /** The column. */
+  column: Column;
+  /** The grid API. */
+  api: GridApi<TData>;
+  /** The key that initiated a type-to-edit, if any (else null). */
+  charPress?: string | null;
+  /** Alias of {@link charPress} for AG-Grid familiarity. */
+  eventKey?: string | null;
+  /** True when this edit began the editing session (vs. a tab into it). */
+  cellStartedEdit?: boolean;
+  /** Commit (or, with `true`, cancel) the edit from inside the editor. */
+  stopEditing: (cancel?: boolean) => void;
+  /** Extra params supplied via `colDef.cellEditorParams`. */
+  [key: string]: any;
+}
+
+/**
+ * Interface an Angular component implements to act as a custom `cellEditor`,
+ * mirroring AG Grid's `ICellEditorAngularComp`.
+ *
+ * - `agInit` receives the {@link ICellEditorParams} when editing starts.
+ * - `getValue` returns the edited value; the grid then runs the normal
+ *   `valueParser` → validation → `valueSetter` → `onCellValueChanged` pipeline.
+ * - `isPopup` (optional) — return true to render unconstrained by the cell box.
+ * - `isCancelAfterEnd` (optional) — return true to discard the edit on commit.
+ * - `afterGuiAttached`/`focusIn` (optional) — called once mounted so the editor
+ *   can focus its input.
+ */
+export interface ICellEditorAngularComp<TData = any, TValue = any> {
+  agInit(params: ICellEditorParams<TData, TValue>): void;
+  getValue(): TValue;
+  isPopup?(): boolean;
+  isCancelBeforeStart?(): boolean;
+  isCancelAfterEnd?(): boolean;
+  afterGuiAttached?(): void;
+  focusIn?(): void;
 }
 
 /**

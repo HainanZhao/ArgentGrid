@@ -12,9 +12,10 @@
 | **Data Volume (client-side)** | ~100k rows | Millions (SSRM) | **1M+ rows** ✅ |
 | **Row Models** | Client-side | Client, SSRM, Infinite | **Client-side only** ❌ |
 | **Custom Cell Components** | Any framework component | Any framework component | **✅ Angular components via DOM overlay (class, `cellRendererSelector`, or registered name) + canvas primitives + string functions** |
-| **Sorting** | Yes | Yes | **✅ Single + multi-column** |
-| **Filtering** | Text, Num, Date | + Set, Multi | **✅ Text, Num, Date, Boolean, Set; quick + floating filters** |
-| **Cell Editing** | Yes | Yes | **✅ Inline (DOM overlay), valueParser/Setter, validation** |
+| **Custom Header Components** | Any framework component | Any framework component | **✅ Angular `headerComponent` (class or registered name) in the DOM header (`IHeaderAngularComp`/`IHeaderParams`)** |
+| **Sorting** | Yes | Yes | **✅ Single + multi-column; custom `colDef.comparator`** |
+| **Filtering** | Text, Num, Date | + Set, Multi | **✅ Text, Num, Date, Boolean, Set; quick + floating; custom `IFilterAngularComp` filter components** |
+| **Cell Editing** | Yes | Yes | **✅ Inline + custom `cellEditor` Angular components (DOM overlay), valueParser/Setter, validation** |
 | **Selection** | Row | Row + Range | **✅ Row + checkbox + Range** |
 | **Column Pin / Resize / Reorder** | Yes | Yes | **✅** |
 | **Row Pinning (top/bottom)** | Yes | Yes | **✅** |
@@ -65,8 +66,10 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
   - [x] Recycled pool of absolutely-positioned Angular components composited over the canvas for visible component-cells only (`CellOverlayManager`).
   - [x] Driven by `CanvasRenderer.onAfterRender` so it stays in lockstep on scroll/resize/sort/filter/data; `PositionedColumn.x` handles pinned offset.
   - [x] `cellRenderer: MyComponent` (Angular class) + `cellRendererSelector`; AG-Grid-style `ICellRendererParams` / `ICellRendererAngularComp` (`agInit`/`refresh`). Validated in `Features/CustomComponents` story (interactive pill + star rating, click + `applyTransaction` from a cell).
-  - [ ] Follow-ups: **custom DOM headers/filters** over the canvas (same layer); **pinned component columns** edge cases; function-returns-`HTMLElement` renderers; reduce first-paint flash of overlay cells.
-  - Unlocks links, buttons, images, framework components in cells.
+  - [x] **Custom header components** (`colDef.headerComponent`): an Angular component class or registered name mounts directly in the (real-DOM) header cell via `ArgentHeaderOutletDirective`, receiving `IHeaderParams` (`progressSort`/`setSort`, `showColumnMenu`/`showFilter`, live `column`, `headerComponentParams`); the grid disables default sort-on-click for custom headers and bumps a `headerStateVersion` to drive `refresh()` on sort/filter/column changes. Validated in `Features/HeaderComponents` (class + registered-name) + `header-outlet.directive.spec.ts` + component memo/guard tests.
+  - [x] **Custom filter components** (`colDef.filter` = an Angular component class or registered name): hosted in the filter popup, implementing `IFilterAngularComp` (`agInit`/`isFilterActive`/`doesFilterPass`/`getModel`/`setModel`) with `IFilterParams` (`filterChangedCallback`, `valueGetter`/`getValue`, `filterParams`). Instances are created lazily and **kept alive per colId** so state persists across opens. The model↔instance bridge: the component registers a live `doesFilterPass` predicate with `GridService.setCustomFilterEvaluator` and writes a `{filterType:'custom'}` model entry; `applyFiltering` consults the predicate (lazy data→node map). Validated in `Features/CustomFilters` + resolver/service/component specs.
+  - [ ] Follow-ups: custom **floating-filter** components + rehydrating a custom filter from an externally-restored filter model; custom **header *group*** components; **pinned component columns** edge cases; function-returns-`HTMLElement` renderers; reduce first-paint flash of overlay cells.
+  - Unlocks links, buttons, images, framework components in cells *and headers*.
 - [x] **T1.2 — Full keyboard navigation** — **landed**
   - [x] Arrow keys (clamp at edges), Tab/Shift-Tab (wrap rows), Home/End (row), Ctrl+Home/End (grid), PageUp/Down, Enter-to-edit, type-to-edit. Dispatch in `handleKeyDown` via shared `computeNextCell` helper (reused by editor-Tab `moveToNextCell`).
   - [x] Focused-cell state in `GridService` (`setFocusedCell`/`getFocusedCell`), mirroring the `cellRanges` pattern; visible focus ring drawn on canvas (`CanvasRenderer.drawFocusedCell` via `drawCellSelectionBorder`).

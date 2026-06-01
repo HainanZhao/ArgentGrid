@@ -317,4 +317,234 @@ describe('ArgentGridComponent - Context Menu', () => {
       expect(component.isEditing).toBe(false);
     });
   });
+
+  describe('stopEditing - custom cell editor', () => {
+    const mockRowNode = { data: { name: 'John', age: 25 }, displayedRowIndex: 0 } as any;
+    const mockColDef = { field: 'age', colId: 'age' };
+
+    /** A fake live editor instance: getValue + optional lifecycle hooks. */
+    function fakeEditor(getValue: () => any, extra: Record<string, any> = {}) {
+      return { instance: { getValue, ...extra }, destroy: vi.fn() } as any;
+    }
+
+    beforeEach(() => {
+      mockRowNode.data = { name: 'John', age: 25 };
+      component.isEditing = true;
+      component.editingRowNode = mockRowNode;
+      component.editingColDef = mockColDef as any;
+      component.editorInputRef = undefined as any; // component editor → no <input>
+      component.gridOptions = {} as any;
+      mockCdr.detectChanges.mockClear();
+    });
+
+    it('commits the value returned by the editor component getValue()', () => {
+      const applyTransaction = vi.fn();
+      component.gridApi = { applyTransaction } as any;
+      const ref = fakeEditor(() => 42);
+      component.editingComponentRef = ref;
+
+      component.stopEditing(true);
+
+      expect(applyTransaction).toHaveBeenCalledWith({ update: [mockRowNode.data] });
+      expect(mockRowNode.data.age).toBe(42); // default setter assigns the field
+      expect(component.isEditing).toBe(false);
+      expect(ref.destroy).toHaveBeenCalled(); // editor instance torn down
+      expect(component.isComponentEditor).toBe(false);
+    });
+
+    it('runs valueParser + valueSetter against the editor value', () => {
+      const applyTransaction = vi.fn();
+      component.gridApi = { applyTransaction } as any;
+      const valueParser = vi.fn(({ newValue }) => newValue + 1);
+      const valueSetter = vi.fn(({ value, data }: any) => {
+        data.age = value * 10;
+        return true;
+      });
+      component.editingColDef = { ...mockColDef, valueParser, valueSetter } as any;
+      component.editingComponentRef = fakeEditor(() => 4);
+
+      component.stopEditing(true);
+
+      expect(valueParser).toHaveBeenCalled();
+      expect(valueSetter).toHaveBeenCalled();
+      expect(mockRowNode.data.age).toBe(50); // (4 + 1) * 10
+    });
+
+    it('does not commit when the editor vetoes via isCancelAfterEnd()', () => {
+      const applyTransaction = vi.fn();
+      component.gridApi = { applyTransaction } as any;
+      const ref = fakeEditor(() => 99, { isCancelAfterEnd: () => true });
+      component.editingComponentRef = ref;
+
+      component.stopEditing(true);
+
+      expect(applyTransaction).not.toHaveBeenCalled();
+      expect(mockRowNode.data.age).toBe(25); // unchanged
+      expect(component.isEditing).toBe(false);
+      expect(ref.destroy).toHaveBeenCalled();
+    });
+  });
+});
+
+/** A stand-in for an Angular component class — resolution checks `ɵcmp`. */
+function fakeHeaderComponent(name: string): any {
+  const cls = class {};
+  (cls as any).ɵcmp = { name };
+  return cls;
+}
+
+describe('ArgentGridComponent - custom header components', () => {
+  let component: ArgentGridComponent;
+
+  beforeEach(() => {
+    component = new ArgentGridComponent(mockCdr as any);
+    component.gridApi = {
+      getGridOption: () => undefined,
+      getColumn: (id: string) => ({ colId: id, sort: null }),
+      setColumnSort: vi.fn(),
+    } as any;
+  });
+
+  it('resolves a colDef.headerComponent class for a column', () => {
+    const HeaderComp = fakeHeaderComponent('H');
+    component.columnDefs = [{ colId: 'a', field: 'a', headerComponent: HeaderComp }] as any;
+    expect(component.getHeaderComponent({ colId: 'a', field: 'a' } as any)).toBe(HeaderComp);
+  });
+
+  it('returns null for a column with no headerComponent, a group, or the selection column', () => {
+    component.columnDefs = [
+      { colId: 'a', field: 'a' },
+      { groupId: 'g', children: [] },
+    ] as any;
+    expect(component.getHeaderComponent({ colId: 'a', field: 'a' } as any)).toBeNull();
+    expect(component.getHeaderComponent({ groupId: 'g', children: [] } as any)).toBeNull();
+    expect(component.getHeaderComponent({ colId: 'ag-Grid-SelectionColumn' } as any)).toBeNull();
+  });
+
+  it('memoizes resolution per colId (recomputes only after cache clear)', () => {
+    const HeaderComp = fakeHeaderComponent('H');
+    component.columnDefs = [{ colId: 'a', field: 'a', headerComponent: HeaderComp }] as any;
+    expect(component.getHeaderComponent({ colId: 'a' } as any)).toBe(HeaderComp);
+
+    // Underlying def changes but the cache is sticky until a columns event clears it.
+    component.columnDefs = [{ colId: 'a', field: 'a' }] as any;
+    expect(component.getHeaderComponent({ colId: 'a' } as any)).toBe(HeaderComp);
+
+    (component as any).headerComponentCache.clear();
+    expect(component.getHeaderComponent({ colId: 'a' } as any)).toBeNull();
+  });
+
+  it('onHeaderClick does NOT trigger default sort when a custom header is present', () => {
+    component.columnDefs = [
+      { colId: 'a', field: 'a', sortable: true, headerComponent: fakeHeaderComponent('H') },
+    ] as any;
+    component.onHeaderClick({ colId: 'a', field: 'a' } as any, { shiftKey: false } as any);
+    expect(component.gridApi.setColumnSort).not.toHaveBeenCalled();
+  });
+
+  it('onHeaderClick DOES trigger default sort for a plain (no-component) header', () => {
+    component.columnDefs = [{ colId: 'a', field: 'a', sortable: true }] as any;
+    component.canvasRenderer = { render: vi.fn() } as any;
+    component.onHeaderClick({ colId: 'a', field: 'a' } as any, { shiftKey: false } as any);
+    expect(component.gridApi.setColumnSort).toHaveBeenCalledWith('a', 'asc', false);
+  });
+
+  it('builds header params with a stable reference and live sort callbacks', () => {
+    component.columnDefs = [
+      {
+        colId: 'a',
+        field: 'a',
+        sortable: true,
+        headerComponent: fakeHeaderComponent('H'),
+        headerComponentParams: { custom: 1 },
+      },
+    ] as any;
+    component.canvasRenderer = { render: vi.fn() } as any;
+    const p1 = component.getHeaderComponentParams({ colId: 'a', field: 'a' } as any);
+    const p2 = component.getHeaderComponentParams({ colId: 'a', field: 'a' } as any);
+    expect(p1).toBe(p2); // stable reference
+    expect(p1.custom).toBe(1); // headerComponentParams spread
+    expect(p1.displayName).toBe('a');
+    expect(p1.enableSorting).toBe(true);
+
+    p1.setSort('desc', true);
+    expect(component.gridApi.setColumnSort).toHaveBeenCalledWith('a', 'desc', true);
+    p1.progressSort();
+    // current sort is null → progresses to 'asc'
+    expect(component.gridApi.setColumnSort).toHaveBeenCalledWith('a', 'asc', false);
+  });
+});
+
+describe('ArgentGridComponent - custom filter components', () => {
+  let component: ArgentGridComponent;
+
+  function fakeFilter(active: boolean, model: any) {
+    return {
+      instance: {
+        isFilterActive: () => active,
+        doesFilterPass: vi.fn(() => true),
+        getModel: () => model,
+        setModel: vi.fn(),
+      },
+      destroy: vi.fn(),
+    } as any;
+  }
+
+  beforeEach(() => {
+    component = new ArgentGridComponent(mockCdr as any);
+  });
+
+  it('registers a live predicate + writes a custom model entry when the filter is active', () => {
+    const model: any = {};
+    component.gridApi = { getFilterModel: () => model, setFilterModel: vi.fn() } as any;
+    const setEval = vi.spyOn((component as any).gridService, 'setCustomFilterEvaluator');
+    (component as any).customFilterInstances.set('age', fakeFilter(true, { gt: 28 }));
+
+    (component as any).onCustomFilterChanged('age');
+
+    expect(setEval).toHaveBeenCalledWith('age', expect.any(Function));
+    expect(model.age).toEqual({ filterType: 'custom', model: { gt: 28 } });
+    expect(component.gridApi.setFilterModel).toHaveBeenCalledWith(model);
+  });
+
+  it('clears the predicate + removes the model entry when the filter is inactive', () => {
+    const model: any = { age: { filterType: 'custom', model: { gt: 28 } } };
+    component.gridApi = { getFilterModel: () => model, setFilterModel: vi.fn() } as any;
+    const setEval = vi.spyOn((component as any).gridService, 'setCustomFilterEvaluator');
+    (component as any).customFilterInstances.set('age', fakeFilter(false, null));
+
+    (component as any).onCustomFilterChanged('age');
+
+    expect(setEval).toHaveBeenCalledWith('age', null);
+    expect(model.age).toBeUndefined();
+  });
+
+  it('clearColumnFilter resets the instance model and drops the predicate', () => {
+    const model: any = { age: { filterType: 'custom', model: { gt: 28 } } };
+    component.gridApi = { getFilterModel: () => model, setFilterModel: vi.fn() } as any;
+    const setEval = vi.spyOn((component as any).gridService, 'setCustomFilterEvaluator');
+    const ref = fakeFilter(true, { gt: 28 });
+    (component as any).customFilterInstances.set('age', ref);
+
+    component.clearColumnFilter({ colId: 'age', field: 'age' } as any);
+
+    expect(ref.instance.setModel).toHaveBeenCalledWith(null);
+    expect(setEval).toHaveBeenCalledWith('age', null);
+    expect(model.age).toBeUndefined();
+  });
+
+  it('destroyCustomFilters tears down every instance and clears predicates', () => {
+    const clearAll = vi.spyOn((component as any).gridService, 'clearCustomFilterEvaluators');
+    const a = fakeFilter(true, {});
+    const b = fakeFilter(true, {});
+    (component as any).customFilterInstances.set('age', a);
+    (component as any).customFilterInstances.set('name', b);
+
+    (component as any).destroyCustomFilters();
+
+    expect(a.destroy).toHaveBeenCalled();
+    expect(b.destroy).toHaveBeenCalled();
+    expect((component as any).customFilterInstances.size).toBe(0);
+    expect(clearAll).toHaveBeenCalled();
+  });
 });

@@ -48,18 +48,25 @@
                 [cdkDragDisabled]="isColumnGroup(entry.item) || entry.item.colId === 'ag-Grid-SelectionColumn'"
                 [cdkDragData]="entry.item">
                 <div class="argent-grid-header-content" cdkDragHandle>
-                  <div *ngIf="!isColumnGroup(entry.item) && hasHeaderCheckbox(entry.item)" class="argent-grid-header-checkbox">
-                    <input type="checkbox"
-                           [checked]="isAllSelected"
-                           [indeterminate]="isIndeterminateSelection"
-                           (click)="$event.stopPropagation()"
-                           (change)="onSelectionHeaderChange($event)" />
-                  </div>
-                  <span class="header-text">{{ getHeaderName(entry.item) }}</span>
-                  <span class="group-toggle" *ngIf="isColumnGroup(entry.item) && hasExpansionToggle(entry.item)" (click)="toggleGroup(entry.item, $event)">
-                     {{ entry.item.expanded ? '−' : '+' }}
-                  </span>
-                  <span class="sort-indicator" *ngIf="!isColumnGroup(entry.item) && getSortIndicator(entry.item)">{{ getSortIndicator(entry.item) }}</span>
+                  <ng-container *ngIf="getHeaderComponent(entry.item) as headerComp; else defaultHeaderLeft">
+                    <ng-container [argentHeaderOutlet]="headerComp"
+                                  [argentHeaderOutletParams]="getHeaderComponentParams(entry.item)"
+                                  [argentHeaderOutletVersion]="headerStateVersion"></ng-container>
+                  </ng-container>
+                  <ng-template #defaultHeaderLeft>
+                    <div *ngIf="!isColumnGroup(entry.item) && hasHeaderCheckbox(entry.item)" class="argent-grid-header-checkbox">
+                      <input type="checkbox"
+                             [checked]="isAllSelected"
+                             [indeterminate]="isIndeterminateSelection"
+                             (click)="$event.stopPropagation()"
+                             (change)="onSelectionHeaderChange($event)" />
+                    </div>
+                    <span class="header-text">{{ getHeaderName(entry.item) }}</span>
+                    <span class="group-toggle" *ngIf="isColumnGroup(entry.item) && hasExpansionToggle(entry.item)" (click)="toggleGroup(entry.item, $event)">
+                       {{ entry.item.expanded ? '−' : '+' }}
+                    </span>
+                    <span class="sort-indicator" *ngIf="!isColumnGroup(entry.item) && getSortIndicator(entry.item)">{{ getSortIndicator(entry.item) }}</span>
+                  </ng-template>
                 </div>
                 <div class="argent-grid-header-filter-icon"
                      [class.active]="isColumnFiltered(entry.item)"
@@ -107,11 +114,18 @@
                   [cdkDragDisabled]="isColumnGroup(entry.item) || entry.item.colId === 'ag-Grid-SelectionColumn'"
                   [cdkDragData]="entry.item">
                   <div class="argent-grid-header-content" cdkDragHandle>
-                    <span class="header-text">{{ getHeaderName(entry.item) }}</span>
-                    <span class="group-toggle" *ngIf="isColumnGroup(entry.item) && hasExpansionToggle(entry.item)" (click)="toggleGroup(entry.item, $event)">
-                       {{ entry.item.expanded ? '−' : '+' }}
-                    </span>
-                    <span class="sort-indicator" *ngIf="!isColumnGroup(entry.item) && getSortIndicator(entry.item)">{{ getSortIndicator(entry.item) }}</span>
+                    <ng-container *ngIf="getHeaderComponent(entry.item) as headerComp; else defaultHeaderCenter">
+                      <ng-container [argentHeaderOutlet]="headerComp"
+                                    [argentHeaderOutletParams]="getHeaderComponentParams(entry.item)"
+                                    [argentHeaderOutletVersion]="headerStateVersion"></ng-container>
+                    </ng-container>
+                    <ng-template #defaultHeaderCenter>
+                      <span class="header-text">{{ getHeaderName(entry.item) }}</span>
+                      <span class="group-toggle" *ngIf="isColumnGroup(entry.item) && hasExpansionToggle(entry.item)" (click)="toggleGroup(entry.item, $event)">
+                         {{ entry.item.expanded ? '−' : '+' }}
+                      </span>
+                      <span class="sort-indicator" *ngIf="!isColumnGroup(entry.item) && getSortIndicator(entry.item)">{{ getSortIndicator(entry.item) }}</span>
+                    </ng-template>
                   </div>
                   <div class="argent-grid-header-filter-icon"
                        [class.active]="isColumnFiltered(entry.item)"
@@ -159,11 +173,18 @@
                 [cdkDragDisabled]="isColumnGroup(entry.item) || entry.item.colId === 'ag-Grid-SelectionColumn'"
                 [cdkDragData]="entry.item">
                 <div class="argent-grid-header-content" cdkDragHandle>
-                  <span class="header-text">{{ getHeaderName(entry.item) }}</span>
-                  <span class="group-toggle" *ngIf="isColumnGroup(entry.item) && hasExpansionToggle(entry.item)" (click)="toggleGroup(entry.item, $event)">
-                     {{ entry.item.expanded ? '−' : '+' }}
-                  </span>
-                  <span class="sort-indicator" *ngIf="!isColumnGroup(entry.item) && getSortIndicator(entry.item)">{{ getSortIndicator(entry.item) }}</span>
+                  <ng-container *ngIf="getHeaderComponent(entry.item) as headerComp; else defaultHeaderRight">
+                    <ng-container [argentHeaderOutlet]="headerComp"
+                                  [argentHeaderOutletParams]="getHeaderComponentParams(entry.item)"
+                                  [argentHeaderOutletVersion]="headerStateVersion"></ng-container>
+                  </ng-container>
+                  <ng-template #defaultHeaderRight>
+                    <span class="header-text">{{ getHeaderName(entry.item) }}</span>
+                    <span class="group-toggle" *ngIf="isColumnGroup(entry.item) && hasExpansionToggle(entry.item)" (click)="toggleGroup(entry.item, $event)">
+                       {{ entry.item.expanded ? '−' : '+' }}
+                    </span>
+                    <span class="sort-indicator" *ngIf="!isColumnGroup(entry.item) && getSortIndicator(entry.item)">{{ getSortIndicator(entry.item) }}</span>
+                  </ng-template>
                 </div>
                 <div class="argent-grid-header-filter-icon"
                      [class.active]="isColumnFiltered(entry.item)"
@@ -304,20 +325,26 @@
                 (mousemove)="onCanvasMouseMove($event)"
                 (mouseleave)="onCanvasMouseLeave()"></canvas>
 
-        <!-- Cell Editor Overlay -->
-        <div class="argent-grid-cell-editor" 
+        <!-- Cell Editor Overlay. The built-in <input> is the default; a custom
+             cellEditor Angular component is mounted into #editorContainer instead
+             (see startEditing). Enter/Escape/Tab are handled at the wrapper so
+             both paths share one keyboard flow. -->
+        <div class="argent-grid-cell-editor"
+             #editorContainer
              *ngIf="isEditing"
+             [class.argent-grid-cell-editor--component]="isComponentEditor"
              [style.top.px]="editorPosition.y"
              [style.left.px]="editorPosition.x"
              [style.width.px]="editorPosition.width"
              [style.height.px]="editorPosition.height"
+             (keydown)="onEditorKeydown($event)"
              (click)="$event.stopPropagation()">
           <input #editorInput
+                 *ngIf="!isComponentEditor"
                  type="text"
                  class="argent-grid-editor-input"
                  [value]="editingValue"
                  (input)="onEditorInput($event)"
-                 (keydown)="onEditorKeydown($event)"
                  (blur)="onEditorBlur()"
                  autofocus />
         </div>
@@ -401,6 +428,11 @@
   <!-- Set Filter Popup -->
   <div *ngIf="activeSetFilter" class="set-filter-popup" [style.left.px]="setFilterPosition.x" [style.top.px]="setFilterPosition.y" (clickOutside)="closeSetFilter()" clickOutside>
     <argent-set-filter [values]="setFilterValues" [initialSelectedValues]="setFilterSelectedValues" [valueFormatter]="setFilterValueFormatter" (filterChanged)="onSetFilterChanged($event)"></argent-set-filter>
+  </div>
+
+  <!-- Custom Filter Popup (colDef.filter = Angular component) -->
+  <div *ngIf="activeCustomFilter" class="filter-popup argent-grid-custom-filter-popup" [style.left.px]="customFilterPosition.x" [style.top.px]="customFilterPosition.y" (clickOutside)="closeCustomFilter()" clickOutside (click)="$event.stopPropagation()">
+    <div #customFilterContainer class="argent-grid-custom-filter-host"></div>
   </div>
 
   <!-- Context Menu -->
