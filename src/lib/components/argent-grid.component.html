@@ -1,4 +1,9 @@
-<div class="argent-grid-container" [style.height]="height" [style.width]="width" (click)="onContainerClick($event)" tabindex="0">
+<div class="argent-grid-container" [style.height]="height" [style.width]="width" (click)="onContainerClick($event)" tabindex="0"
+     [attr.role]="gridRole"
+     [attr.aria-label]="ariaLabel"
+     [attr.aria-rowcount]="ariaRowCount"
+     [attr.aria-colcount]="ariaColCount"
+     [attr.aria-activedescendant]="activeDescendantId">
   <div class="argent-grid-main-layout" cdkDropListGroup>
     <div class="argent-grid-content-area">
       <!-- Row Group Panel -->
@@ -18,7 +23,7 @@
       </div>
 
       <!-- Header Layer (DOM-based for accessibility) -->
-      <div class="argent-grid-header" *ngIf="effectiveHeaderHeight > 0">
+      <div class="argent-grid-header" *ngIf="effectiveHeaderHeight > 0" [attr.role]="accessibilityEnabled ? 'rowgroup' : null">
         
         <div class="argent-grid-header-main">
           <!-- Left Pinned Header -->
@@ -38,6 +43,11 @@
                 class="argent-grid-header-cell argent-grid-header-cell-pinned-left"
                 [class.argent-grid-header-group-cell]="isColumnGroup(entry.item)"
                 [class.center-content]="!isColumnGroup(entry.item) && entry.item.colId === 'ag-Grid-SelectionColumn'"
+                [attr.role]="accessibilityEnabled ? 'columnheader' : null"
+                [attr.aria-colindex]="getAriaColIndex(entry.item)"
+                [attr.aria-colspan]="accessibilityEnabled && isColumnGroup(entry.item) ? getItemColSpan(entry.item) : null"
+                [attr.aria-sort]="getAriaSort(entry.item)"
+                [attr.aria-label]="accessibilityEnabled ? getHeaderName(entry.item) : null"
                 [style.grid-column]="getLeftPinnedColIndex(entry.item) + ' / span ' + getItemColSpan(entry.item)"
                 [style.grid-row]="(entry.rowIndex + 1) + ' / span ' + getItemRowSpan(entry.item, entry.rowIndex)"
                 [style.width.px]="getItemWidth(entry.item)"
@@ -56,6 +66,7 @@
                   <ng-template #defaultHeaderLeft>
                     <div *ngIf="!isColumnGroup(entry.item) && hasHeaderCheckbox(entry.item)" class="argent-grid-header-checkbox">
                       <input type="checkbox"
+                             aria-label="Select all rows"
                              [checked]="isAllSelected"
                              [indeterminate]="isIndeterminateSelection"
                              (click)="$event.stopPropagation()"
@@ -104,6 +115,11 @@
                   *ngIf="isColumnVisible(entry.item)"
                   class="argent-grid-header-cell"
                   [class.argent-grid-header-group-cell]="isColumnGroup(entry.item)"
+                  [attr.role]="accessibilityEnabled ? 'columnheader' : null"
+                  [attr.aria-colindex]="getAriaColIndex(entry.item)"
+                  [attr.aria-colspan]="accessibilityEnabled && isColumnGroup(entry.item) ? getItemColSpan(entry.item) : null"
+                  [attr.aria-sort]="getAriaSort(entry.item)"
+                  [attr.aria-label]="accessibilityEnabled ? getHeaderName(entry.item) : null"
                   [style.grid-column]="getScrollableColIndex(entry.item) + ' / span ' + getItemColSpan(entry.item)"
                   [style.grid-row]="(entry.rowIndex + 1) + ' / span ' + getItemRowSpan(entry.item, entry.rowIndex)"
                   [style.width.px]="getItemWidth(entry.item)"
@@ -163,6 +179,11 @@
                 *ngIf="isColumnVisible(entry.item)"
                 class="argent-grid-header-cell argent-grid-header-cell-pinned-right"
                 [class.argent-grid-header-group-cell]="isColumnGroup(entry.item)"
+                [attr.role]="accessibilityEnabled ? 'columnheader' : null"
+                [attr.aria-colindex]="getAriaColIndex(entry.item)"
+                [attr.aria-colspan]="accessibilityEnabled && isColumnGroup(entry.item) ? getItemColSpan(entry.item) : null"
+                [attr.aria-sort]="getAriaSort(entry.item)"
+                [attr.aria-label]="accessibilityEnabled ? getHeaderName(entry.item) : null"
                 [style.grid-column]="getRightPinnedColIndex(entry.item) + ' / span ' + getItemColSpan(entry.item)"
                 [style.grid-row]="(entry.rowIndex + 1) + ' / span ' + getItemRowSpan(entry.item, entry.rowIndex)"
                 [style.width.px]="getItemWidth(entry.item)"
@@ -320,6 +341,11 @@
              lifted above the canvas via z-index. -->
         <div class="argent-grid-cell-overlay-layer" #cellOverlayLayer></div>
 
+        <!-- Off-screen ARIA mirror of the visible rows. Visually hidden (clipped)
+             but readable by assistive tech; the AriaRowMirror keeps it in
+             lockstep with the canvas. Not aria-hidden — it IS the a11y tree. -->
+        <div class="argent-grid-aria-layer" #ariaLayer></div>
+
         <canvas #gridCanvas class="argent-grid-canvas"
                 (contextmenu)="onCanvasContextMenu($event)"
                 (mousemove)="onCanvasMouseMove($event)"
@@ -397,7 +423,7 @@
   <!-- Overlay for loading/no rows -->
   <div class="argent-grid-overlay" *ngIf="showOverlay">
     <div class="argent-grid-overlay-wrapper">
-      <div class="argent-grid-overlay-content" [class.loading]="activeOverlay === 'loading'">
+      <div class="argent-grid-overlay-content" [class.loading]="activeOverlay === 'loading'" role="status" aria-live="polite">
         <ng-container *ngIf="activeOverlay === 'loading' && !gridOptions?.loadingOverlayComponent">
           <div class="ag-overlay-loading-wrapper">
             <span class="ag-overlay-loading-center">Loading...</span>

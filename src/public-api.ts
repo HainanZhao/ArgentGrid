@@ -17,6 +17,9 @@ export { ClickOutsideDirective } from './lib/directives/click-outside.directive'
 export { ArgentHeaderOutletDirective } from './lib/directives/header-outlet.directive';
 // Canvas renderer
 export { CanvasRenderer } from './lib/rendering/canvas-renderer';
+// Accessibility: off-screen ARIA mirror of the visible rows
+export { AriaRowMirror } from './lib/rendering/aria-row-mirror';
+export type { AriaRowMirrorDeps } from './lib/rendering/aria-row-mirror';
 // Cell overlay manager (DOM/Angular custom cell renderers)
 export { CellOverlayManager } from './lib/rendering/cell-overlay-manager';
 // Live Data Optimizations

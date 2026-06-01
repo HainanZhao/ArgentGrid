@@ -489,6 +489,25 @@
    never carry this component's view-encapsulation attribute, so their critical
    layout/pointer styles are set inline in CellOverlayManager, not here. */
 
+/* Off-screen ARIA mirror layer (AriaRowMirror). The standard "visually hidden
+   but still in the accessibility tree" pattern: NOT display:none and NOT
+   aria-hidden (either would remove it from AT). Its row/cell descendants are
+   plain text nodes that inherit this clipping, so no per-element styling is
+   needed (and they wouldn't get encapsulated styles anyway, being created
+   dynamically). */
+.argent-grid-aria-layer {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 /* ============================================================================
    CELL EDITOR VALIDATION
    ============================================================================ */

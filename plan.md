@@ -36,7 +36,7 @@
 | **Overlays (loading/no-rows)** | Yes | Yes | **✅** |
 | **Keyboard Navigation** | Cell-level | Advanced | **✅ Cell-to-cell nav (arrows/Tab/Home/End/PageUp-Down), Enter + type-to-edit, focus ring, ensureIndexVisible/ColumnVisible** |
 | **Auto / Dynamic Row Height** | Yes | Yes | **✅ `wrapText` + `autoHeight` (measured), `getRowHeight` callback; cumulative offset model** |
-| **Accessibility (ARIA)** | Yes | Yes | **⚠️ Headers only — canvas content not exposed to AT** |
+| **Accessibility (ARIA)** | Yes | Yes | **✅ `role=grid`/header/row/gridcell via DOM headers + off-screen ARIA row mirror (`aria-rowindex`/`colindex`/`sort`/`selected`/`activedescendant`); ⚠️ grouped-header row nesting is a follow-up** |
 | **Integrated Charts** | No | Yes | **❌ Planned** |
 | **Theming** | Yes | Yes | **✅ CSS-var driven (Quartz)** |
 
@@ -47,7 +47,7 @@
 Canvas rendering buys the headline feature — **1M rows at 60fps** — but it directly fights the two things AG Grid users depend on most:
 
 1. **Arbitrary custom components in cells / headers / filters** — the single most popular AG Grid capability. Canvas cannot host `<a>`, buttons with handlers, images, or framework components. ArgentGrid currently supports only canvas-drawn primitives (checkbox, badge, button, progress, rating, sparkline) plus `cellRenderer` functions that return *plain strings*.
-2. **Accessibility** — canvas content is invisible to screen readers; only DOM headers are exposed today.
+2. **Accessibility** — ~~canvas content is invisible to screen readers; only DOM headers are exposed today.~~ **Resolved in T2.4** — an off-screen, visually-hidden ARIA DOM mirror (`AriaRowMirror`) exposes the visible rows as `role="row"`/`role="gridcell"` text nodes alongside `role="columnheader"` headers and a `role="grid"` root, kept in lockstep with the canvas via the same per-paint `sync(layout)` pipeline as the cell overlay.
 
 **The pivotal decision:** introduce a recycled **DOM-overlay layer** that positions a small pool of real DOM/Angular components over the canvas for the handful of *visible* cells that opt into component rendering (mirroring how AG Grid virtualizes its own DOM). Everything in Tier 1 below flows from this. It is the highest-leverage work in the roadmap and a prerequisite for genuine parity and a11y.
 
@@ -100,7 +100,12 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
   - [x] The component receives `IDetailCellRendererParams` (master `data`, the detail `node`, `masterNode`, `api`, + spread of `detailCellRendererParams`) and implements `IDetailCellRendererAngularComp` (`agInit`/`refresh`). Canvas and overlay share one `toAngularComponent` resolver, so the "draw placeholder vs. mount component" decision can't diverge; `renderDetailRow` keeps an opaque backdrop and only draws placeholder text when no component renderer resolves.
   - [x] Validated: `cell-overlay-manager.spec.ts` (full-width mount geometry + master-node params + no-renderer fallback + scroll-out recycle). `Features/MasterDetail` story — flagship **nested `<argent-grid>`** of a customer's orders, plus a registered-name custom panel exercising `detailCellRendererParams`. Full suite 562 passing; build clean.
   - [ ] Follow-up: auto-height detail rows (currently fixed `detailRowHeight`); a visible master-row expand chevron drawn on the canvas (today the story supplies a first-column toggle component).
-- [ ] **T2.4 — Accessibility / ARIA pass** — off-screen DOM mirror of focused/visible rows with roles, so AT and a11y audits pass (often a procurement hard-requirement).
+- [x] **T2.4 — Accessibility / ARIA pass** — **landed**
+  - [x] Off-screen, visually-hidden (clip pattern, not `display:none`/`aria-hidden`) DOM mirror of the *visible* rows: `AriaRowMirror` (`render/aria-row-mirror.ts`) maintains pooled `role="row"` → `role="gridcell"` text nodes that mirror exactly what the canvas paints, driven by the same `CanvasRenderer.onAfterRender` → `sync(layout)` pipeline as the cell overlay (fanned out to both managers in the component). Virtualized to ~visibleRows × visibleCols; group rows collapse to one cell + `aria-expanded`, detail rows to one cell.
+  - [x] Grid root advertises `role="grid"` (`treegrid` under tree data / row grouping), `aria-label` (`gridOptions.ariaLabel`, default "Data grid"), `aria-rowcount` (data + header rows), `aria-colcount`, and `aria-activedescendant` tracking the focused cell. The id is computed from `(gridId, rowKey, colId)` so it's valid before the next mirror frame mounts the cell.
+  - [x] Real-DOM header carries `role="rowgroup"` + per-cell `role="columnheader"` with `aria-colindex` (absolute, from the full column order — correct under horizontal virtualization), `aria-sort` (asc/desc/none), `aria-colspan` on group headers, `aria-label`; the select-all checkbox is labeled. Loading/no-rows overlay is `role="status"` `aria-live="polite"`. `gridOptions.suppressAccessibility` opts the whole thing out.
+  - [x] Validated: `aria-row-mirror.spec.ts` (roles, header-offset rowindex, full-order colindex under virtualization, selection gating, group/detail, recycle/pool reuse, no-churn scroll frame, computed `getActiveDescendantId`); `Features/Accessibility` story (`AriaSemantics` + `AccessibilitySuppressed` play tests). Full suite 616 passing; build clean.
+  - [ ] Follow-ups: multi-row (grouped) header `role="row"` nesting (today depth-1 correct; header is a flat CSS-grid of sibling cells); exposing horizontally-virtualized off-screen columns to AT (mirror covers only the rendered window, like AG Grid's DOM); automated axe audit in CI (structural tests only for now).
 
 ### Tier 3 — Scale & enterprise data
 
@@ -142,6 +147,6 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
 - **Keyboard Navigation**: re-baseline found only editor keys + copy/paste (downgraded to ⚠️). **Now resolved** — full cell-to-cell navigation implemented in T1.2, marked ✅.
 - **Custom Cell Renderers**: previously framed as supported — only canvas primitives + string-returning functions. No DOM/framework components. This is now Tier 1 priority.
 - **Column Virtualization (horizontal)**: re-baseline marked this ❌ ("draws all visible columns"), but `walkColumns` already culled off-screen center columns at the draw level — the claim was stale. **Now resolved & hardened** in T2.2: the cull is buffered, the center region is clipped (fixing a pinned-overdraw bug), and both are covered by tests. Marked ✅.
-- **Accessibility**: headers only; canvas content not exposed to assistive tech.
+- **Accessibility**: re-baseline found headers-only with canvas content not exposed to assistive tech (downgraded to ⚠️). **Now resolved** in T2.4 — an off-screen ARIA row mirror plus header/grid roles expose the data to AT. Marked ✅ (grouped-header row nesting + an automated axe audit remain follow-ups).
 </content>
 </invoke>
