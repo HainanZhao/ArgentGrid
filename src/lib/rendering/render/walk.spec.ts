@@ -129,7 +129,7 @@ describe('Walker Functions', () => {
       expect(xPositions[2]).toBe(325);
     });
 
-    it('should skip center columns outside viewport', () => {
+    it('should skip center columns scrolled out of the viewport', () => {
       const columns: Column[] = [
         createMockColumn({ colId: 'left1', pinned: 'left', width: 50 }),
         createMockColumn({ colId: 'center1', width: 100 }),
@@ -138,15 +138,64 @@ describe('Walker Functions', () => {
         createMockColumn({ colId: 'right1', pinned: 'right', width: 75 }),
       ];
 
-      // Scroll so center1 and part of center2 are hidden
+      // centerStartX=50, centerEndX=400-75=325. Scroll 150 pushes center1
+      // entirely left of the center region (its right edge lands at x=0).
       const visited: string[] = [];
-      walkColumns(columns, 150, 400, 50, 75, (col, _x, _width, _isPinned) => {
-        visited.push(col.colId);
-      });
+      walkColumns(columns, 150, 400, 50, 75, (col) => visited.push(col.colId));
 
-      // Left and right pinned should always be visited
+      // Pinned columns are always drawn; center1 is fully off-screen → culled.
       expect(visited).toContain('left1');
       expect(visited).toContain('right1');
+      expect(visited).not.toContain('center1');
+      expect(visited).toContain('center2');
+      expect(visited).toContain('center3');
+    });
+
+    it('should cull center columns scrolled off the right edge', () => {
+      const columns: Column[] = [
+        createMockColumn({ colId: 'c0', width: 100 }),
+        createMockColumn({ colId: 'c1', width: 100 }),
+        createMockColumn({ colId: 'c2', width: 100 }),
+        createMockColumn({ colId: 'c3', width: 100 }),
+      ];
+
+      // Viewport 250 wide, no pinned, no scroll → only c0,c1,c2 reach the edge.
+      const visited: string[] = [];
+      walkColumns(columns, 0, 250, 0, 0, (col) => visited.push(col.colId));
+
+      expect(visited).toEqual(['c0', 'c1', 'c2']);
+      expect(visited).not.toContain('c3');
+    });
+
+    it('columnBuffer renders extra columns each side of the viewport', () => {
+      const columns: Column[] = [
+        createMockColumn({ colId: 'left1', pinned: 'left', width: 50 }),
+        createMockColumn({ colId: 'center1', width: 100 }),
+        createMockColumn({ colId: 'center2', width: 100 }),
+        createMockColumn({ colId: 'center3', width: 100 }),
+        createMockColumn({ colId: 'right1', pinned: 'right', width: 75 }),
+      ];
+
+      // Same scroll as above, but buffer=1 should pull center1 back in.
+      const visited: string[] = [];
+      walkColumns(columns, 150, 400, 50, 75, (col) => visited.push(col.colId), undefined, 1);
+
+      expect(visited).toContain('center1'); // buffered (just off the left edge)
+      expect(visited).toContain('center2');
+      expect(visited).toContain('center3');
+    });
+
+    it('columnBuffer is clamped to the available columns (no out-of-bounds)', () => {
+      const columns: Column[] = [
+        createMockColumn({ colId: 'c0', width: 100 }),
+        createMockColumn({ colId: 'c1', width: 100 }),
+      ];
+
+      const visited: string[] = [];
+      // Huge buffer, everything already visible → each column emitted exactly once.
+      walkColumns(columns, 0, 400, 0, 0, (col) => visited.push(col.colId), undefined, 50);
+
+      expect(visited).toEqual(['c0', 'c1']);
     });
   });
 

@@ -1256,6 +1256,52 @@ describe('GridService', () => {
       expect(api.getRowAtY(50)).toBe(1);
       expect(api.getRowAtY(140)).toBe(2);
     });
+
+    it('applies the getRowHeight callback to per-row heights', () => {
+      // default rowHeight 32; row index 1 overridden to 80.
+      const a = service.createApi(testColumnDefs, [...testRowData], {
+        getRowHeight: ({ rowIndex }) => (rowIndex === 1 ? 80 : null),
+      });
+      expect(a.getRowY(0)).toBe(0);
+      expect(a.getRowY(1)).toBe(32);
+      expect(a.getRowY(2)).toBe(112); // 32 + 80
+      expect(a.getTotalHeight()).toBe(144); // 32 + 80 + 32
+    });
+
+    it('applies an injected row-height calculator', () => {
+      // Make the row with id===2 (display index 1) taller.
+      service.setRowHeightCalculator((node) => ((node.data as TestData).id === 2 ? 60 : null));
+
+      expect(api.getRowY(1)).toBe(32);
+      expect(api.getRowY(2)).toBe(92); // 32 + 60
+      expect(api.getTotalHeight()).toBe(124); // 32 + 60 + 32
+    });
+
+    it('prefers the getRowHeight callback over the calculator', () => {
+      const a = service.createApi(testColumnDefs, [...testRowData], {
+        getRowHeight: () => 50,
+      });
+      service.setRowHeightCalculator(() => 999);
+      expect(a.getRowY(1)).toBe(50); // callback wins, calculator ignored
+      expect(a.getTotalHeight()).toBe(150);
+    });
+
+    it('recalculateRowHeights re-runs the current calculator', () => {
+      let extra = 0;
+      service.setRowHeightCalculator(() => 32 + extra);
+      expect(api.getTotalHeight()).toBe(96); // 3 * 32
+
+      extra = 8;
+      service.recalculateRowHeights();
+      expect(api.getTotalHeight()).toBe(120); // 3 * 40
+    });
+
+    it('clearing the calculator restores default heights', () => {
+      service.setRowHeightCalculator(() => 50);
+      expect(api.getTotalHeight()).toBe(150);
+      service.setRowHeightCalculator(null);
+      expect(api.getTotalHeight()).toBe(96); // back to 3 * 32
+    });
   });
 
   describe('Export Functions', () => {

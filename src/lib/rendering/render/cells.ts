@@ -12,6 +12,7 @@ import {
   type ICellRendererParams,
   IRowNode,
 } from '../../types/ag-grid-types';
+import { type CellRendererComponents, resolveNamedRenderer } from './cell-renderer-registry';
 import {
   drawBadge,
   drawButton,
@@ -28,17 +29,51 @@ export function isAngularComponent(x: any): boolean {
   return typeof x === 'function' && !!x?.ɵcmp;
 }
 
+/** The per-grid `gridOptions.components` map, if any, from a grid API. */
+function getComponents<TData = any>(
+  api: GridApi<TData> | null | undefined
+): CellRendererComponents | undefined {
+  return api?.getGridOption?.('components') as CellRendererComponents | undefined;
+}
+
+/**
+ * Resolve a `cellRenderer` value (component class, or a registered name) to the
+ * Angular component it routes to, or null when it isn't a component renderer
+ * (a plain string-returning function, a built-in canvas string, or undefined).
+ */
+function toAngularComponent(
+  renderer: any,
+  components: CellRendererComponents | undefined
+): Type<any> | null {
+  if (isAngularComponent(renderer)) return renderer as Type<any>;
+  if (typeof renderer === 'string') {
+    const resolved = resolveNamedRenderer(renderer, components);
+    return isAngularComponent(resolved) ? (resolved as Type<any>) : null;
+  }
+  return null;
+}
+
 /**
  * True when a column *may* route any of its cells through the DOM/Angular
  * overlay layer (a component `cellRenderer`, or a `cellRendererSelector` that
  * could pick one). Column-level test used by the overlay to decide which
  * columns to consider; the actual per-cell decision is {@link resolveCellComponent}.
  */
-export function usesComponentRenderer<TData = any>(colDef: ColDef<TData> | null): boolean {
+export function usesComponentRenderer<TData = any>(
+  colDef: ColDef<TData> | null,
+  components?: CellRendererComponents | null
+): boolean {
   if (!colDef) return false;
-  return (
-    isAngularComponent(colDef.cellRenderer) || typeof colDef.cellRendererSelector === 'function'
-  );
+  // A selector is opaque at column level (no per-cell params) — it *may* pick a
+  // component, so the column is a candidate; the per-cell check decides for real.
+  if (typeof colDef.cellRendererSelector === 'function') return true;
+  if (isAngularComponent(colDef.cellRenderer)) return true;
+  // A named renderer counts only when it resolves to an Angular component; a name
+  // that maps to a function, or an unknown/built-in string, stays canvas-drawn.
+  if (typeof colDef.cellRenderer === 'string') {
+    return isAngularComponent(resolveNamedRenderer(colDef.cellRenderer, components ?? undefined));
+  }
+  return false;
 }
 
 /**
@@ -56,15 +91,17 @@ export function resolveCellComponent<TData = any>(
   params: ICellRendererParams<TData>
 ): Type<any> | null {
   if (!colDef) return null;
+  const components = getComponents(params.api);
   if (typeof colDef.cellRendererSelector === 'function') {
     try {
       const selected = colDef.cellRendererSelector(params);
-      return isAngularComponent(selected?.component) ? (selected?.component as Type<any>) : null;
+      // A selector may return a component class or a registered name.
+      return toAngularComponent(selected?.component, components);
     } catch {
       return null;
     }
   }
-  return isAngularComponent(colDef.cellRenderer) ? (colDef.cellRenderer as Type<any>) : null;
+  return toAngularComponent(colDef.cellRenderer, components);
 }
 
 /**
@@ -182,7 +219,7 @@ export function drawCellContent<TData = any>(
   // all content. Resolved per-cell (not per-column) so a cellRendererSelector
   // that falls back to a non-component branch is still drawn here, not left
   // blank. Only pay the param build when the column could route to a component.
-  if (colDef && (colDef.cellRendererSelector || isAngularComponent(colDef.cellRenderer))) {
+  if (colDef && usesComponentRenderer(colDef, getComponents(api))) {
     const overlayParams: ICellRendererParams<TData> = {
       value,
       valueFormatted: formattedValue,
@@ -286,8 +323,25 @@ export function drawCellContent<TData = any>(
   ctx.fillStyle = textColor;
   ctx.textBaseline = 'middle';
 
-  // Truncate text if needed (the group indent/indicator eats into the width).
   const maxWidth = width - theme.cellPadding * 2 - groupOffset;
+
+  // Wrapped / auto-height text: lay out multiple lines, vertically centered in
+  // the cell (top-aligned when the block is taller than the row), clipping any
+  // lines that fall past the bottom edge.
+  if (colDef?.wrapText || colDef?.autoHeight) {
+    const lines = wrapLines(ctx, formattedValue, maxWidth);
+    const lineH = getTextLineHeight(theme);
+    const blockH = lines.length * lineH;
+    const top = y + Math.max(theme.cellPadding, (height - blockH) / 2);
+    for (let i = 0; i < lines.length; i++) {
+      const lineMidY = top + i * lineH + lineH / 2;
+      if (lineMidY + lineH / 2 > y + height + 1) break; // would overflow the row
+      ctx.fillText(lines[i], Math.floor(textX), Math.floor(lineMidY));
+    }
+    return;
+  }
+
+  // Truncate text if needed (the group indent/indicator eats into the width).
   const truncatedText = colDef?.suppressEllipsis
     ? formattedValue
     : truncateText(ctx, formattedValue, maxWidth);
@@ -396,6 +450,73 @@ export function truncateText(
 }
 
 /**
+ * Line height (px) used for wrapped/auto-height text. Shared by the canvas
+ * renderer (drawing) and the auto-height measurement pass so a measured row is
+ * tall enough for exactly the lines that get drawn.
+ */
+export function getTextLineHeight(theme: GridTheme): number {
+  return Math.ceil(theme.fontSize * 1.4);
+}
+
+/**
+ * Greedy word-wrap `text` into lines that each fit within `maxWidth` for the
+ * current `ctx` font. Honors explicit newlines; a single word wider than
+ * `maxWidth` is character-broken so it can never overflow horizontally.
+ */
+export function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const result: string[] = [];
+  if (text == null || text === '') return result;
+  const str = String(text);
+  if (maxWidth <= 0) return [str];
+
+  for (const paragraph of str.split('\n')) {
+    const words = paragraph.split(/\s+/).filter((w) => w.length > 0);
+    if (words.length === 0) {
+      result.push('');
+      continue;
+    }
+    let line = '';
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (ctx.measureText(candidate).width <= maxWidth) {
+        line = candidate;
+        continue;
+      }
+      if (line) {
+        result.push(line);
+        line = '';
+      }
+      if (ctx.measureText(word).width <= maxWidth) {
+        line = word;
+      } else {
+        // A single word too wide for the cell — break it across lines.
+        const pieces = breakWord(ctx, word, maxWidth);
+        for (let i = 0; i < pieces.length - 1; i++) result.push(pieces[i]);
+        line = pieces[pieces.length - 1];
+      }
+    }
+    result.push(line);
+  }
+  return result;
+}
+
+/** Character-break a single over-long word into chunks that fit `maxWidth`. */
+function breakWord(ctx: CanvasRenderingContext2D, word: string, maxWidth: number): string[] {
+  const pieces: string[] = [];
+  let cur = '';
+  for (const ch of word) {
+    if (cur && ctx.measureText(cur + ch).width > maxWidth) {
+      pieces.push(cur);
+      cur = ch;
+    } else {
+      cur += ch;
+    }
+  }
+  if (cur) pieces.push(cur);
+  return pieces.length ? pieces : [word];
+}
+
+/**
  * Measure text width
  */
 export function measureText(ctx: CanvasRenderingContext2D, text: string): number {
@@ -469,27 +590,33 @@ export function getFormattedValue<TData = any>(
 
   // Use custom cellRenderer if provided (string-returning function only — an
   // Angular component class is also a function but is handled by the overlay).
-  if (
-    colDef &&
-    typeof colDef.cellRenderer === 'function' &&
-    !isAngularComponent(colDef.cellRenderer)
-  ) {
-    try {
-      const result = colDef.cellRenderer({
-        value,
-        data,
-        node: rowNode,
-        colDef,
-        api,
-      });
-      // Handle both string and Promise<string> returns
-      if (typeof result === 'string') {
-        return stripHtmlTags(result);
+  // A string `cellRenderer` is first resolved against the named registry; only a
+  // resolved *function* renderer draws here. Angular components route to the
+  // overlay, and unknown/built-in names ('checkbox', …) fall through to canvas.
+  if (colDef) {
+    let renderer: any = colDef.cellRenderer;
+    if (typeof renderer === 'string') {
+      const resolved = resolveNamedRenderer(renderer, getComponents(api));
+      renderer = typeof resolved === 'function' && !isAngularComponent(resolved) ? resolved : null;
+    }
+    if (typeof renderer === 'function' && !isAngularComponent(renderer)) {
+      try {
+        const result = renderer({
+          value,
+          data,
+          node: rowNode,
+          colDef,
+          api,
+        });
+        // Handle both string and Promise<string> returns
+        if (typeof result === 'string') {
+          return stripHtmlTags(result);
+        }
+        // For async renderers, return value as string (updated on next render)
+        return String(value);
+      } catch (e) {
+        console.warn('Cell renderer error:', e);
       }
-      // For async renderers, return value as string (will be updated on next render)
-      return String(value);
-    } catch (e) {
-      console.warn('Cell renderer error:', e);
     }
   }
 

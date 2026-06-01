@@ -21,7 +21,15 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CanvasRenderer } from '../rendering/canvas-renderer';
 import { CellOverlayManager } from '../rendering/cell-overlay-manager';
+import {
+  getCellValue,
+  getFormattedValue,
+  getTextLineHeight,
+  groupIndicatorAreaWidth,
+  wrapLines,
+} from '../rendering/render/cells';
 import { getColumnDef, isColumnVisible } from '../rendering/render/column-utils';
+import { getFontFromTheme } from '../rendering/render/theme';
 import { GridService } from '../services/grid.service';
 import { applyThemeCSSVariables, convertThemeToGridTheme } from '../themes/theme-builder';
 import type {
@@ -239,6 +247,8 @@ export class ArgentGridComponent<TData = any>
             this.gridApi.setGridOption('headerHeight', convertedTheme.headerHeight);
           }
         }
+        // Font/line-height may have changed → re-measure auto-height rows.
+        this.setupAutoRowHeight();
       }
     }
   }
@@ -339,6 +349,8 @@ export class ArgentGridComponent<TData = any>
         this.canvasRenderer.onAfterRender = (layout) => {
           this.cellOverlayManager?.sync(layout);
         };
+        // Now that the renderer (and its theme) exists, wire up auto-height.
+        this.setupAutoRowHeight();
       }
     }
 
@@ -432,6 +444,65 @@ export class ArgentGridComponent<TData = any>
     this.gridApi?.destroy();
     this.canvasRenderer?.destroy();
     this.onCanvasMouseLeave();
+  }
+
+  /** Offscreen 2D context used only to measure wrapped text for auto-height. */
+  private measureCtx: CanvasRenderingContext2D | null = null;
+
+  private getMeasureCtx(): CanvasRenderingContext2D | null {
+    if (!this.measureCtx) {
+      this.measureCtx = document.createElement('canvas').getContext('2d');
+    }
+    return this.measureCtx;
+  }
+
+  /**
+   * Install (or clear) the auto-height measurer on the grid service. For columns
+   * with `autoHeight`, each row's height is the tallest wrapped-text height
+   * across those columns (clamped to at least the default row height). Reads
+   * column widths live, so it stays correct across resizes when re-run. No-op
+   * (and clears any prior measurer) when no column opts into auto-height.
+   */
+  private setupAutoRowHeight(): void {
+    if (!this.gridApi || typeof this.canvasRenderer?.getTheme !== 'function') return;
+    const theme = this.canvasRenderer.getTheme();
+    const autoCols = this.gridApi
+      .getAllColumns()
+      .filter((c) => !!getColumnDef(c, this.gridApi)?.autoHeight);
+
+    if (autoCols.length === 0) {
+      this.gridService.setRowHeightCalculator(null);
+      return;
+    }
+
+    const ctx = this.getMeasureCtx();
+    if (!ctx) return;
+    const lineH = getTextLineHeight(theme);
+    const minH = theme.rowHeight;
+
+    this.gridService.setRowHeightCalculator((node) => {
+      if ((node as any).group || (node as any).detail) return null;
+      ctx.font = getFontFromTheme(theme);
+      let maxH: number | null = null;
+      for (const col of autoCols) {
+        if (!isColumnVisible(col)) continue;
+        const colDef = getColumnDef(col, this.gridApi);
+        const value = getCellValue(col, colDef, node, this.gridApi);
+        const text = getFormattedValue(value, colDef, node.data, node, this.gridApi);
+        // Mirror drawCellContent's available width: the auto-group/tree column
+        // reserves room at the left for the indent + expand indicator, so the
+        // measured wrap width must subtract the same offset or the row is sized
+        // too short and the last wrapped line is clipped.
+        const groupOffset =
+          col.colId === 'ag-Grid-AutoColumn' && (node.group || node.level > 0)
+            ? groupIndicatorAreaWidth(node.level, theme)
+            : 0;
+        const lines = wrapLines(ctx, text, (col.width || 0) - theme.cellPadding * 2 - groupOffset);
+        const h = Math.max(1, lines.length) * lineH + theme.cellPadding * 2;
+        maxH = maxH == null ? h : Math.max(maxH, h);
+      }
+      return maxH == null ? null : Math.max(maxH, minH);
+    });
   }
 
   private initializeGrid(): void {
@@ -531,6 +602,13 @@ export class ArgentGridComponent<TData = any>
 
     // Update selection state
     this.updateSelectionState();
+
+    // On re-init (e.g. column visibility toggle) the renderer already exists and
+    // the column set may have changed — re-bind the auto-height measurer. On the
+    // very first init the renderer is created later (ngAfterViewInit wires it).
+    if (this.canvasRenderer) {
+      this.setupAutoRowHeight();
+    }
   }
 
   private onRowDataChanged(newData: TData[] | null): void {
@@ -2043,6 +2121,9 @@ export class ArgentGridComponent<TData = any>
   private onResizeMouseUp(): void {
     this.isResizing = false;
     this.resizeItem = null;
+    // A new column width changes how auto-height cells wrap → re-measure rows.
+    this.gridService.recalculateRowHeights();
+    this.canvasRenderer?.render();
   }
 
   private applyResize(item: Column | ColumnGroup, newWidth: number): void {

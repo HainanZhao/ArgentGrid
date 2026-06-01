@@ -69,6 +69,14 @@ export class CellOverlayManager<TData = any> {
    */
   private hiddenKey: string | null = null;
 
+  /**
+   * The center (non-pinned) region in screen-x for the current frame, mirrored
+   * from {@link OverlayLayout.centerClip}. Center cells are clip-pathed to it so
+   * a buffered/scrolled cell never shows over the pinned columns. `null` = no
+   * center region (don't clip).
+   */
+  private centerClip: { left: number; right: number } | null = null;
+
   constructor(deps: CellOverlayDeps<TData>) {
     this.container = deps.container;
     this.gridApi = deps.gridApi;
@@ -81,13 +89,15 @@ export class CellOverlayManager<TData = any> {
    * changed (reposition only); creates/recycles components on demand.
    */
   sync(layout: OverlayLayout): void {
+    this.centerClip = layout.centerClip ?? null;
     // Determine which columns route through the overlay (component renderers).
+    const components = this.gridApi.getGridOption('components') as Record<string, any> | undefined;
     const overlayColumns = layout.columns
       .map((pos) => {
         const column = this.gridApi.getColumn(pos.colId);
         if (!column) return null;
         const colDef = this.getColDef(column);
-        if (!colDef || !usesComponentRenderer(colDef)) return null;
+        if (!colDef || !usesComponentRenderer(colDef, components)) return null;
         return { pos, column, colDef };
       })
       .filter((c): c is NonNullable<typeof c> => c !== null);
@@ -121,7 +131,8 @@ export class CellOverlayManager<TData = any> {
             y,
             pos.width,
             height,
-            layout.dataChanged
+            layout.dataChanged,
+            pos.isPinned
           );
         }
       }
@@ -205,7 +216,8 @@ export class CellOverlayManager<TData = any> {
     y: number,
     width: number,
     height: number,
-    dataChanged: boolean
+    dataChanged: boolean,
+    isPinned: boolean
   ): void {
     const bindingKey = this.bindingKey(params);
     let entry = this.active.get(key);
@@ -238,8 +250,27 @@ export class CellOverlayManager<TData = any> {
     }
 
     this.position(entry.hostEl, x, y, width, height);
+    this.applyCenterClip(entry.hostEl, isPinned, x, width);
     // Respect an active hide (e.g. this cell is being edited) across re-syncs.
     entry.hostEl.style.display = key === this.hiddenKey ? 'none' : '';
+  }
+
+  /**
+   * Clip a center cell's host to the center region so the part that overflows
+   * under a pinned column (when scrolled or rendered as a buffer column) isn't
+   * visible. Pinned cells are never clipped. The inset is in the host's own
+   * coordinate space (its left edge is at screen-x `x`).
+   */
+  private applyCenterClip(el: HTMLElement, isPinned: boolean, x: number, width: number): void {
+    const clip = this.centerClip;
+    if (isPinned || !clip) {
+      if (el.style.clipPath) el.style.clipPath = '';
+      return;
+    }
+    const leftOverflow = Math.max(0, clip.left - x);
+    const rightOverflow = Math.max(0, x + width - clip.right);
+    el.style.clipPath =
+      leftOverflow || rightOverflow ? `inset(0 ${rightOverflow}px 0 ${leftOverflow}px)` : '';
   }
 
   /** A pooled or fresh instance of `componentType`. */

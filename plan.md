@@ -11,14 +11,14 @@
 | **Rendering Engine** | DOM-based | DOM-based | **Canvas viewport + DOM headers** |
 | **Data Volume (client-side)** | ~100k rows | Millions (SSRM) | **1M+ rows** ✅ |
 | **Row Models** | Client-side | Client, SSRM, Infinite | **Client-side only** ❌ |
-| **Custom Cell Components** | Any framework component | Any framework component | **⚠️ Canvas primitives + string functions only — no DOM/Angular components** |
+| **Custom Cell Components** | Any framework component | Any framework component | **✅ Angular components via DOM overlay (class, `cellRendererSelector`, or registered name) + canvas primitives + string functions** |
 | **Sorting** | Yes | Yes | **✅ Single + multi-column** |
 | **Filtering** | Text, Num, Date | + Set, Multi | **✅ Text, Num, Date, Boolean, Set; quick + floating filters** |
 | **Cell Editing** | Yes | Yes | **✅ Inline (DOM overlay), valueParser/Setter, validation** |
 | **Selection** | Row | Row + Range | **✅ Row + checkbox + Range** |
 | **Column Pin / Resize / Reorder** | Yes | Yes | **✅** |
 | **Row Pinning (top/bottom)** | Yes | Yes | **✅** |
-| **Column Virtualization (horizontal)** | Yes | Yes | **❌ Draws all visible columns** |
+| **Column Virtualization (horizontal)** | Yes | Yes | **✅ Off-screen center columns culled + buffered; center region clipped** |
 | **Row Grouping** | No | Yes | **✅ Hierarchical** |
 | **Aggregation** | No | Yes | **✅ Logic complete; ⚠️ weak group-row visuals** |
 | **Pivoting** | No | Yes | **✅ Basic** |
@@ -34,7 +34,7 @@
 | **State Persistence** | No | Yes | **✅ LocalStorage** |
 | **Overlays (loading/no-rows)** | Yes | Yes | **✅** |
 | **Keyboard Navigation** | Cell-level | Advanced | **✅ Cell-to-cell nav (arrows/Tab/Home/End/PageUp-Down), Enter + type-to-edit, focus ring, ensureIndexVisible/ColumnVisible** |
-| **Auto / Dynamic Row Height** | Yes | Yes | **❌ Fixed heights only** |
+| **Auto / Dynamic Row Height** | Yes | Yes | **✅ `wrapText` + `autoHeight` (measured), `getRowHeight` callback; cumulative offset model** |
 | **Accessibility (ARIA)** | Yes | Yes | **⚠️ Headers only — canvas content not exposed to AT** |
 | **Integrated Charts** | No | Yes | **❌ Planned** |
 | **Theming** | Yes | Yes | **✅ CSS-var driven (Quartz)** |
@@ -73,13 +73,25 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
   - [x] `ensureIndexVisible` (auto/top/bottom) + `ensureColumnVisible`/`scrollToColumn` (center-column scroll math; pinned cols are no-ops). Click-to-focus via `onCellClick`.
   - [x] Validated: `grid.service.spec.ts` (Focus + Scroll API) + Storybook interaction (`play`) tests on the `Components/ArgentGrid` `KeyboardNavigation` / `KeyboardEditing` stories (run via `@storybook/test-runner`).
   - [ ] Follow-ups: cell-to-cell range extension on Shift+Arrow; focus traversal into pinned rows (top/bottom); damage-tracked partial repaint of focus ring (currently full `render()`).
-- [ ] **T1.3 — Named cell-renderer registry**
-  - `cellRenderer: 'myRenderer'` resolution; registration API. Enables T1.1 and AG Grid API compatibility.
+- [x] **T1.3 — Named cell-renderer registry** — **landed**
+  - [x] `cellRenderer: 'myRenderer'` (string) resolution shared by the canvas and the DOM overlay via `resolveNamedRenderer` (`render/cell-renderer-registry.ts`); a name → Angular component routes to the overlay, a name → string-returning function draws on canvas, an unknown/built-in name ('checkbox', 'rating') falls through to the canvas primitives unchanged.
+  - [x] Two-layer resolution: per-grid `gridOptions.components` map (AG-Grid-compatible, takes precedence) over a process-wide global registry (`registerCellRenderer`/`unregisterCellRenderer`/`getGlobalCellRenderer`/`clearCellRendererRegistry`, exported from the public API). `cellRendererSelector` may also return a registered name.
+  - [x] Validated: `cell-renderer-registry.spec.ts` + new resolution tests in `cells.spec.ts` (`usesComponentRenderer`/`resolveCellComponent`/`getFormattedValue`); `Features/NamedRenderers` story (`GlobalRegistry` + `PerGridComponents` precedence override).
 
 ### Tier 2 — High-frequency everyday features
 
-- [ ] **T2.1 — Auto-height rows + text wrapping** — measure wrapped text, variable row heights, viewport math.
-- [ ] **T2.2 — Horizontal column virtualization** — cull off-screen center columns (needed before wide-grid claims hold).
+- [x] **T2.1 — Auto-height rows + text wrapping** — **landed**
+  - [x] Canvas text wrapping: `colDef.wrapText`/`autoHeight` draw greedy word-wrapped lines (newline-aware, long words char-broken) vertically centered and clipped to the row (`wrapLines`/`getTextLineHeight` in `render/cells.ts`); plain columns keep single-line + ellipsis.
+  - [x] Variable row heights reuse the existing cumulative offset model: `updateRowHeightCache` now resolves each non-detail row's height fresh from the `gridOptions.getRowHeight` callback (AG-Grid-compatible), then an injected auto-height measurer, else the default; detail-row heights are preserved.
+  - [x] Auto-height measurer wired in the component (`setupAutoRowHeight`): an offscreen 2D context measures the tallest wrapped `autoHeight` column per row (live column widths, clamped to ≥ default height), reusing `getCellValue`/`getFormattedValue`/`wrapLines`. Re-measures on column resize, theme change, and column-visibility re-init; the scrollbar/virtualization stay correct via `getTotalHeight`.
+  - [x] Validated: `cells.spec.ts` (wrap word-boundary/newline/long-word/empty/zero-width + line-height); `grid.service.spec.ts` (getRowHeight callback, injected calculator, callback-over-calculator precedence, `recalculateRowHeights`, clearing). `Features/AutoHeightRows` story (wrapped summary/tags columns, resizable). Full suite 558 passing; build clean.
+  - [ ] Follow-up: auto-height currently measures all displayed rows on each rebuild (fine for the client-side model / moderate data); lazy per-viewport measurement would be needed to pair auto-height with 1M-row datasets.
+- [x] **T2.2 — Horizontal column virtualization** — **landed**
+  - [x] `walkColumns` computes every center column's x in one pass and emits only the visible window plus a `columnBuffer` (renderer default 1) each side, so off-screen center columns are never drawn and fast horizontal scroll doesn't pop a blank column at the leading edge. (Re-baseline note: the unbuffered cull already existed but was untested and undocumented; this hardens it.)
+  - [x] Center cells are now clipped to the center region in `renderRow` (drawn before the pinned columns), fixing a latent bug where a center column straddling/buffered under the pinned edge overdrew the pinned cells.
+  - [x] Clipping extended consistently across the frame via a shared `clipCenter` helper: the range-selection box (center-only ranges; ranges touching a pinned column stay unclipped) and the keyboard focus ring (center cells) are clipped to the center region; the DOM cell-overlay layer clip-paths each center cell to the center region (`OverlayLayout.centerClip` → `CellOverlayManager.applyCenterClip`). Grid lines already region-filter their borders, so they needed no change.
+  - [x] Validated: strengthened `walk.spec.ts` (off-screen center columns *excluded* both edges + `columnBuffer` behavior/clamping); `canvas-renderer.spec.ts` asserts the center clip rect for the cell pass and that the focus-ring/range passes clip center-only cases but not pinned ones; `cell-overlay-manager.spec.ts` asserts the per-cell `clip-path` (overflow clipped, fully-in-view unclipped, pinned never clipped).
+  - [ ] Follow-up: O(log n) first-visible lookup via cumulative offsets for grids with thousands of columns (current scan is O(total center columns)/frame).
 - [ ] **T2.3 — Master/Detail (real)** — embed actual nested grid/component in expanded detail rows (depends on T1.1).
 - [ ] **T2.4 — Accessibility / ARIA pass** — off-screen DOM mirror of focused/visible rows with roles, so AT and a11y audits pass (often a procurement hard-requirement).
 
@@ -122,7 +134,7 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
 - **Master/Detail**: previously "✅ Complete" — actual detail rows render placeholder text only. Downgraded to ⚠️.
 - **Keyboard Navigation**: re-baseline found only editor keys + copy/paste (downgraded to ⚠️). **Now resolved** — full cell-to-cell navigation implemented in T1.2, marked ✅.
 - **Custom Cell Renderers**: previously framed as supported — only canvas primitives + string-returning functions. No DOM/framework components. This is now Tier 1 priority.
-- **Column Virtualization (horizontal)**: not implemented; all visible columns are drawn each frame.
+- **Column Virtualization (horizontal)**: re-baseline marked this ❌ ("draws all visible columns"), but `walkColumns` already culled off-screen center columns at the draw level — the claim was stale. **Now resolved & hardened** in T2.2: the cull is buffered, the center region is clipped (fixing a pinned-overdraw bug), and both are covered by tests. Marked ✅.
 - **Accessibility**: headers only; canvas content not exposed to assistive tech.
 </content>
 </invoke>

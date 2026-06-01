@@ -52,6 +52,13 @@ export class GridService<TData = any> {
   // Row height cache
   private cumulativeRowHeights: number[] = [];
   private totalHeight = 0;
+  /**
+   * Optional auto-height measurer (set by the view layer, which owns the canvas
+   * font + column widths). Returns the measured height for a row, or null when
+   * the row has no auto-height column. See {@link setRowHeightCalculator}.
+   */
+  private rowHeightCalculator: ((node: IRowNode<TData>, rowIndex: number) => number | null) | null =
+    null;
 
   // Grouping cache
   private cachedGroupedData: (TData | GroupRowNode<TData>)[] | null = null;
@@ -1484,16 +1491,50 @@ export class GridService<TData = any> {
 
   private updateRowHeightCache(): void {
     const defaultHeight = this.gridOptions?.rowHeight || 32;
+    const getRowHeight = this.gridOptions?.getRowHeight;
     this.cumulativeRowHeights = [];
     let currentTotal = 0;
 
-    this.displayedRowNodes.forEach((node) => {
+    this.displayedRowNodes.forEach((node, rowIndex) => {
       this.cumulativeRowHeights.push(currentTotal);
-      const height = node.rowHeight || defaultHeight;
-      currentTotal += height;
+      // Detail rows carry a fixed height assigned at creation, and group rows
+      // (whose `data` is undefined) are sized by the default — leave both as is.
+      // For every leaf data row, resolve the height fresh each rebuild (so it
+      // tracks column-resize / data changes): the getRowHeight callback wins,
+      // then the auto-height measurer, otherwise the default.
+      if (!(node as any).detail && !(node as any).group) {
+        let resolved: number | null = null;
+        if (getRowHeight) {
+          const h = getRowHeight({ data: node.data, node, rowIndex });
+          if (h != null) resolved = h;
+        }
+        if (resolved == null && this.rowHeightCalculator) {
+          const h = this.rowHeightCalculator(node, rowIndex);
+          if (h != null) resolved = h;
+        }
+        node.rowHeight = resolved;
+      }
+      currentTotal += node.rowHeight || defaultHeight;
     });
 
     this.totalHeight = currentTotal;
+  }
+
+  /**
+   * Install the auto-height measurer used during {@link updateRowHeightCache}.
+   * The view layer (which has the canvas font + column widths) provides it;
+   * pass `null` to clear. Triggers a recompute so the change takes effect.
+   */
+  setRowHeightCalculator(
+    fn: ((node: IRowNode<TData>, rowIndex: number) => number | null) | null
+  ): void {
+    this.rowHeightCalculator = fn;
+    this.recalculateRowHeights();
+  }
+
+  /** Rebuild the row-height cache (e.g. after a column resize changes wrapping). */
+  recalculateRowHeights(): void {
+    this.updateRowHeightCache();
   }
 
   /**
