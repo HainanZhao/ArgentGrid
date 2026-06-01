@@ -46,7 +46,7 @@ These are inherent to the canvas + client-side design. No config flag changes th
 | **Accessibility** ✅ | Canvas cells aren't real DOM, but the grid maintains an **off-screen ARIA mirror** of the visible rows (`role="row"`/`role="gridcell"` with `aria-rowindex`/`aria-colindex`/`aria-selected`), alongside `role="columnheader"` headers (`aria-sort`/`aria-colindex`) and a `role="grid"` root (`aria-rowcount`/`aria-colcount`/`aria-activedescendant`). Screen readers read cell values and keyboard nav announces the focused cell. | Works out of the box; set `gridOptions.ariaLabel` for a meaningful name. ⚠️ Grouped (multi-row) header nesting and horizontally-virtualized off-screen columns are follow-ups; opt out entirely with `gridOptions.suppressAccessibility`. |
 | **Cell CSS** ❌ | `cellClass`, `cellClassRules`, full `cellStyle`, `::before/::after`, per-cell fonts/borders/backgrounds do not apply (canvas, not DOM). **Only `cellStyle.color` is read.** | Dynamic text color → `cellStyle: (p) => ({ color: … })`. Anything richer → a **component cell renderer** (real DOM in the overlay). |
 | **Theming** | `ag-theme-*.css` and CSS-variable overrides don't apply. | Rebuild theming with the **theme object** (`themeQuartz.withParams(...)` / `withPart(...)`). |
-| **Row models** ❌ | `rowModelType: 'serverSide' \| 'infinite' \| 'viewport'` are declared but **not implemented** — only `'clientSide'` works. No SSRM/infinite lazy loading; sort/filter/group are all client-side. | Load the dataset client-side (the canvas handles 1M+ rows), or page/chunk it yourself with `pagination`. Delegating to a backend isn't available. |
+| **Row models** ⚠️ | `'clientSide'` (default) and `'infinite'` work; `'serverSide'` (SSRM) and `'viewport'` are declared but **not implemented**. Infinite is lazy block-loading only (no row grouping / master-detail / auto-height); SSRM-style server grouping/pivot isn't available. | Use `'clientSide'` (the canvas handles 1M+ rows) for in-memory data, or `rowModelType: 'infinite'` + a `datasource` to lazily page from a backend — see [§4 Row models](#row-models). For SSRM-only needs, load client-side or chunk with `pagination`. |
 
 ---
 
@@ -99,6 +99,24 @@ TSV only; header detection is a >50%-match heuristic; no CSV-dialect handling.
 
 ### Sorting/filtering
 Custom **sort `comparator`s** are honored (field-bound columns). Built-in filters (text/number/date/boolean/set, quick + floating) work; **custom filter components** (`colDef.filter` = a component) are supported too. Custom *floating-filter* components are the remaining gap.
+
+### Row models
+`rowModelType: 'infinite'` ✅ works with the AG-Grid-compatible `datasource` (`IDatasource.getRows`). Rows are fetched lazily in blocks as they scroll into view; rows show blank until their block loads. Sort/filter are delegated to the datasource (the cache purges and reloads on change). Config: `cacheBlockSize` (default 100), `maxBlocksInCache`, `cacheOverflowSize`, `infiniteInitialRowCount`, `maxConcurrentDatasourceRequests`. API: `setDatasource`, `purgeInfiniteCache`, `refreshInfiniteCache`, `getInfiniteRowCount`.
+
+```ts
+gridOptions = {
+  rowModelType: 'infinite',
+  cacheBlockSize: 100,
+  datasource: {
+    getRows: (p) => {
+      // p.startRow / p.endRow / p.sortModel / p.filterModel
+      fetchPage(p).then(({ rows, total }) => p.successCallback(rows, total), p.failCallback);
+    },
+  },
+};
+```
+
+Constraints (vs. client-side): fixed `rowHeight` only (no auto-height), and no row grouping / aggregation / master-detail / `applyTransaction` (call `refreshInfiniteCache()` instead). `setRowData` is ignored — data comes from the datasource. ❌ `'serverSide'` (SSRM) and `'viewport'` remain unimplemented.
 
 ---
 
@@ -209,7 +227,7 @@ These work with the same config as AG Grid:
 
 - [ ] Swap `<ag-grid-angular>` → `<argent-grid>`, `AgGridModule` → `ArgentGridModule`.
 - [ ] Replace the CSS theme with a `theme` object (`themeQuartz.withParams(...)`).
-- [ ] Confirm you're on (or can fit) the **client-side row model** — no SSRM/infinite.
+- [ ] Pick a **row model**: `'clientSide'` (in-memory, 1M+ rows) or `'infinite'` (+ a `datasource` for lazy backend paging — [§4](#row-models)). SSRM/viewport are still unavailable.
 - [ ] Move cell styling off `cellClass`/`cellClassRules` → `cellStyle` (color) or a component renderer.
 - [ ] Port custom **header components** to `IHeaderAngularComp` and custom **filter components** to `IFilterAngularComp` (both now supported); custom **sort `comparator`s** work as-is. (Custom *floating-filter* components remain a gap.)
 - [ ] Port custom **cell editors** to `ICellEditorAngularComp` (now supported).

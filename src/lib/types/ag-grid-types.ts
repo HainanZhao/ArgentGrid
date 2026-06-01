@@ -43,6 +43,18 @@ export interface GridOptions<TData = any> {
   rowModelType?: RowModelType;
   /** Callback to get the ID for a row. */
   getRowId?: GetRowIdFunc<TData>;
+  /** Datasource for `rowModelType: 'infinite'` — blocks are fetched lazily on scroll. */
+  datasource?: IDatasource<TData>;
+  /** Rows per block fetched from the infinite datasource. Defaults to 100. */
+  cacheBlockSize?: number;
+  /** Max number of blocks kept in the infinite cache (LRU-evicted). Unbounded if unset. */
+  maxBlocksInCache?: number;
+  /** Extra blocks of scroll headroom kept past the last loaded block while the total is unknown. Defaults to 1. */
+  cacheOverflowSize?: number;
+  /** Initial row count shown before the first infinite block loads. Defaults to 1. */
+  infiniteInitialRowCount?: number;
+  /** Max concurrent infinite datasource requests; extras queue. Defaults to 2. */
+  maxConcurrentDatasourceRequests?: number;
 
   // === RENDERING ===
   /** If true, rows will animate when their position changes. */
@@ -695,6 +707,16 @@ export interface GridApi<TData = any> {
   getAggregations(): { [field: string]: any };
   /** Returns the row node with the given ID. */
   getRowNode(id: string): IRowNode<TData> | null;
+
+  // === INFINITE ROW MODEL API ===
+  /** Sets/replaces the datasource for `rowModelType: 'infinite'` and reloads from block 0. */
+  setDatasource(datasource: IDatasource<TData>): void;
+  /** Drops every cached block; rows reload lazily as they scroll back into view. */
+  purgeInfiniteCache(): void;
+  /** Alias for {@link purgeInfiniteCache} — re-fetches all blocks. */
+  refreshInfiniteCache(): void;
+  /** Current (estimated, then exact) infinite row count, or undefined when not in infinite mode. */
+  getInfiniteRowCount(): number | undefined;
 
   // === SELECTION API ===
   /** Returns the data for the selected rows. */
@@ -1447,6 +1469,46 @@ export interface SortDef {
 }
 
 export type RowModelType = 'clientSide' | 'infinite' | 'serverSide' | 'viewport';
+
+/**
+ * Parameters passed to {@link IDatasource.getRows} for one block request of the
+ * Infinite Row Model. Mirrors AG Grid's `IGetRowsParams` so existing datasources
+ * port over unchanged.
+ */
+export interface IGetRowsParams<TData = any> {
+  /** First row index to fetch (inclusive, 0-based). */
+  startRow: number;
+  /** Last row index to fetch (exclusive). */
+  endRow: number;
+  /** Active sort model — apply it server-side. */
+  sortModel: SortModelItem[];
+  /** Active filter model — apply it server-side. */
+  filterModel: FilterModel;
+  /**
+   * Call with the rows for this block. Pass `lastRow` (the total row count) once
+   * the last block is reached so the grid can pin the scroll height; omit/`-1`
+   * while the total is still unknown.
+   */
+  successCallback(rowsThisBlock: TData[], lastRow?: number): void;
+  /** Call if the request failed; the block can be retried by scrolling to it again. */
+  failCallback(): void;
+  /** Arbitrary context (`gridOptions.context`). */
+  context?: any;
+}
+
+/**
+ * Datasource for `rowModelType: 'infinite'`. The grid calls {@link getRows}
+ * lazily, one block at a time, as rows scroll into view. Mirrors AG Grid's
+ * `IDatasource`.
+ */
+export interface IDatasource<TData = any> {
+  /** Optional known total row count. */
+  rowCount?: number;
+  /** Called by the grid to fetch a block of rows. */
+  getRows(params: IGetRowsParams<TData>): void;
+  /** Optional cleanup called when the datasource is replaced or the grid destroyed. */
+  destroy?(): void;
+}
 export type DomLayoutType = 'normal' | 'autoHeight' | 'print';
 export type SortDirection = 'asc' | 'desc' | null;
 export type RowGroupingDisplayType = 'singleColumn' | 'multipleColumns' | 'groupRows' | 'custom';
