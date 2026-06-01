@@ -34,6 +34,7 @@ export {
   prepColumn,
   prepColumns,
   renderRow,
+  toAngularComponent,
   truncateText,
 } from './cells';
 // Column utilities

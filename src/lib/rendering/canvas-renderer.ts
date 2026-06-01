@@ -30,6 +30,7 @@ import {
   PositionedColumn,
   performHitTest,
   prepColumn,
+  toAngularComponent,
   walkRows,
 } from './render';
 import { DamageTracker } from './utils/damage-tracker';
@@ -544,6 +545,9 @@ export class CanvasRenderer<TData = any> {
       endRow,
       scrollTop: this.scrollTop,
       rowHeight: this.theme.rowHeight,
+      // Inner width (matches the row-background fill) so full-width detail
+      // overlay hosts span the viewport exactly.
+      viewportWidth: this.viewportWidth - this.scrollbarWidth,
       dataChanged,
       columns: positionedColumns.map((p) => ({
         colId: p.column.colId,
@@ -717,11 +721,20 @@ export class CanvasRenderer<TData = any> {
   ): void {
     const rowHeight = rowNode.rowHeight || 200;
 
-    // Draw detail background
+    // Draw detail background (kept even when a component renders, so there is an
+    // opaque backdrop under the DOM host with no first-paint gap).
     this.ctx.fillStyle = '#f0f0f0';
     this.ctx.fillRect(0, Math.floor(y), viewportWidth, rowHeight);
 
-    // Draw placeholder text
+    // When a detailCellRenderer resolves to a component, the DOM overlay hosts
+    // it full-width over this row — skip the canvas placeholder. Same resolver
+    // the overlay uses, so the skip/mount decision can never disagree.
+    const components = this.gridApi.getGridOption('components') as Record<string, any> | undefined;
+    if (toAngularComponent(this.gridApi.getGridOption('detailCellRenderer'), components)) {
+      return;
+    }
+
+    // Draw placeholder text (fallback when no component detailCellRenderer)
     this.ctx.fillStyle = '#666';
     this.ctx.font = `italic ${this.theme.fontSize}px ${this.theme.fontFamily}`;
     this.ctx.fillText(

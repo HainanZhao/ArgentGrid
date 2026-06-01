@@ -52,10 +52,51 @@ class TestRenderer implements ICellRendererAngularComp {
   }
 }
 
+/** Detail (master/detail) renderer test double — records its master node id. */
+const detailInstances: TestDetailRenderer[] = [];
+
+@Component({ standalone: true, template: `<div class="detail">{{ text }}</div>` })
+class TestDetailRenderer implements ICellRendererAngularComp {
+  text = '';
+  agInitCount = 0;
+  masterId: unknown = null;
+
+  constructor() {
+    detailInstances.push(this);
+  }
+
+  private render(params: ICellRendererParams): void {
+    this.masterId = (params as any).masterNode?.id;
+    this.text = `detail of ${this.masterId}`;
+  }
+
+  agInit(params: ICellRendererParams): void {
+    this.agInitCount++;
+    this.render(params);
+  }
+
+  refresh(params: ICellRendererParams): boolean {
+    this.render(params);
+    return true;
+  }
+}
+
 /** Host that simply exposes a real ViewContainerRef for the manager to use. */
 @Component({ standalone: true, template: '' })
 class HostComponent {
   vcr = inject(ViewContainerRef);
+}
+
+/** A detail row node sharing its master's data, as grid.service creates it. */
+function makeDetailNode(masterId: string, data: any, rowHeight = 200): IRowNode {
+  return {
+    id: `${masterId}-detail`,
+    data,
+    group: false,
+    detail: true,
+    masterRowNode: makeNode(masterId, data),
+    rowHeight,
+  } as unknown as IRowNode;
 }
 
 function makeColumn(colId: string, width = 150): Column {
@@ -70,25 +111,35 @@ function makeNode(id: string, data: any): IRowNode {
  * Mock GridApi backed by a mutable `rowsByIndex` map so tests can simulate a
  * sort/filter (the node living at a given display index changes).
  */
-function makeApi(rowsByIndex: Map<number, IRowNode>, columnsById: Map<string, Column>): GridApi {
+function makeApi(
+  rowsByIndex: Map<number, IRowNode>,
+  columnsById: Map<string, Column>,
+  gridOptions: Record<string, any> = {}
+): GridApi {
   return {
     getColumn: (id: string | Column) =>
       columnsById.get(typeof id === 'string' ? id : id.colId) ?? null,
     getDisplayedRowAtIndex: (i: number) => rowsByIndex.get(i) ?? null,
-    getGridOption: () => undefined,
+    getGridOption: (key: string) => gridOptions[key],
   } as unknown as GridApi;
 }
 
 function layout(
   columns: Column[],
   rowCount: number,
-  opts: { scrollTop?: number; dataChanged?: boolean; rowHeight?: number } = {}
+  opts: {
+    scrollTop?: number;
+    dataChanged?: boolean;
+    rowHeight?: number;
+    viewportWidth?: number;
+  } = {}
 ): OverlayLayout {
   return {
     startRow: 0,
     endRow: rowCount,
     scrollTop: opts.scrollTop ?? 0,
     rowHeight: opts.rowHeight ?? 32,
+    viewportWidth: opts.viewportWidth ?? 800,
     dataChanged: opts.dataChanged ?? true,
     columns: columns.map((c) => ({
       colId: c.colId,
@@ -115,6 +166,7 @@ describe('CellOverlayManager (claude)', () => {
 
   beforeEach(async () => {
     instances.length = 0;
+    detailInstances.length = 0;
     await TestBed.configureTestingModule({
       imports: [HostComponent],
       providers: [provideExperimentalZonelessChangeDetection()],
@@ -127,11 +179,12 @@ describe('CellOverlayManager (claude)', () => {
   function makeManager(
     rowsByIndex: Map<number, IRowNode>,
     columnsById: Map<string, Column>,
-    colDef: any
+    colDef: any,
+    gridOptions: Record<string, any> = {}
   ): CellOverlayManager {
     return new CellOverlayManager({
       container,
-      gridApi: makeApi(rowsByIndex, columnsById),
+      gridApi: makeApi(rowsByIndex, columnsById, gridOptions),
       viewContainerRef: vcr,
       getColDef: () => colDef,
     });
@@ -182,6 +235,7 @@ describe('CellOverlayManager (claude)', () => {
       endRow: 1,
       scrollTop: 0,
       rowHeight: 32,
+      viewportWidth: 800,
       dataChanged: true,
       centerClip: { left: 100, right: 400 },
       columns: [{ colId: 'status', x: 50, width: 150, isPinned: false }],
@@ -202,6 +256,7 @@ describe('CellOverlayManager (claude)', () => {
       endRow: 1,
       scrollTop: 0,
       rowHeight: 32,
+      viewportWidth: 800,
       dataChanged: true,
       centerClip: { left: 100, right: 400 },
       columns: [{ colId: 'status', x: 150, width: 150, isPinned: false }],
@@ -224,6 +279,7 @@ describe('CellOverlayManager (claude)', () => {
       endRow: 1,
       scrollTop: 0,
       rowHeight: 32,
+      viewportWidth: 800,
       dataChanged: true,
       centerClip: { left: 100, right: 400 },
       columns: [{ colId: 'status', x: 0, width: 100, isPinned: true }],
@@ -301,9 +357,74 @@ describe('CellOverlayManager (claude)', () => {
 
     mgr.sync({ ...layout([col], 3), startRow: 0, endRow: 3 });
 
-    // Only the leaf row gets an overlay; group/detail rows are skipped.
+    // Only the leaf row gets an overlay; group/detail rows are skipped by the
+    // per-cell pass, and with no detailCellRenderer the detail row gets nothing.
     expect(visibleHosts(container)).toHaveLength(1);
     expect(visibleHosts(container)[0].textContent).toContain('Active');
+
+    mgr.destroy();
+  });
+
+  it('mounts a full-width detail component for a detail row when detailCellRenderer is set', () => {
+    const col = makeColumn('status');
+    const colDef = { field: 'status', cellRenderer: () => 'plain' }; // no cell overlay
+    const master = makeNode('m1', { status: 'Active' });
+    const detailNode = makeDetailNode('m1', { status: 'Active' }, 200);
+    const rows = new Map([
+      [0, master],
+      [1, detailNode],
+    ]);
+    const mgr = makeManager(rows, new Map([['status', col]]), colDef, {
+      detailCellRenderer: TestDetailRenderer,
+    });
+
+    mgr.sync({ ...layout([col], 2), startRow: 0, endRow: 2 });
+
+    const detailHost = visibleHosts(container).find((h) => h.textContent?.includes('detail of'));
+    expect(detailHost).toBeTruthy();
+    // Full-width: x=0, width = layout.viewportWidth (800); y = row 1 * 32; height = detail height.
+    expect(detailHost!.style.transform).toBe('translate(0px, 32px)');
+    expect(detailHost!.style.width).toBe('800px');
+    expect(detailHost!.style.height).toBe('200px');
+    // Receives the master node, and is never center-clipped (spans pinned+center).
+    expect(detailInstances).toHaveLength(1);
+    expect(detailInstances[0].masterId).toBe('m1');
+    expect(detailHost!.style.clipPath).toBe('');
+
+    mgr.destroy();
+  });
+
+  it('does not mount a detail component when no detailCellRenderer is configured', () => {
+    const col = makeColumn('status');
+    const colDef = { field: 'status', cellRenderer: () => 'plain' };
+    const rows = new Map([[0, makeDetailNode('m1', { status: 'Active' })]]);
+    const mgr = makeManager(rows, new Map([['status', col]]), colDef); // no gridOptions
+
+    mgr.sync(layout([col], 1));
+
+    expect(detailInstances).toHaveLength(0);
+    expect(visibleHosts(container)).toHaveLength(0);
+
+    mgr.destroy();
+  });
+
+  it('recycles the detail host when its row scrolls out of view', () => {
+    const col = makeColumn('status');
+    const colDef = { field: 'status', cellRenderer: () => 'plain' };
+    const rows = new Map([
+      [0, makeNode('m1', { status: 'Active' })],
+      [1, makeDetailNode('m1', { status: 'Active' })],
+    ]);
+    const mgr = makeManager(rows, new Map([['status', col]]), colDef, {
+      detailCellRenderer: TestDetailRenderer,
+    });
+
+    mgr.sync({ ...layout([col], 2), startRow: 0, endRow: 2 });
+    expect(visibleHosts(container).some((h) => h.textContent?.includes('detail of'))).toBe(true);
+
+    // Scroll past the detail row (window no longer includes index 1).
+    mgr.sync({ ...layout([col], 5), startRow: 2, endRow: 5 });
+    expect(visibleHosts(container).some((h) => h.textContent?.includes('detail of'))).toBe(false);
 
     mgr.destroy();
   });

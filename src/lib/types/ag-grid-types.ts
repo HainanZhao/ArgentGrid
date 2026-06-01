@@ -1615,6 +1615,27 @@ export interface ICellRendererParams<TData = any, TValue = any> {
 }
 
 /**
+ * Params passed to a `gridOptions.detailCellRenderer` component (master/detail).
+ * A detail node shares its master row's `data`; `masterNode` points back at the
+ * master row. Mirrors AG Grid's `IDetailCellRendererParams` closely enough that
+ * a detail component implements the same `ICellRendererAngularComp` lifecycle.
+ */
+export interface IDetailCellRendererParams<TData = any> {
+  /** The master row's data (the detail node shares it). */
+  data: TData | undefined;
+  /** The detail row node (`node.masterRowNode` is the master). */
+  node: IRowNode<TData>;
+  /** Convenience pointer to the master row node. */
+  masterNode: IRowNode<TData>;
+  /** The displayed index of the detail row. */
+  rowIndex: number;
+  /** The grid API. */
+  api: GridApi<TData>;
+  /** Extra params supplied via `gridOptions.detailCellRendererParams`. */
+  [key: string]: any;
+}
+
+/**
  * Interface an Angular component may implement to participate in the cell
  * overlay lifecycle, mirroring AG Grid's `ICellRendererAngularComp`.
  *
@@ -1626,6 +1647,17 @@ export interface ICellRendererParams<TData = any, TValue = any> {
 export interface ICellRendererAngularComp<TData = any, TValue = any> {
   agInit(params: ICellRendererParams<TData, TValue>): void;
   refresh?(params: ICellRendererParams<TData, TValue>): boolean;
+}
+
+/**
+ * Lifecycle interface for a master/detail `detailCellRenderer` component. Same
+ * shape as {@link ICellRendererAngularComp} but receives
+ * {@link IDetailCellRendererParams} (master data + detail node) instead of cell
+ * params. Hosted full-width over the canvas by the same overlay machinery.
+ */
+export interface IDetailCellRendererAngularComp<TData = any> {
+  agInit(params: IDetailCellRendererParams<TData>): void;
+  refresh?(params: IDetailCellRendererParams<TData>): boolean;
 }
 
 /**
@@ -1641,6 +1673,11 @@ export interface OverlayLayout {
   scrollTop: number;
   /** Effective row height in pixels. */
   rowHeight: number;
+  /**
+   * Inner viewport width in pixels (excludes the vertical scrollbar). Used to
+   * size full-width overlay hosts such as master/detail detail rows.
+   */
+  viewportWidth: number;
   /**
    * True when this frame reflects a data/column change (sort, filter, edit,
    * transaction) rather than a pure scroll/resize. On such frames the overlay

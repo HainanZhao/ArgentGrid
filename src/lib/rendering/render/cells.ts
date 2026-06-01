@@ -40,8 +40,10 @@ function getComponents<TData = any>(
  * Resolve a `cellRenderer` value (component class, or a registered name) to the
  * Angular component it routes to, or null when it isn't a component renderer
  * (a plain string-returning function, a built-in canvas string, or undefined).
+ * Shared by the canvas and the DOM overlay (cells *and* master/detail) so their
+ * "draw on canvas vs. mount a component" decisions can never disagree.
  */
-function toAngularComponent(
+export function toAngularComponent(
   renderer: any,
   components: CellRendererComponents | undefined
 ): Type<any> | null {
