@@ -2,6 +2,11 @@ import { moveItemInArray } from '@angular/cdk/drag-drop';
 import { Injectable } from '@angular/core';
 import { Workbook } from 'exceljs';
 import { Subject } from 'rxjs';
+import {
+  DEFAULT_INFINITE_CONFIG,
+  InfiniteRowModel,
+  InfiniteRowModelConfig,
+} from '../rendering/infinite-row-model';
 import { getCellValue, getFormattedValue } from '../rendering/render/cells';
 import {
   CellRange,
@@ -17,6 +22,7 @@ import {
   GridOptions,
   GridState,
   GroupRowNode,
+  IDatasource,
   IRowNode,
   RowDataTransaction,
   RowDataTransactionResult,
@@ -82,6 +88,88 @@ export class GridService<TData = any> {
   // Quick Filter state
   private quickFilterText = '';
 
+  // Infinite Row Model (rowModelType: 'infinite'); null in client-side mode.
+  private infiniteModel: InfiniteRowModel<TData> | null = null;
+
+  /** True when the grid is running the lazy block-loading infinite row model. */
+  private isInfinite(): boolean {
+    return this.infiniteModel !== null;
+  }
+
+  /** Fixed row height used for infinite-mode geometry (auto-height isn't supported there). */
+  private fixedRowHeight(): number {
+    return this.gridOptions?.rowHeight || 32;
+  }
+
+  /** Build the infinite model from the current grid options, if configured. */
+  private setupInfiniteRowModel(): void {
+    this.infiniteModel?.destroy();
+    this.infiniteModel = null;
+
+    const opts = this.gridOptions;
+    if (opts?.rowModelType !== 'infinite' || !opts.datasource) return;
+
+    const config: InfiniteRowModelConfig = {
+      cacheBlockSize: opts.cacheBlockSize ?? DEFAULT_INFINITE_CONFIG.cacheBlockSize,
+      maxBlocksInCache: opts.maxBlocksInCache ?? DEFAULT_INFINITE_CONFIG.maxBlocksInCache,
+      cacheOverflowSize: opts.cacheOverflowSize ?? DEFAULT_INFINITE_CONFIG.cacheOverflowSize,
+      infiniteInitialRowCount:
+        opts.infiniteInitialRowCount ?? DEFAULT_INFINITE_CONFIG.infiniteInitialRowCount,
+      maxConcurrentDatasourceRequests:
+        opts.maxConcurrentDatasourceRequests ??
+        DEFAULT_INFINITE_CONFIG.maxConcurrentDatasourceRequests,
+    };
+
+    this.infiniteModel = new InfiniteRowModel<TData>(opts.datasource, config, {
+      context: opts.context,
+      makeRowNode: (data, index) => this.createInfiniteRowNode(data, index),
+      onBlocksLoaded: () => {
+        this.totalHeight = this.infiniteModel
+          ? this.infiniteModel.getRowCount() * this.fixedRowHeight()
+          : 0;
+        this.gridStateChanged$.next({ type: 'rowDataChanged' });
+      },
+    });
+    // Seed total height for the initial (estimated) row count.
+    this.totalHeight = this.infiniteModel.getRowCount() * this.fixedRowHeight();
+  }
+
+  /** Build a real row node for an infinite block, mirroring the client-side node shape. */
+  private createInfiniteRowNode(data: TData, index: number): IRowNode<TData> {
+    const id = this.getRowId(data, index);
+    const node: IRowNode<TData> = {
+      id,
+      data,
+      rowPinned: false,
+      rowHeight: null,
+      displayed: true,
+      selected: this.selectedRows.has(id),
+      expanded: false,
+      group: false,
+      master: false,
+      level: 0,
+      firstChild: false,
+      lastChild: false,
+      rowIndex: index,
+      displayedRowIndex: index,
+      setSelected: (selected: boolean, clearSelection: boolean = false) => {
+        const changed = node.selected !== selected || clearSelection;
+        if (!changed) return;
+        if (clearSelection) {
+          this.selectedRows.clear();
+        }
+        node.selected = selected;
+        if (selected) {
+          this.selectedRows.add(node.id!);
+        } else {
+          this.selectedRows.delete(node.id!);
+        }
+        this.gridStateChanged$.next({ type: 'selectionChanged' });
+      },
+    };
+    return node;
+  }
+
   createApi(
     columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null,
     rowData: TData[] | null,
@@ -104,9 +192,15 @@ export class GridService<TData = any> {
 
     this.initializeColumns(true);
 
-    // Trigger initial pipeline run
-    this.applySorting();
-    this.applyFiltering(); // This will trigger grouping if needed and initialize nodes
+    if (this.gridOptions.rowModelType === 'infinite' && this.gridOptions.datasource) {
+      // Infinite mode: rows come lazily from the datasource — skip the
+      // client-side sort/filter/group pipeline entirely.
+      this.setupInfiniteRowModel();
+    } else {
+      // Trigger initial pipeline run
+      this.applySorting();
+      this.applyFiltering(); // This will trigger grouping if needed and initialize nodes
+    }
 
     return this.createGridApi();
   }
@@ -604,7 +698,11 @@ export class GridService<TData = any> {
         // NOTE: column.sort is already updated above for the current column
       }
 
-      this.applyFiltering();
+      if (this.isInfinite()) {
+        this.infiniteModel!.setSortModel(this.sortModel);
+      } else {
+        this.applyFiltering();
+      }
       this.gridStateChanged$.next({ type: 'sortChanged' });
     }
   }
@@ -652,6 +750,9 @@ export class GridService<TData = any> {
       },
       getAllColumns: () => Array.from(this.columns.values()),
       getDisplayedRowAtIndex: (index) => {
+        if (this.isInfinite()) {
+          return this.infiniteModel!.getRow(index);
+        }
         return this.displayedRowNodes[index] || null;
       },
       getHeaderRows: () => this.getHeaderRows(),
@@ -662,18 +763,59 @@ export class GridService<TData = any> {
       },
 
       // Row Data API
-      getRowData: () => [...this.filteredRowData],
+      getRowData: () => {
+        if (this.isInfinite()) {
+          return this.infiniteModel!.getLoadedNodes().map((n) => n.data);
+        }
+        return [...this.filteredRowData];
+      },
       setRowData: (rowData) => {
+        if (this.isInfinite()) {
+          console.warn(
+            '[ArgentGrid] setRowData is ignored in infinite row model; data comes from the datasource. Use setDatasource()/refreshInfiniteCache() instead.'
+          );
+          return;
+        }
         this.rowData = rowData;
         this.filteredRowData = [...rowData];
         this.groupingDirty = true;
         this.applySorting();
         this.applyFiltering();
       },
-      applyTransaction: (transaction) => this.applyTransaction(transaction),
-      getDisplayedRowCount: () => this.displayedRowNodes.length,
+      applyTransaction: (transaction) => {
+        if (this.isInfinite()) {
+          console.warn(
+            '[ArgentGrid] applyTransaction is not supported in infinite row model; refreshing the datasource cache instead.'
+          );
+          this.infiniteModel!.refresh();
+          return null;
+        }
+        return this.applyTransaction(transaction);
+      },
+      getDisplayedRowCount: () =>
+        this.isInfinite() ? this.infiniteModel!.getRowCount() : this.displayedRowNodes.length,
       getAggregations: () => this.calculateColumnAggregations(this.filteredRowData),
-      getRowNode: (id) => this.rowNodes.get(id) || null,
+      getRowNode: (id) =>
+        this.isInfinite() ? this.infiniteModel!.getRowNodeById(id) : this.rowNodes.get(id) || null,
+
+      // Infinite Row Model API
+      setDatasource: (datasource: IDatasource<TData>) => {
+        if (!this.gridOptions) this.gridOptions = {} as GridOptions<TData>;
+        this.gridOptions.datasource = datasource;
+        if (this.gridOptions.rowModelType !== 'infinite') {
+          this.gridOptions.rowModelType = 'infinite';
+        }
+        if (this.isInfinite()) {
+          this.infiniteModel!.setDatasource(datasource);
+        } else {
+          this.setupInfiniteRowModel();
+          this.gridStateChanged$.next({ type: 'rowDataChanged' });
+        }
+      },
+      purgeInfiniteCache: () => this.infiniteModel?.purge(),
+      refreshInfiniteCache: () => this.infiniteModel?.refresh(),
+      getInfiniteRowCount: () =>
+        this.isInfinite() ? this.infiniteModel!.getRowCount() : undefined,
 
       // Selection API
       getSelectedRows: () => Array.from(this.rowNodes.values()).filter((n) => n.selected),
@@ -696,18 +838,32 @@ export class GridService<TData = any> {
       // Filter API
       setFilterModel: (model) => {
         this.filterModel = model;
-        this.applyFiltering();
+        if (this.isInfinite()) {
+          this.infiniteModel!.setFilterModel(model);
+        } else {
+          this.applyFiltering();
+        }
         this.gridStateChanged$.next({ type: 'filterChanged' });
       },
       getFilterModel: () => ({ ...this.filterModel }),
       onFilterChanged: () => {
-        this.applyFiltering();
+        if (this.isInfinite()) {
+          this.infiniteModel!.setFilterModel(this.filterModel);
+        } else {
+          this.applyFiltering();
+        }
         this.gridStateChanged$.next({ type: 'filterChanged' });
       },
       isFilterPresent: () => Object.keys(this.filterModel).length > 0 || !!this.quickFilterText,
       setQuickFilter: (text: string) => {
         this.quickFilterText = text;
-        this.applyFiltering();
+        if (this.isInfinite()) {
+          // Quick filter has no dedicated server param; reload so the datasource
+          // can re-query (it sees the same filter/sort models on each block).
+          this.infiniteModel!.refresh();
+        } else {
+          this.applyFiltering();
+        }
         this.gridStateChanged$.next({ type: 'filterChanged' });
       },
 
@@ -719,7 +875,11 @@ export class GridService<TData = any> {
           const sortItem = model.find((m) => m.colId === col.colId);
           col.sort = sortItem ? sortItem.sort : null;
         });
-        this.applyFiltering(); // Re-filter, re-sort and re-group
+        if (this.isInfinite()) {
+          this.infiniteModel!.setSortModel(model);
+        } else {
+          this.applyFiltering(); // Re-filter, re-sort and re-group
+        }
         this.gridStateChanged$.next({ type: 'sortChanged' });
       },
       getSortModel: () => [...this.sortModel],
@@ -974,6 +1134,8 @@ export class GridService<TData = any> {
         this.columns.clear();
         this.rowNodes.clear();
         this.rowData = [];
+        this.infiniteModel?.destroy();
+        this.infiniteModel = null;
       },
 
       // Grid Information
@@ -987,7 +1149,17 @@ export class GridService<TData = any> {
         this.gridOptions[key] = value;
 
         if (key === 'rowHeight' || key === 'detailRowHeight') {
-          this.updateRowHeightCache();
+          if (this.isInfinite()) {
+            this.totalHeight = this.infiniteModel!.getRowCount() * this.fixedRowHeight();
+          } else {
+            this.updateRowHeightCache();
+          }
+        }
+
+        // (Re)build the infinite model when its config changes.
+        if (key === 'datasource' || key === 'rowModelType') {
+          this.setupInfiniteRowModel();
+          this.gridStateChanged$.next({ type: 'rowDataChanged' });
         }
 
         this.gridStateChanged$.next({ type: 'optionChanged', key: key as string, value });
@@ -1103,6 +1275,7 @@ export class GridService<TData = any> {
         this.updateRowHeightCache();
       },
       getRowHeightForRow: (rowIndex) => {
+        if (this.isInfinite()) return this.fixedRowHeight();
         const node = this.displayedRowNodes[rowIndex];
         return node?.rowHeight || this.gridOptions?.rowHeight || 32;
       },
@@ -1194,6 +1367,9 @@ export class GridService<TData = any> {
 
       // Rendering
       getRenderedNodes: () => {
+        if (this.isInfinite()) {
+          return this.infiniteModel!.getLoadedNodes();
+        }
         return [...this.displayedRowNodes];
       },
       getFirstRenderedRow: () => {
@@ -1620,12 +1796,20 @@ export class GridService<TData = any> {
    * Get the Y position for a row index
    */
   getRowY(index: number): number {
+    if (this.isInfinite()) {
+      return Math.max(0, index) * this.fixedRowHeight();
+    }
     if (index <= 0) return 0;
     if (index >= this.cumulativeRowHeights.length) return this.totalHeight;
     return this.cumulativeRowHeights[index];
   }
 
   private getRowAtY(y: number): number {
+    if (this.isInfinite()) {
+      const h = this.fixedRowHeight();
+      if (h <= 0) return 0;
+      return Math.max(0, Math.floor(y / h));
+    }
     if (this.cumulativeRowHeights.length === 0) return 0;
 
     // Binary search for the row at position y
@@ -1653,6 +1837,9 @@ export class GridService<TData = any> {
   }
 
   private getTotalHeight(): number {
+    if (this.isInfinite()) {
+      return this.infiniteModel!.getRowCount() * this.fixedRowHeight();
+    }
     return this.totalHeight;
   }
 

@@ -2675,4 +2675,130 @@ describe('GridService', () => {
       expect(evt?.value).toEqual({ colId: 'email' });
     });
   });
+
+  describe('Infinite Row Model (rowModelType: infinite)', () => {
+    // A datasource whose requests are resolved synchronously by the test.
+    function makeDatasource() {
+      const requests: any[] = [];
+      return {
+        requests,
+        getRows: (params: any) => requests.push(params),
+        resolve(reqIndex: number, count: number, lastRow?: number) {
+          const req = requests[reqIndex];
+          const rows: TestData[] = [];
+          for (let i = 0; i < count; i++) {
+            const id = req.startRow + i;
+            rows.push({ id, name: `row-${id}`, age: 20 + id, email: `r${id}@x.com` });
+          }
+          req.successCallback(rows, lastRow);
+        },
+      };
+    }
+
+    function infiniteApi(ds: any, opts: Record<string, unknown> = {}) {
+      const svc = new GridService<TestData>();
+      const a = svc.createApi(testColumnDefs, null, {
+        rowModelType: 'infinite',
+        datasource: ds,
+        cacheBlockSize: 10,
+        rowHeight: 40,
+        ...opts,
+      });
+      return { svc, api: a };
+    }
+
+    it('derives count and geometry from the (estimated then known) row count', () => {
+      const ds = makeDatasource();
+      const { api: a } = infiniteApi(ds, { infiniteInitialRowCount: 1 });
+      expect(a.getDisplayedRowCount()).toBe(1);
+      expect(a.getInfiniteRowCount()).toBe(1);
+
+      a.getDisplayedRowAtIndex(0); // triggers block 0 fetch
+      ds.resolve(0, 10, 250);
+      expect(a.getDisplayedRowCount()).toBe(250);
+      expect(a.getTotalHeight()).toBe(250 * 40);
+      expect(a.getRowY(5)).toBe(5 * 40);
+    });
+
+    it('returns a loading placeholder before a block resolves, then the real node', () => {
+      const ds = makeDatasource();
+      const { api: a } = infiniteApi(ds);
+      const placeholder = a.getDisplayedRowAtIndex(2);
+      expect((placeholder as any)?.__loading).toBe(true);
+      ds.resolve(0, 10, 10);
+      const loaded = a.getDisplayedRowAtIndex(2);
+      expect((loaded as any)?.__loading).toBeUndefined();
+      expect(loaded?.data).toMatchObject({ id: 2 });
+    });
+
+    it('forwards sort changes to the datasource and purges the cache', () => {
+      const ds = makeDatasource();
+      const { api: a } = infiniteApi(ds);
+      a.getDisplayedRowAtIndex(0);
+      ds.resolve(0, 10, 100);
+      expect(a.getDisplayedRowCount()).toBe(100);
+
+      a.setSortModel([{ colId: 'age', sort: 'desc' }]);
+      expect(a.getDisplayedRowCount()).toBe(1); // purged back to initial
+      a.getDisplayedRowAtIndex(0);
+      const last = ds.requests[ds.requests.length - 1];
+      expect(last.sortModel).toEqual([{ colId: 'age', sort: 'desc' }]);
+    });
+
+    it('forwards filter changes to the datasource', () => {
+      const ds = makeDatasource();
+      const { api: a } = infiniteApi(ds);
+      a.setFilterModel({ name: { type: 'contains', filter: 'row' } } as FilterModel);
+      a.getDisplayedRowAtIndex(0);
+      const last = ds.requests[ds.requests.length - 1];
+      expect(last.filterModel).toEqual({ name: { type: 'contains', filter: 'row' } });
+    });
+
+    it('looks up loaded nodes by id via getRowNode', () => {
+      const ds = makeDatasource();
+      const { api: a } = infiniteApi(ds);
+      a.getDisplayedRowAtIndex(0);
+      ds.resolve(0, 10, 10);
+      expect(a.getRowNode('4')?.data).toMatchObject({ id: 4 });
+    });
+
+    it('ignores setRowData and applyTransaction (warns) in infinite mode', () => {
+      const ds = makeDatasource();
+      const { api: a } = infiniteApi(ds);
+      a.getDisplayedRowAtIndex(0);
+      ds.resolve(0, 10, 10);
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      a.setRowData([{ id: 99, name: 'x', age: 1, email: 'x' }]);
+      expect(a.getDisplayedRowCount()).toBe(10); // unchanged
+      expect(a.applyTransaction({ add: [{ id: 98, name: 'y', age: 1, email: 'y' }] })).toBeNull();
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('emits rowDataChanged when a block loads', () => {
+      const ds = makeDatasource();
+      const { svc, api: a } = infiniteApi(ds);
+      const events: { type: string }[] = [];
+      const sub = svc.gridStateChanged$.subscribe((e) => events.push(e));
+      a.getDisplayedRowAtIndex(0);
+      ds.resolve(0, 10, 10);
+      sub.unsubscribe();
+      expect(events.some((e) => e.type === 'rowDataChanged')).toBe(true);
+    });
+
+    it('switches into infinite mode via setDatasource on a client-side grid', () => {
+      const svc = new GridService<TestData>();
+      const a = svc.createApi(testColumnDefs, [...testRowData]);
+      expect(a.getInfiniteRowCount()).toBeUndefined();
+
+      const ds = makeDatasource();
+      a.setGridOption('rowModelType', 'infinite');
+      a.setDatasource(ds);
+      a.getDisplayedRowAtIndex(0);
+      ds.resolve(0, 10, 30);
+      expect(a.getInfiniteRowCount()).toBe(30);
+      expect(a.getDisplayedRowCount()).toBe(30);
+    });
+  });
 });

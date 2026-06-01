@@ -10,7 +10,7 @@
 | :--- | :--- | :--- | :--- |
 | **Rendering Engine** | DOM-based | DOM-based | **Canvas viewport + DOM headers** |
 | **Data Volume (client-side)** | ~100k rows | Millions (SSRM) | **1M+ rows** ✅ |
-| **Row Models** | Client-side | Client, SSRM, Infinite | **Client-side only** ❌ |
+| **Row Models** | Client-side | Client, SSRM, Infinite | **Client-side + Infinite (lazy `datasource`)** ✅; SSRM/viewport ❌ |
 | **Custom Cell Components** | Any framework component | Any framework component | **✅ Angular components via DOM overlay (class, `cellRendererSelector`, or registered name) + canvas primitives + string functions** |
 | **Custom Header Components** | Any framework component | Any framework component | **✅ Angular `headerComponent` (class or registered name) in the DOM header (`IHeaderAngularComp`/`IHeaderParams`)** |
 | **Sorting** | Yes | Yes | **✅ Single + multi-column; custom `colDef.comparator`** |
@@ -109,7 +109,12 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
 
 ### Tier 3 — Scale & enterprise data
 
-- [ ] **T3.1 — Infinite Row Model** — lazy block loading; smaller than SSRM, high value.
+- [x] **T3.1 — Infinite Row Model** — **landed**
+  - [x] AG-Grid-compatible `rowModelType: 'infinite'` + `gridOptions.datasource` (`IDatasource.getRows(params)` with `startRow`/`endRow`/`sortModel`/`filterModel`/`successCallback(rows, lastRow)`/`failCallback`). New self-contained `InfiniteRowModel` (`render/infinite-row-model.ts`) owns a block cache (`Map<blockNumber, {state, nodes, lastAccess}>`, `blockSize = cacheBlockSize`, default 100), lazy fetch, count growth/pinning, concurrency capping (`maxConcurrentDatasourceRequests`, default 2) + queue, and LRU eviction (`maxBlocksInCache`).
+  - [x] Zero new scroll plumbing: the canvas already pulls each visible row via `getDisplayedRowAtIndex` during `walkRows`, so that's the lazy-load trigger — it returns a loaded node or a `__loading` placeholder and schedules the block. `GridService` branches on `isInfinite()` for `getDisplayedRowCount`/`AtIndex`, `getRowY`/`getRowAtY`/`getTotalHeight` (fixed `rowHeight` math), `getRowNode`, and routes sort/filter to the datasource (purge + reload). `onBlocksLoaded` → `gridStateChanged$('rowDataChanged')` → repaint + scroll-spacer resize (the existing component subscription handles it). `setRowData`/`applyTransaction` warn and no-op/refresh.
+  - [x] New API: `setDatasource`, `purgeInfiniteCache`, `refreshInfiniteCache`, `getInfiniteRowCount`; new types `IDatasource`/`IGetRowsParams` + `GridOptions` config exported from the public API.
+  - [x] Validated: `infinite-row-model.spec.ts` (block math, placeholder→load, count growth/pin, concurrency+queue, LRU, fail/retry, sort/filter purge, stale-result drop, destroy); `grid.service.spec.ts` infinite-mode branches; `Features/InfiniteRowModel` story (100k-row lazy `datasource` + a known-total `play` test asserting block load + exact `aria-rowcount`). Full suite 641 passing; build clean.
+  - [ ] Follow-ups: infinite + row grouping/aggregation, master/detail, and auto-height; abort stale in-flight requests after a purge; a richer loading-row skeleton (blank today).
 - [ ] **T3.2 — Server-Side Row Model (SSRM)** — server-side group/sort/filter, block cache. Gates "enterprise" positioning.
 - [ ] **T3.3 — Tree Data** — path-based hierarchy; reuses grouping infrastructure.
 

@@ -15,13 +15,20 @@ export { SetFilterComponent } from './lib/components/set-filter/set-filter.compo
 export { AgGridCompatibilityDirective } from './lib/directives/ag-grid-compatibility.directive';
 export { ClickOutsideDirective } from './lib/directives/click-outside.directive';
 export { ArgentHeaderOutletDirective } from './lib/directives/header-outlet.directive';
-// Canvas renderer
-export { CanvasRenderer } from './lib/rendering/canvas-renderer';
+export type { AriaRowMirrorDeps } from './lib/rendering/aria-row-mirror';
 // Accessibility: off-screen ARIA mirror of the visible rows
 export { AriaRowMirror } from './lib/rendering/aria-row-mirror';
-export type { AriaRowMirrorDeps } from './lib/rendering/aria-row-mirror';
+// Canvas renderer
+export { CanvasRenderer } from './lib/rendering/canvas-renderer';
 // Cell overlay manager (DOM/Angular custom cell renderers)
 export { CellOverlayManager } from './lib/rendering/cell-overlay-manager';
+export type {
+  InfiniteRowModelConfig,
+  InfiniteRowModelDeps,
+  LoadingRowNode,
+} from './lib/rendering/infinite-row-model';
+// Infinite Row Model (rowModelType: 'infinite' — lazy block-loading datasource)
+export { DEFAULT_INFINITE_CONFIG, InfiniteRowModel } from './lib/rendering/infinite-row-model';
 // Live Data Optimizations
 export { LiveDataOptimizations } from './lib/rendering/live-data-optimizations';
 // Named cell-renderer registry (T1.3)
