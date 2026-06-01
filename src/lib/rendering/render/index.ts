@@ -34,6 +34,10 @@ export {
   prepColumn,
   prepColumns,
   renderRow,
+  resolveCellEditor,
+  resolveFilterComponent,
+  resolveHeaderComponent,
+  toAngularComponent,
   truncateText,
 } from './cells';
 // Column utilities

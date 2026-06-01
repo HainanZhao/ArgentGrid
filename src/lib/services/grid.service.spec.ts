@@ -87,6 +87,144 @@ describe('GridService', () => {
     expect(sortedData[2].age).toBe(35);
   });
 
+  describe('custom comparator (colDef.comparator)', () => {
+    interface TaskRow {
+      id: number;
+      priority: string; // low | medium | high
+      owner: string;
+    }
+    const RANK: Record<string, number> = { low: 0, medium: 1, high: 2 };
+    const taskData: TaskRow[] = [
+      { id: 1, priority: 'high', owner: 'B' },
+      { id: 2, priority: 'low', owner: 'A' },
+      { id: 3, priority: 'medium', owner: 'A' },
+    ];
+
+    it('honors a custom comparator instead of default string compare', () => {
+      const cols: ColDef<TaskRow>[] = [
+        { colId: 'id', field: 'id' },
+        {
+          colId: 'priority',
+          field: 'priority',
+          sortable: true,
+          comparator: (a: string, b: string) => RANK[a] - RANK[b],
+        },
+      ];
+      const a = service.createApi(cols as any, [...taskData] as any);
+      a.setSortModel([{ colId: 'priority', sort: 'asc' }]);
+      // Default string sort would be high, low, medium; comparator gives low<medium<high.
+      expect(a.getRowData().map((r: any) => r.priority)).toEqual(['low', 'medium', 'high']);
+    });
+
+    it('inverts the comparator result for descending', () => {
+      const cols: ColDef<TaskRow>[] = [
+        { colId: 'id', field: 'id' },
+        {
+          colId: 'priority',
+          field: 'priority',
+          sortable: true,
+          comparator: (a: string, b: string) => RANK[a] - RANK[b],
+        },
+      ];
+      const a = service.createApi(cols as any, [...taskData] as any);
+      a.setSortModel([{ colId: 'priority', sort: 'desc' }]);
+      expect(a.getRowData().map((r: any) => r.priority)).toEqual(['high', 'medium', 'low']);
+    });
+
+    it('passes the row nodes (nodeA/nodeB) and isDescending to the comparator', () => {
+      const seen: { hasNodeA: boolean; hasNodeB: boolean; isDesc: boolean }[] = [];
+      const cols: ColDef<TaskRow>[] = [
+        { colId: 'id', field: 'id' },
+        {
+          colId: 'priority',
+          field: 'priority',
+          sortable: true,
+          comparator: (a: string, b: string, nodeA: any, nodeB: any, isDescending: boolean) => {
+            seen.push({
+              hasNodeA: !!nodeA?.data,
+              hasNodeB: !!nodeB?.data,
+              isDesc: isDescending,
+            });
+            return RANK[a] - RANK[b];
+          },
+        },
+      ];
+      const a = service.createApi(cols as any, [...taskData] as any);
+      a.setSortModel([{ colId: 'priority', sort: 'desc' }]);
+      expect(seen.length).toBeGreaterThan(0);
+      expect(seen.every((s) => s.hasNodeA && s.hasNodeB)).toBe(true);
+      expect(seen.every((s) => s.isDesc === true)).toBe(true);
+    });
+
+    it('uses the comparator on the primary sort and default compare as tie-breaker', () => {
+      const cols: ColDef<TaskRow>[] = [
+        { colId: 'id', field: 'id' },
+        { colId: 'owner', field: 'owner', sortable: true },
+        {
+          colId: 'priority',
+          field: 'priority',
+          sortable: true,
+          comparator: (a: string, b: string) => RANK[a] - RANK[b],
+        },
+      ];
+      const a = service.createApi(cols as any, [...taskData] as any);
+      // owner asc (default), then priority asc (comparator) within same owner.
+      a.setSortModel([
+        { colId: 'owner', sort: 'asc' },
+        { colId: 'priority', sort: 'asc' },
+      ]);
+      const rows = a.getRowData() as any[];
+      // Owner A: low(id 2) then medium(id 3); Owner B: high(id 1).
+      expect(rows.map((r) => r.id)).toEqual([2, 3, 1]);
+    });
+
+    it('falls back to default comparison when no comparator is set', () => {
+      const cols: ColDef<TaskRow>[] = [
+        { colId: 'id', field: 'id' },
+        { colId: 'priority', field: 'priority', sortable: true },
+      ];
+      const a = service.createApi(cols as any, [...taskData] as any);
+      a.setSortModel([{ colId: 'priority', sort: 'asc' }]);
+      // Plain alphabetical string order.
+      expect(a.getRowData().map((r: any) => r.priority)).toEqual(['high', 'low', 'medium']);
+    });
+  });
+
+  describe('custom filter evaluator (filterType: custom)', () => {
+    // testRowData ages: John 30, Jane 25, Bob 35.
+    it('filters rows via the registered predicate', () => {
+      service.setCustomFilterEvaluator('age', (data) => (data as TestData).age > 28);
+      api.setFilterModel({ age: { filterType: 'custom' } });
+      expect(api.getDisplayedRowCount()).toBe(2); // John(30), Bob(35)
+    });
+
+    it('does not constrain rows when no evaluator is registered', () => {
+      api.setFilterModel({ age: { filterType: 'custom' } }); // model entry but no predicate
+      expect(api.getDisplayedRowCount()).toBe(3);
+    });
+
+    it('passes a row node carrying data to the predicate', () => {
+      const sawData: boolean[] = [];
+      service.setCustomFilterEvaluator('age', (_data, node) => {
+        sawData.push(!!node?.data);
+        return true;
+      });
+      api.setFilterModel({ age: { filterType: 'custom' } });
+      expect(sawData.length).toBe(3);
+      expect(sawData.every(Boolean)).toBe(true);
+    });
+
+    it('stops constraining once the evaluator is cleared', () => {
+      service.setCustomFilterEvaluator('age', (data) => (data as TestData).age > 100);
+      api.setFilterModel({ age: { filterType: 'custom' } });
+      expect(api.getDisplayedRowCount()).toBe(0);
+
+      service.setCustomFilterEvaluator('age', null);
+      api.setFilterModel({ age: { filterType: 'custom' } });
+      expect(api.getDisplayedRowCount()).toBe(3);
+    });
+  });
+
   it('should update column objects when setSortModel is called', () => {
     const sortApi = service.createApi(testColumnDefs, [...testRowData]);
     sortApi.setSortModel([{ colId: 'name', sort: 'desc' }]);

@@ -6,6 +6,9 @@ import {
   getTextLineHeight,
   getValueByPath,
   resolveCellComponent,
+  resolveCellEditor,
+  resolveFilterComponent,
+  resolveHeaderComponent,
   stripHtmlTags,
   usesComponentRenderer,
   wrapLines,
@@ -283,6 +286,146 @@ describe('cells.ts', () => {
           },
         } as ColDef;
         expect(resolveCellComponent(colDef, params(apiWithComponents()))).toBeNull();
+      });
+    });
+
+    describe('resolveCellEditor', () => {
+      it('resolves a direct cellEditor component class', () => {
+        const comp = fakeComponent('Editor');
+        expect(
+          resolveCellEditor({ cellEditor: comp } as ColDef, params(apiWithComponents())).component
+        ).toBe(comp);
+      });
+
+      it('resolves a named cellEditor (global registry + per-grid components)', () => {
+        const globalComp = fakeComponent('G');
+        const localComp = fakeComponent('L');
+        registerCellRenderer('ed', globalComp);
+        expect(
+          resolveCellEditor({ cellEditor: 'ed' } as ColDef, params(apiWithComponents())).component
+        ).toBe(globalComp);
+        expect(
+          resolveCellEditor(
+            { cellEditor: 'ed' } as ColDef,
+            params(apiWithComponents({ ed: localComp }))
+          ).component
+        ).toBe(localComp);
+      });
+
+      it('returns null component for a non-component cellEditor (built-in text editor)', () => {
+        expect(
+          resolveCellEditor(
+            { cellEditor: 'agTextCellEditor' } as ColDef,
+            params(apiWithComponents())
+          ).component
+        ).toBeNull();
+        expect(resolveCellEditor({} as ColDef, params(apiWithComponents())).component).toBeNull();
+      });
+
+      it('resolves component + params from a cellEditorSelector', () => {
+        const comp = fakeComponent('Sel');
+        const colDef = {
+          cellEditorSelector: () => ({ component: comp, params: { values: [1, 2] } }),
+        } as ColDef;
+        const res = resolveCellEditor(colDef, params(apiWithComponents()));
+        expect(res.component).toBe(comp);
+        expect(res.params).toEqual({ values: [1, 2] });
+      });
+
+      it('resolves a registered name returned by cellEditorSelector', () => {
+        const comp = fakeComponent('SelName');
+        registerCellRenderer('selEd', comp);
+        const colDef = { cellEditorSelector: () => ({ component: 'selEd' }) } as ColDef;
+        expect(resolveCellEditor(colDef, params(apiWithComponents())).component).toBe(comp);
+      });
+
+      it('returns null component when the selector throws', () => {
+        const colDef = {
+          cellEditorSelector: () => {
+            throw new Error('boom');
+          },
+        } as ColDef;
+        expect(resolveCellEditor(colDef, params(apiWithComponents())).component).toBeNull();
+      });
+    });
+
+    describe('resolveHeaderComponent', () => {
+      it('resolves a direct headerComponent class', () => {
+        const comp = fakeComponent('Header');
+        expect(
+          resolveHeaderComponent({ headerComponent: comp } as ColDef, apiWithComponents())
+        ).toBe(comp);
+      });
+
+      it('resolves a named headerComponent (global registry + per-grid, per-grid wins)', () => {
+        const globalComp = fakeComponent('G');
+        const localComp = fakeComponent('L');
+        registerCellRenderer('hdr', globalComp);
+        expect(
+          resolveHeaderComponent({ headerComponent: 'hdr' } as ColDef, apiWithComponents())
+        ).toBe(globalComp);
+        expect(
+          resolveHeaderComponent(
+            { headerComponent: 'hdr' } as ColDef,
+            apiWithComponents({ hdr: localComp })
+          )
+        ).toBe(localComp);
+      });
+
+      it('returns null when no headerComponent is set', () => {
+        expect(resolveHeaderComponent({} as ColDef, apiWithComponents())).toBeNull();
+        expect(resolveHeaderComponent(null, apiWithComponents())).toBeNull();
+      });
+
+      it('returns null for a name that does not resolve to a component', () => {
+        registerCellRenderer('fn', () => 'x');
+        expect(
+          resolveHeaderComponent({ headerComponent: 'fn' } as ColDef, apiWithComponents())
+        ).toBeNull();
+        expect(
+          resolveHeaderComponent({ headerComponent: 'unknown' } as ColDef, apiWithComponents())
+        ).toBeNull();
+      });
+
+      it('returns null for a column group def', () => {
+        const groupDef = { children: [], headerComponent: fakeComponent('X') } as any;
+        expect(resolveHeaderComponent(groupDef, apiWithComponents())).toBeNull();
+      });
+    });
+
+    describe('resolveFilterComponent', () => {
+      it('resolves a direct filter component class', () => {
+        const comp = fakeComponent('Filter');
+        expect(resolveFilterComponent({ filter: comp } as ColDef, apiWithComponents())).toBe(comp);
+      });
+
+      it('resolves a named filter (global registry + per-grid, per-grid wins)', () => {
+        const globalComp = fakeComponent('G');
+        const localComp = fakeComponent('L');
+        registerCellRenderer('flt', globalComp);
+        expect(resolveFilterComponent({ filter: 'flt' } as ColDef, apiWithComponents())).toBe(
+          globalComp
+        );
+        expect(
+          resolveFilterComponent({ filter: 'flt' } as ColDef, apiWithComponents({ flt: localComp }))
+        ).toBe(localComp);
+      });
+
+      it('returns null for built-in filter identifiers and booleans', () => {
+        for (const f of ['text', 'number', 'date', 'set', 'boolean', 'agTextColumnFilter', true]) {
+          expect(resolveFilterComponent({ filter: f } as ColDef, apiWithComponents())).toBeNull();
+        }
+      });
+
+      it('returns null when no filter is set or for a column group', () => {
+        expect(resolveFilterComponent({} as ColDef, apiWithComponents())).toBeNull();
+        expect(resolveFilterComponent(null, apiWithComponents())).toBeNull();
+        expect(
+          resolveFilterComponent(
+            { children: [], filter: fakeComponent('X') } as any,
+            apiWithComponents()
+          )
+        ).toBeNull();
       });
     });
   });

@@ -5,15 +5,23 @@ import { ArgentGridComponent } from './components/argent-grid.component';
 import { SetFilterComponent } from './components/set-filter/set-filter.component';
 import { AgGridCompatibilityDirective } from './directives/ag-grid-compatibility.directive';
 import { ClickOutsideDirective } from './directives/click-outside.directive';
+import { ArgentHeaderOutletDirective } from './directives/header-outlet.directive';
 
 @NgModule({
   declarations: [ArgentGridComponent, AgGridCompatibilityDirective],
-  imports: [CommonModule, DragDropModule, SetFilterComponent, ClickOutsideDirective],
+  imports: [
+    CommonModule,
+    DragDropModule,
+    SetFilterComponent,
+    ClickOutsideDirective,
+    ArgentHeaderOutletDirective,
+  ],
   exports: [
     ArgentGridComponent,
     AgGridCompatibilityDirective,
     SetFilterComponent,
     ClickOutsideDirective,
+    ArgentHeaderOutletDirective,
   ],
 })
 export class ArgentGridModule {}

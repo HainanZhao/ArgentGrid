@@ -27,6 +27,7 @@ import {
   getCellValue,
   getFormattedValue,
   resolveCellComponent,
+  toAngularComponent,
   usesComponentRenderer,
 } from './render/cells';
 
@@ -138,6 +139,43 @@ export class CellOverlayManager<TData = any> {
       }
     }
 
+    // Master/detail pass: mount a full-width component over each visible detail
+    // row. Independent of the cell pass above (a master/detail grid may have no
+    // component columns); the shared recycle loop below unmounts detail hosts
+    // when their row scrolls out, exactly like cells.
+    const detailType = toAngularComponent(
+      this.gridApi.getGridOption('detailCellRenderer'),
+      components
+    );
+    if (detailType) {
+      const extra =
+        (this.gridApi.getGridOption('detailCellRendererParams') as
+          | Record<string, any>
+          | undefined) ?? {};
+      for (let rowIndex = layout.startRow; rowIndex < layout.endRow; rowIndex++) {
+        const node = this.gridApi.getDisplayedRowAtIndex(rowIndex);
+        if (!node || !(node as any).detail) continue;
+
+        const y = this.rowY(rowIndex, layout);
+        const height = (node as any).rowHeight || layout.rowHeight;
+        const key = `detail::${rowIndex}`;
+        stillNeeded.add(key);
+        // Full-width (x=0, width=viewportWidth). isPinned=true so the host is
+        // never center-clipped — a detail row legitimately spans pinned+center.
+        this.placeCell(
+          key,
+          detailType,
+          this.buildDetailParams(node, rowIndex, extra),
+          0,
+          y,
+          layout.viewportWidth,
+          height,
+          layout.dataChanged,
+          true
+        );
+      }
+    }
+
     // Recycle cells that are no longer visible.
     for (const [key, entry] of this.active) {
       if (!stillNeeded.has(key)) {
@@ -197,6 +235,27 @@ export class CellOverlayManager<TData = any> {
       column,
       api: this.gridApi,
     };
+  }
+
+  /**
+   * Params for a master/detail `detailCellRenderer`. The detail node shares its
+   * master's `data`; `masterNode` points back at the master. Typed as
+   * {@link ICellRendererParams} only to flow through the shared `placeCell`
+   * lifecycle — the component receives an {@link IDetailCellRendererParams}.
+   */
+  private buildDetailParams(
+    node: any,
+    rowIndex: number,
+    extra: Record<string, any>
+  ): ICellRendererParams<TData> {
+    return {
+      ...extra,
+      data: node.data,
+      node,
+      masterNode: node.masterRowNode,
+      rowIndex,
+      api: this.gridApi,
+    } as unknown as ICellRendererParams<TData>;
   }
 
   private rowY(rowIndex: number, layout: OverlayLayout): number {

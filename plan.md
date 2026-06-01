@@ -12,9 +12,10 @@
 | **Data Volume (client-side)** | ~100k rows | Millions (SSRM) | **1M+ rows** ✅ |
 | **Row Models** | Client-side | Client, SSRM, Infinite | **Client-side only** ❌ |
 | **Custom Cell Components** | Any framework component | Any framework component | **✅ Angular components via DOM overlay (class, `cellRendererSelector`, or registered name) + canvas primitives + string functions** |
-| **Sorting** | Yes | Yes | **✅ Single + multi-column** |
-| **Filtering** | Text, Num, Date | + Set, Multi | **✅ Text, Num, Date, Boolean, Set; quick + floating filters** |
-| **Cell Editing** | Yes | Yes | **✅ Inline (DOM overlay), valueParser/Setter, validation** |
+| **Custom Header Components** | Any framework component | Any framework component | **✅ Angular `headerComponent` (class or registered name) in the DOM header (`IHeaderAngularComp`/`IHeaderParams`)** |
+| **Sorting** | Yes | Yes | **✅ Single + multi-column; custom `colDef.comparator`** |
+| **Filtering** | Text, Num, Date | + Set, Multi | **✅ Text, Num, Date, Boolean, Set; quick + floating; custom `IFilterAngularComp` filter components** |
+| **Cell Editing** | Yes | Yes | **✅ Inline + custom `cellEditor` Angular components (DOM overlay), valueParser/Setter, validation** |
 | **Selection** | Row | Row + Range | **✅ Row + checkbox + Range** |
 | **Column Pin / Resize / Reorder** | Yes | Yes | **✅** |
 | **Row Pinning (top/bottom)** | Yes | Yes | **✅** |
@@ -22,7 +23,7 @@
 | **Row Grouping** | No | Yes | **✅ Hierarchical** |
 | **Aggregation** | No | Yes | **✅ Logic complete; ⚠️ weak group-row visuals** |
 | **Pivoting** | No | Yes | **✅ Basic** |
-| **Master/Detail** | No | Yes | **⚠️ Placeholder rendering only** |
+| **Master/Detail** | No | Yes | **✅ Real Angular component (nested grid / panel) in detail rows via DOM overlay** |
 | **Tree Data** | Basic | Advanced | **❌ Missing** |
 | **Pagination** | Yes | Yes | **✅ Full API** |
 | **Clipboard (copy/paste)** | Yes | Yes (range) | **✅ TSV, copy-with-headers** |
@@ -65,8 +66,10 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
   - [x] Recycled pool of absolutely-positioned Angular components composited over the canvas for visible component-cells only (`CellOverlayManager`).
   - [x] Driven by `CanvasRenderer.onAfterRender` so it stays in lockstep on scroll/resize/sort/filter/data; `PositionedColumn.x` handles pinned offset.
   - [x] `cellRenderer: MyComponent` (Angular class) + `cellRendererSelector`; AG-Grid-style `ICellRendererParams` / `ICellRendererAngularComp` (`agInit`/`refresh`). Validated in `Features/CustomComponents` story (interactive pill + star rating, click + `applyTransaction` from a cell).
-  - [ ] Follow-ups: **custom DOM headers/filters** over the canvas (same layer); **pinned component columns** edge cases; function-returns-`HTMLElement` renderers; reduce first-paint flash of overlay cells.
-  - Unlocks links, buttons, images, framework components in cells.
+  - [x] **Custom header components** (`colDef.headerComponent`): an Angular component class or registered name mounts directly in the (real-DOM) header cell via `ArgentHeaderOutletDirective`, receiving `IHeaderParams` (`progressSort`/`setSort`, `showColumnMenu`/`showFilter`, live `column`, `headerComponentParams`); the grid disables default sort-on-click for custom headers and bumps a `headerStateVersion` to drive `refresh()` on sort/filter/column changes. Validated in `Features/HeaderComponents` (class + registered-name) + `header-outlet.directive.spec.ts` + component memo/guard tests.
+  - [x] **Custom filter components** (`colDef.filter` = an Angular component class or registered name): hosted in the filter popup, implementing `IFilterAngularComp` (`agInit`/`isFilterActive`/`doesFilterPass`/`getModel`/`setModel`) with `IFilterParams` (`filterChangedCallback`, `valueGetter`/`getValue`, `filterParams`). Instances are created lazily and **kept alive per colId** so state persists across opens. The model↔instance bridge: the component registers a live `doesFilterPass` predicate with `GridService.setCustomFilterEvaluator` and writes a `{filterType:'custom'}` model entry; `applyFiltering` consults the predicate (lazy data→node map). Validated in `Features/CustomFilters` + resolver/service/component specs.
+  - [ ] Follow-ups: custom **floating-filter** components + rehydrating a custom filter from an externally-restored filter model; custom **header *group*** components; **pinned component columns** edge cases; function-returns-`HTMLElement` renderers; reduce first-paint flash of overlay cells.
+  - Unlocks links, buttons, images, framework components in cells *and headers*.
 - [x] **T1.2 — Full keyboard navigation** — **landed**
   - [x] Arrow keys (clamp at edges), Tab/Shift-Tab (wrap rows), Home/End (row), Ctrl+Home/End (grid), PageUp/Down, Enter-to-edit, type-to-edit. Dispatch in `handleKeyDown` via shared `computeNextCell` helper (reused by editor-Tab `moveToNextCell`).
   - [x] Focused-cell state in `GridService` (`setFocusedCell`/`getFocusedCell`), mirroring the `cellRanges` pattern; visible focus ring drawn on canvas (`CanvasRenderer.drawFocusedCell` via `drawCellSelectionBorder`).
@@ -92,7 +95,11 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
   - [x] Clipping extended consistently across the frame via a shared `clipCenter` helper: the range-selection box (center-only ranges; ranges touching a pinned column stay unclipped) and the keyboard focus ring (center cells) are clipped to the center region; the DOM cell-overlay layer clip-paths each center cell to the center region (`OverlayLayout.centerClip` → `CellOverlayManager.applyCenterClip`). Grid lines already region-filter their borders, so they needed no change.
   - [x] Validated: strengthened `walk.spec.ts` (off-screen center columns *excluded* both edges + `columnBuffer` behavior/clamping); `canvas-renderer.spec.ts` asserts the center clip rect for the cell pass and that the focus-ring/range passes clip center-only cases but not pinned ones; `cell-overlay-manager.spec.ts` asserts the per-cell `clip-path` (overflow clipped, fully-in-view unclipped, pinned never clipped).
   - [ ] Follow-up: O(log n) first-visible lookup via cumulative offsets for grids with thousands of columns (current scan is O(total center columns)/frame).
-- [ ] **T2.3 — Master/Detail (real)** — embed actual nested grid/component in expanded detail rows (depends on T1.1).
+- [x] **T2.3 — Master/Detail (real)** — **landed**
+  - [x] A configured `gridOptions.detailCellRenderer` (Angular component class **or** registered name) is hosted **full-width** over each visible expanded detail row, reusing the existing DOM-overlay pool — a second pass in `CellOverlayManager.sync` keyed `detail::<row>`, positioned via the cumulative `getRowY`, sized to `detailRowHeight`, and `isPinned`-flagged so it's never center-clipped. Mounts/recycles as detail rows scroll in/out like cells.
+  - [x] The component receives `IDetailCellRendererParams` (master `data`, the detail `node`, `masterNode`, `api`, + spread of `detailCellRendererParams`) and implements `IDetailCellRendererAngularComp` (`agInit`/`refresh`). Canvas and overlay share one `toAngularComponent` resolver, so the "draw placeholder vs. mount component" decision can't diverge; `renderDetailRow` keeps an opaque backdrop and only draws placeholder text when no component renderer resolves.
+  - [x] Validated: `cell-overlay-manager.spec.ts` (full-width mount geometry + master-node params + no-renderer fallback + scroll-out recycle). `Features/MasterDetail` story — flagship **nested `<argent-grid>`** of a customer's orders, plus a registered-name custom panel exercising `detailCellRendererParams`. Full suite 562 passing; build clean.
+  - [ ] Follow-up: auto-height detail rows (currently fixed `detailRowHeight`); a visible master-row expand chevron drawn on the canvas (today the story supplies a first-column toggle component).
 - [ ] **T2.4 — Accessibility / ARIA pass** — off-screen DOM mirror of focused/visible rows with roles, so AT and a11y audits pass (often a procurement hard-requirement).
 
 ### Tier 3 — Scale & enterprise data
@@ -131,7 +138,7 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
 ## 📌 Known Discrepancies Corrected in This Re-baseline
 
 - **Sparklines**: render correctly on canvas (previously a service helper looked stubbed — the real drawing lives in `render/primitives.ts`). Marked ✅.
-- **Master/Detail**: previously "✅ Complete" — actual detail rows render placeholder text only. Downgraded to ⚠️.
+- **Master/Detail**: re-baseline found detail rows rendering placeholder text only (downgraded to ⚠️). **Now resolved** in T2.3 — expanded detail rows host a real Angular component (nested grid or panel) full-width via the DOM overlay. Marked ✅.
 - **Keyboard Navigation**: re-baseline found only editor keys + copy/paste (downgraded to ⚠️). **Now resolved** — full cell-to-cell navigation implemented in T1.2, marked ✅.
 - **Custom Cell Renderers**: previously framed as supported — only canvas primitives + string-returning functions. No DOM/framework components. This is now Tier 1 priority.
 - **Column Virtualization (horizontal)**: re-baseline marked this ❌ ("draws all visible columns"), but `walkColumns` already culled off-screen center columns at the draw level — the claim was stale. **Now resolved & hardened** in T2.2: the cull is buffered, the center region is clipped (fixing a pinned-overdraw bug), and both are covered by tests. Marked ✅.

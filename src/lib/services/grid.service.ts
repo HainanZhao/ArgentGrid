@@ -35,6 +35,13 @@ export class GridService<TData = any> {
   private columnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
   private sortModel: SortModelItem[] = [];
   private filterModel: FilterModel = {};
+  /** Live predicates for columns whose filter is a custom component
+   * (`filterType: 'custom'`), keyed by colId. Registered by the grid component
+   * from the filter instance's `doesFilterPass`; consulted in {@link applyFiltering}. */
+  private customFilterEvaluators = new Map<
+    string,
+    (data: TData, node: IRowNode<TData>) => boolean
+  >();
   private filteredRowData: TData[] = [];
   private selectedRows: Set<string> = new Set();
   private expandedGroups: Set<string> = new Set();
@@ -1421,18 +1428,48 @@ export class GridService<TData = any> {
       return;
     }
 
-    const sortFn = (a: TData, b: TData) => {
-      for (const sortItem of this.sortModel) {
+    // Resolve each active sort column once (field + optional custom comparator)
+    // instead of per-comparison, mirroring AG Grid's `colDef.comparator`.
+    const sortCols = this.sortModel
+      .map((sortItem) => {
         const column = this.columns.get(sortItem.colId);
-        if (!column?.field) continue;
+        if (!column?.field) return null;
+        const colDef = this.getColumnDefForColumn(column);
+        const comparator =
+          colDef && !('children' in colDef) && typeof colDef.comparator === 'function'
+            ? colDef.comparator
+            : null;
+        return { field: column.field as keyof TData, isDesc: sortItem.sort === 'desc', comparator };
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null);
 
-        const field = column.field as keyof TData;
+    // A custom comparator receives the row nodes; build a data→node lookup once,
+    // and only when at least one comparator is in play (cheap default path stays
+    // allocation-free).
+    let dataToNode: Map<TData, IRowNode<TData>> | null = null;
+    if (sortCols.some((s) => s.comparator)) {
+      dataToNode = new Map();
+      for (const node of this.rowNodes.values()) {
+        if (node.data) dataToNode.set(node.data, node);
+      }
+    }
+
+    const sortFn = (a: TData, b: TData) => {
+      for (const { field, isDesc, comparator } of sortCols) {
         const valueA = a[field] as any;
         const valueB = b[field] as any;
-
-        const comparison = this.compareValues(valueA, valueB);
+        let comparison: number;
+        if (comparator) {
+          const nodeA = (dataToNode?.get(a) ?? null) as IRowNode;
+          const nodeB = (dataToNode?.get(b) ?? null) as IRowNode;
+          // AG Grid contract: comparator sorts ascending; the grid flips the
+          // sign for descending (passing isDescending so it *can* opt out).
+          comparison = comparator(valueA, valueB, nodeA, nodeB, isDesc);
+        } else {
+          comparison = this.compareValues(valueA, valueB);
+        }
         if (comparison !== 0) {
-          return sortItem.sort === 'desc' ? -comparison : comparison;
+          return isDesc ? -comparison : comparison;
         }
       }
       return 0;
@@ -1443,6 +1480,29 @@ export class GridService<TData = any> {
     this.filteredRowData.sort(sortFn);
   }
 
+  /**
+   * Register (or clear, with `null`) the live predicate for a custom-component
+   * filter on a column. Called by the grid component from the filter instance's
+   * `doesFilterPass`; consulted by {@link applyFiltering} for `filterType:'custom'`
+   * entries. Does not re-filter on its own — the caller follows with
+   * `setFilterModel` (which runs `applyFiltering`).
+   */
+  public setCustomFilterEvaluator(
+    colId: string,
+    evaluator: ((data: TData, node: IRowNode<TData>) => boolean) | null
+  ): void {
+    if (evaluator) {
+      this.customFilterEvaluators.set(colId, evaluator);
+    } else {
+      this.customFilterEvaluators.delete(colId);
+    }
+  }
+
+  /** Drop all custom-filter predicates (grid teardown / column reset). */
+  public clearCustomFilterEvaluators(): void {
+    this.customFilterEvaluators.clear();
+  }
+
   private applyFiltering(): void {
     this.groupingDirty = true;
 
@@ -1451,11 +1511,30 @@ export class GridService<TData = any> {
       // No filters, use all data
       this.filteredRowData = [...this.rowData];
     } else {
+      // Custom-component filters evaluate against the row node via a registered
+      // predicate; build a data→node lookup once, only when one is in play.
+      const hasCustom = Object.values(this.filterModel).some((f) => f?.filterType === 'custom');
+      let dataToNode: Map<TData, IRowNode<TData>> | null = null;
+      if (hasCustom) {
+        dataToNode = new Map();
+        for (const node of this.rowNodes.values()) {
+          if (node.data) dataToNode.set(node.data, node);
+        }
+      }
+
       // Apply filters with AND logic
       this.filteredRowData = this.rowData.filter((row) => {
         return Object.keys(this.filterModel).every((colId) => {
           const filterItem = this.filterModel[colId];
           if (!filterItem) return true;
+
+          // Custom filter: delegate to the live instance's doesFilterPass.
+          if (filterItem.filterType === 'custom') {
+            const evaluator = this.customFilterEvaluators.get(colId);
+            if (!evaluator) return true; // no live instance yet → not constraining
+            const node = dataToNode?.get(row) ?? ({ data: row } as IRowNode<TData>);
+            return evaluator(row, node);
+          }
 
           const column = this.columns.get(colId);
           if (!column?.field) return true;

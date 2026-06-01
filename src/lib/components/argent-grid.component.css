@@ -265,6 +265,15 @@
   padding: 12px;
 }
 
+/* Custom filter component host: the component supplies its own internals; the
+   popup just provides the chrome (border/shadow) inherited from .filter-popup. */
+.argent-grid-custom-filter-popup {
+  padding: 0;
+}
+.argent-grid-custom-filter-host {
+  display: block;
+}
+
 .filter-popup-header {
   font-weight: bold;
   margin-bottom: 8px;

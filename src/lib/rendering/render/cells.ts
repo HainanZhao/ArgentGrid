@@ -7,6 +7,7 @@
 import type { Type } from '@angular/core';
 import {
   ColDef,
+  type ColGroupDef,
   Column,
   GridApi,
   type ICellRendererParams,
@@ -40,8 +41,10 @@ function getComponents<TData = any>(
  * Resolve a `cellRenderer` value (component class, or a registered name) to the
  * Angular component it routes to, or null when it isn't a component renderer
  * (a plain string-returning function, a built-in canvas string, or undefined).
+ * Shared by the canvas and the DOM overlay (cells *and* master/detail) so their
+ * "draw on canvas vs. mount a component" decisions can never disagree.
  */
-function toAngularComponent(
+export function toAngularComponent(
   renderer: any,
   components: CellRendererComponents | undefined
 ): Type<any> | null {
@@ -102,6 +105,64 @@ export function resolveCellComponent<TData = any>(
     }
   }
   return toAngularComponent(colDef.cellRenderer, components);
+}
+
+/**
+ * Resolve the custom editor for a cell: a `cellEditor` component class / a
+ * registered name, or a `cellEditorSelector` that returns `{ component, params }`.
+ * Returns the Angular component to host plus any selector-provided params (merged
+ * over `cellEditorParams` by the caller), or `null` component to fall back to the
+ * built-in text editor. Shares {@link toAngularComponent} with the renderer path.
+ */
+export function resolveCellEditor<TData = any>(
+  colDef: ColDef<TData> | null,
+  params: ICellRendererParams<TData>
+): { component: Type<any> | null; params?: Record<string, any> } {
+  if (!colDef) return { component: null };
+  const components = getComponents(params.api);
+  if (typeof colDef.cellEditorSelector === 'function') {
+    try {
+      const selected = colDef.cellEditorSelector(params);
+      return {
+        component: toAngularComponent(selected?.component, components),
+        params: selected?.params,
+      };
+    } catch {
+      return { component: null };
+    }
+  }
+  return { component: toAngularComponent(colDef.cellEditor, components) };
+}
+
+/**
+ * Resolve a column's custom header component (`colDef.headerComponent`) to the
+ * Angular component class to mount in the DOM header, or null to keep the
+ * built-in header (label + sort/filter/menu chrome). Accepts a component class
+ * or a registered name (resolved through the per-grid `components` map / global
+ * registry), sharing {@link toAngularComponent} with the cell paths. Column
+ * groups have no header component in v1.
+ */
+export function resolveHeaderComponent<TData = any>(
+  colDef: ColDef<TData> | ColGroupDef<TData> | null,
+  api: GridApi<TData> | null | undefined
+): Type<any> | null {
+  if (!colDef || 'children' in colDef || !colDef.headerComponent) return null;
+  return toAngularComponent(colDef.headerComponent, getComponents(api));
+}
+
+/**
+ * Resolve a column's custom filter component (`colDef.filter` set to a component
+ * class or a registered name), or null for the built-in filters. The built-in
+ * filter identifiers (`'text'`, `'number'`, `'date'`, `'boolean'`, `'set'`,
+ * `'agTextColumnFilter'`, …) and booleans resolve to null, so the canvas keeps
+ * its built-in popup. Shares {@link toAngularComponent} with the other paths.
+ */
+export function resolveFilterComponent<TData = any>(
+  colDef: ColDef<TData> | ColGroupDef<TData> | null,
+  api: GridApi<TData> | null | undefined
+): Type<any> | null {
+  if (!colDef || 'children' in colDef || !colDef.filter) return null;
+  return toAngularComponent(colDef.filter, getComponents(api));
 }
 
 /**

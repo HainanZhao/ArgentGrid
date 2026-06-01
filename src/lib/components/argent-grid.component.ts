@@ -4,6 +4,7 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  type ComponentRef,
   ElementRef,
   EventEmitter,
   HostListener,
@@ -14,6 +15,7 @@ import {
   type OnInit,
   Output,
   type SimpleChanges,
+  type Type,
   ViewChild,
   ViewContainerRef,
 } from '@angular/core';
@@ -26,6 +28,9 @@ import {
   getFormattedValue,
   getTextLineHeight,
   groupIndicatorAreaWidth,
+  resolveCellEditor,
+  resolveFilterComponent,
+  resolveHeaderComponent,
   wrapLines,
 } from '../rendering/render/cells';
 import { getColumnDef, isColumnVisible } from '../rendering/render/column-utils';
@@ -43,9 +48,17 @@ import type {
   GetContextMenuItemsParams,
   GridApi,
   GridOptions,
+  ICellEditorAngularComp,
+  ICellEditorParams,
+  IDoesFilterPassParams,
+  IFilterAngularComp,
+  IFilterParams,
+  IHeaderAngularComp,
+  IHeaderParams,
   IRowNode,
   MenuItemDef,
   RowSelectionOptions,
+  SortDirection,
 } from '../types/ag-grid-types';
 
 @Component({
@@ -75,6 +88,8 @@ export class ArgentGridComponent<TData = any>
   @ViewChild('headerScrollable') headerScrollableRef!: ElementRef<HTMLDivElement>;
   @ViewChild('headerScrollableFilter') headerScrollableFilterRef!: ElementRef<HTMLDivElement>;
   @ViewChild('editorInput') editorInputRef!: ElementRef<HTMLInputElement>;
+  @ViewChild('editorContainer') editorContainerRef?: ElementRef<HTMLDivElement>;
+  @ViewChild('customFilterContainer') customFilterContainerRef?: ElementRef<HTMLDivElement>;
   @ViewChild('cellOverlayLayer') cellOverlayLayerRef!: ElementRef<HTMLDivElement>;
 
   canvasHeight = 0;
@@ -134,6 +149,23 @@ export class ArgentGridComponent<TData = any>
   editorPosition = { x: 0, y: 0, width: 100, height: 32 };
   private editingRowNode: IRowNode<TData> | null = null;
   private editingColDef: ColDef<TData> | null = null;
+  /** Live instance of a custom `cellEditor` component, when one is in use. */
+  private editingComponentRef: ComponentRef<ICellEditorAngularComp<TData>> | null = null;
+
+  /** True while a custom `cellEditor` component (not the built-in input) is active. */
+  get isComponentEditor(): boolean {
+    return !!this.editingComponentRef;
+  }
+
+  // --- Custom header components (colDef.headerComponent) ---
+  /** Resolved header component per colId (null = built-in header). Memoized so
+   * template re-evaluation doesn't re-resolve; cleared when columns change. */
+  private headerComponentCache = new Map<string, Type<IHeaderAngularComp> | null>();
+  /** Stable IHeaderParams reference per colId so the outlet directive only
+   * refreshes on `headerStateVersion` bumps, never on identity churn. */
+  private headerParamsCache = new Map<string, IHeaderParams<TData>>();
+  /** Bumped on sort/filter/column changes to trigger header `refresh()`. */
+  headerStateVersion = 0;
 
   // Header Menu state
   activeHeaderMenu: Column | ColDef<TData> | ColGroupDef<TData> | null = null;
@@ -178,6 +210,14 @@ export class ArgentGridComponent<TData = any>
   setFilterValueFormatter?: (value: any) => string;
   private activeSetFilterColumn: Column | null = null;
   private initialColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null = null;
+
+  // Custom filter components (colDef.filter = Angular component)
+  activeCustomFilter = false;
+  customFilterPosition = { x: 0, y: 0 };
+  activeCustomFilterColumn: Column | null = null;
+  /** Live filter instances, kept alive per colId so filter state persists
+   * across popup opens (mirrors AG Grid). Created lazily, destroyed on teardown. */
+  private customFilterInstances = new Map<string, ComponentRef<IFilterAngularComp<TData>>>();
 
   public gridApi!: GridApi<TData>;
   public isColumnVisible = isColumnVisible;
@@ -440,10 +480,21 @@ export class ArgentGridComponent<TData = any>
       this.resizeObserver.disconnect();
     }
 
+    this.destroyCustomFilters();
     this.cellOverlayManager?.destroy();
     this.gridApi?.destroy();
     this.canvasRenderer?.destroy();
     this.onCanvasMouseLeave();
+  }
+
+  /** Destroy all live custom-filter instances and drop their predicates. Used on
+   * teardown and when the column definitions are replaced. */
+  private destroyCustomFilters(): void {
+    for (const ref of this.customFilterInstances.values()) {
+      ref.destroy();
+    }
+    this.customFilterInstances.clear();
+    this.gridService?.clearCustomFilterEvaluators();
   }
 
   /** Offscreen 2D context used only to measure wrapped text for auto-height. */
@@ -535,6 +586,17 @@ export class ArgentGridComponent<TData = any>
 
     // Listen for grid state changes from API (filters, sorts, options)
     this.gridService.gridStateChanged$.pipe(takeUntil(this.destroy$)).subscribe((event) => {
+      // Keep custom header components in step with header-affecting state.
+      // The column set can change shape (resolved component / params), so drop
+      // the per-column caches; sort/filter only changes state the component
+      // re-reads, so just bump the refresh version.
+      if (event.type === 'columnsChanged' || event.type === 'columnGroupExpanded') {
+        this.headerComponentCache.clear();
+        this.headerParamsCache.clear();
+        this.headerStateVersion++;
+      } else if (event.type === 'sortChanged' || event.type === 'filterChanged') {
+        this.headerStateVersion++;
+      }
       if (event.type === 'optionChanged' && event.key === 'sideBar') {
         this.sideBarVisible = !!event.value;
       }
@@ -630,6 +692,8 @@ export class ArgentGridComponent<TData = any>
 
   private onColumnDefsChanged(newColumnDefs: (ColDef<TData> | ColGroupDef<TData>)[] | null): void {
     this.columnDefs = newColumnDefs;
+    // Column set replaced — old filter instances may no longer apply.
+    this.destroyCustomFilters();
 
     if (this.gridApi) {
       this.gridApi.setColumnDefs(newColumnDefs);
@@ -1009,17 +1073,98 @@ export class ArgentGridComponent<TData = any>
       return;
     }
 
+    // A custom header component owns its own sort affordance (via params.setSort
+    // / progressSort), so the default sort-on-click is disabled for it — exactly
+    // like AG Grid.
+    if (this.getHeaderComponent(col)) {
+      return;
+    }
+
     const colId = (col as any).colId || (col as any).field?.toString() || '';
-    // Get latest column state from API to ensure we have the current sort
-    const latestCol = this.gridApi?.getColumn(colId);
-    const currentSort = latestCol?.sort || null;
+    this.progressColumnSort(colId, event.shiftKey);
+  }
 
-    // Toggle sort
-    const newSort = currentSort === 'asc' ? 'desc' : currentSort === 'desc' ? null : 'asc';
-    const isMultiSort = event.shiftKey;
-
-    this.gridApi.setColumnSort(colId, newSort, isMultiSort);
+  /** Advance a column's sort to its next state (asc → desc → none), reading the
+   * latest sort from the API. Shared by header clicks and custom header params. */
+  private progressColumnSort(colId: string, multiSort: boolean): void {
+    const currentSort = this.gridApi?.getColumn(colId)?.sort || null;
+    const newSort: SortDirection =
+      currentSort === 'asc' ? 'desc' : currentSort === 'desc' ? null : 'asc';
+    this.gridApi.setColumnSort(colId, newSort, multiSort);
     this.canvasRenderer?.render();
+  }
+
+  /**
+   * Resolve the custom header component for a column (memoized per colId), or
+   * null to use the built-in header. Column groups never have one.
+   */
+  getHeaderComponent(
+    col: Column | ColDef<TData> | ColGroupDef<TData>
+  ): Type<IHeaderAngularComp> | null {
+    if ('children' in col || (col as any).colId === 'ag-Grid-SelectionColumn') {
+      return null;
+    }
+    const colId = (col as any).colId || (col as any).field?.toString() || '';
+    if (!colId) return null;
+    if (this.headerComponentCache.has(colId)) {
+      return this.headerComponentCache.get(colId) ?? null;
+    }
+    const colDef = this.getColumnDefForColumn(col as any);
+    const component = resolveHeaderComponent<TData>(colDef as ColDef<TData>, this.gridApi);
+    this.headerComponentCache.set(colId, component);
+    return component;
+  }
+
+  /**
+   * Build (and cache) the {@link IHeaderParams} for a column's custom header
+   * component. The reference is stable per colId so the outlet directive only
+   * refreshes on `headerStateVersion` bumps; the live `column` it carries always
+   * reflects the current sort.
+   */
+  getHeaderComponentParams(col: Column | ColDef<TData> | ColGroupDef<TData>): IHeaderParams<TData> {
+    const colId = (col as any).colId || (col as any).field?.toString() || '';
+    const cached = this.headerParamsCache.get(colId);
+    if (cached) return cached;
+
+    const column = (this.gridApi?.getColumn(colId) || (col as Column)) as Column;
+    const colDef = (this.getColumnDefForColumn(col as any) || {}) as ColDef<TData>;
+    const extra = (colDef.headerComponentParams as Record<string, any>) || {};
+
+    const params: IHeaderParams<TData> = {
+      ...extra,
+      column,
+      colDef,
+      displayName: this.getHeaderName(col),
+      api: this.gridApi,
+      enableSorting: this.isSortable(col),
+      enableMenu: this.hasHeaderMenu(col),
+      enableFilterButton: this.hasHeaderFilterButton(col),
+      progressSort: (multiSort = false) => this.progressColumnSort(colId, multiSort),
+      setSort: (sort: SortDirection, multiSort = false) => {
+        this.gridApi.setColumnSort(colId, sort, multiSort);
+        this.canvasRenderer?.render();
+      },
+      showColumnMenu: (source: HTMLElement) =>
+        this.onHeaderMenuClick(this.syntheticEventFor(source), col),
+      showFilter: (source: HTMLElement) =>
+        this.onHeaderFilterClick(this.syntheticEventFor(source), col),
+    };
+    this.headerParamsCache.set(colId, params);
+    return params;
+  }
+
+  /** A MouseEvent anchored at an element, for menu/filter opening from custom
+   * header callbacks. `target` is pinned to the source element since the event
+   * is never dispatched (the handlers read `event.target` for positioning). */
+  private syntheticEventFor(source: HTMLElement): MouseEvent {
+    const rect = source.getBoundingClientRect();
+    const event = new MouseEvent('click', {
+      clientX: rect.left,
+      clientY: rect.bottom,
+      bubbles: true,
+    });
+    Object.defineProperty(event, 'target', { value: source, enumerable: true });
+    return event;
   }
 
   // --- Header Menu Logic ---
@@ -1066,7 +1211,9 @@ export class ArgentGridComponent<TData = any>
       y: rect.bottom - containerRect.top + 4,
     };
     const colDef = this.getColumnDefForColumn(column);
-    if (colDef && this.isColDef(colDef) && colDef.filter === 'set') {
+    if (colDef && this.isColDef(colDef) && resolveFilterComponent(colDef, this.gridApi)) {
+      this.openCustomFilter(column, position);
+    } else if (colDef && this.isColDef(colDef) && colDef.filter === 'set') {
       this.openSetFilter(null, column, position);
     } else {
       this.openFilterPopup(null, column, position);
@@ -1203,14 +1350,23 @@ export class ArgentGridComponent<TData = any>
   }
 
   public clearColumnFilter(col: Column): void {
-    const field = col.field;
-    if (!field || !this.gridApi) return;
+    if (!this.gridApi) return;
+
+    // Custom-component filter: reset the live instance and drop its predicate.
+    const customRef = this.customFilterInstances.get(col.colId);
+    if (customRef) {
+      customRef.instance.setModel(null);
+      this.gridService.setCustomFilterEvaluator(col.colId, null);
+    }
 
     const currentModel = this.gridApi.getFilterModel();
-    delete (currentModel as any)[field];
+    // Built-in filters are keyed by field; custom filters by colId.
+    if (col.field) delete (currentModel as any)[col.field];
+    delete (currentModel as any)[col.colId];
     this.gridApi.setFilterModel(currentModel);
     this.closeHeaderMenu();
     this.closeFilterPopup();
+    this.closeCustomFilter();
   }
 
   closeHeaderMenu(): void {
@@ -1437,8 +1593,10 @@ export class ArgentGridComponent<TData = any>
 
   /** Start editing a cell seeded with a single typed character (type-to-edit). */
   private startEditingWithChar(rowIndex: number, colId: string, char: string): void {
-    this.startEditing(rowIndex, colId);
-    if (this.isEditing) {
+    this.startEditing(rowIndex, colId, char);
+    // Built-in input: seed the typed character (a custom editor gets it via
+    // params.charPress in agInit instead).
+    if (this.isEditing && !this.editingComponentRef) {
       this.editingValue = char;
     }
   }
@@ -1692,6 +1850,102 @@ export class ArgentGridComponent<TData = any>
   closeSetFilter(): void {
     this.activeSetFilter = false;
     this.activeSetFilterColumn = null;
+    this._cdr.detectChanges();
+  }
+
+  // --- Custom filter components (colDef.filter = Angular component) ---
+
+  /**
+   * Open the custom-filter popup for a column. The filter instance is created
+   * once (lazily) and kept alive so its state persists; here we just (re)attach
+   * its GUI to the popup container and show it.
+   */
+  openCustomFilter(col: Column, position?: { x: number; y: number }): void {
+    this.activeCustomFilterColumn = col;
+    if (position) {
+      this.customFilterPosition = position;
+    }
+    const ref = this.getOrCreateCustomFilter(col);
+    if (!ref) return;
+
+    // Render the popup container first, then move the (alive) filter element in.
+    this.activeCustomFilter = true;
+    this._cdr.detectChanges();
+    const container = this.customFilterContainerRef?.nativeElement;
+    if (container) {
+      container.appendChild(ref.location.nativeElement);
+    }
+    ref.instance.afterGuiAttached?.({ suppressFocus: false });
+    ref.changeDetectorRef.detectChanges();
+  }
+
+  /** Get the live filter instance for a column, creating + `agInit`-ing it on
+   * first use. Returns null when the column has no resolvable filter component. */
+  private getOrCreateCustomFilter(col: Column): ComponentRef<IFilterAngularComp<TData>> | null {
+    const existing = this.customFilterInstances.get(col.colId);
+    if (existing) return existing;
+
+    const colDef = this.getColumnDefForColumn(col) as ColDef<TData> | null;
+    const component = resolveFilterComponent<TData>(colDef, this.gridApi);
+    if (!component) return null;
+
+    const ref = this._viewContainerRef.createComponent(component) as ComponentRef<
+      IFilterAngularComp<TData>
+    >;
+    const params: IFilterParams<TData> = {
+      ...((colDef?.filterParams as Record<string, any>) || {}),
+      colDef: (colDef || {}) as ColDef<TData>,
+      column: col,
+      api: this.gridApi,
+      context: this.gridOptions?.context,
+      filterChangedCallback: () => this.onCustomFilterChanged(col.colId),
+      filterModifiedCallback: () => {},
+      valueGetter: (node: IRowNode<TData>) => getCellValue(col, colDef, node, this.gridApi),
+      getValue: (node: IRowNode<TData>) => getCellValue(col, colDef, node, this.gridApi),
+    };
+    ref.instance.agInit(params);
+
+    // Restore any persisted model for this column.
+    const existingModel = this.gridApi?.getFilterModel()[col.colId] as any;
+    if (existingModel?.filterType === 'custom' && 'model' in existingModel) {
+      ref.instance.setModel(existingModel.model);
+    }
+
+    ref.changeDetectorRef.detectChanges();
+    this.customFilterInstances.set(col.colId, ref);
+    return ref;
+  }
+
+  /**
+   * Called by a filter instance via `filterChangedCallback`. Registers (or
+   * clears) the live predicate and writes/removes the `{filterType:'custom'}`
+   * model entry, then re-filters.
+   */
+  private onCustomFilterChanged(colId: string): void {
+    const ref = this.customFilterInstances.get(colId);
+    if (!ref || !this.gridApi) return;
+
+    const model = this.gridApi.getFilterModel();
+    if (ref.instance.isFilterActive()) {
+      this.gridService.setCustomFilterEvaluator(colId, (data, node) =>
+        ref.instance.doesFilterPass({ node, data } as IDoesFilterPassParams<TData>)
+      );
+      (model as any)[colId] = { filterType: 'custom', model: ref.instance.getModel?.() };
+    } else {
+      this.gridService.setCustomFilterEvaluator(colId, null);
+      delete (model as any)[colId];
+    }
+    this.gridApi.setFilterModel(model);
+    this.canvasRenderer?.render();
+    this._cdr.detectChanges();
+  }
+
+  closeCustomFilter(): void {
+    // Keep the instance alive (state persists) — just hide the popup. The popup
+    // container is removed by *ngIf, detaching the filter element; it re-attaches
+    // on the next open.
+    this.activeCustomFilter = false;
+    this.activeCustomFilterColumn = null;
     this._cdr.detectChanges();
   }
 
@@ -2376,7 +2630,7 @@ export class ArgentGridComponent<TData = any>
   }
 
   // Cell Editing Methods
-  startEditing(rowIndex: number, colId: string): void {
+  startEditing(rowIndex: number, colId: string, charPress: string | null = null): void {
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     const column = this.gridApi.getColumn(colId);
 
@@ -2395,7 +2649,7 @@ export class ArgentGridComponent<TData = any>
     const value = (rowNode.data as any)[column.field];
 
     this.editingRowNode = rowNode;
-    this.editingColDef = colDef;
+    this.editingColDef = this.isColDef(colDef) ? colDef : null;
     this.editingValue = value !== null && value !== undefined ? String(value) : '';
 
     // Calculate editor position based on row and column
@@ -2413,12 +2667,33 @@ export class ArgentGridComponent<TData = any>
       height: this.effectiveRowHeight,
     };
 
+    // Resolve a custom cellEditor component (class, registered name, or selector).
+    // null → fall back to the built-in text input below.
+    const editorComponent = this.editingColDef
+      ? this.createEditorComponent(this.editingColDef, value, rowNode, column, rowIndex, charPress)
+      : null;
+
     this.isEditing = true;
 
     // Hide the component overlay for this cell (if any) so the editor owns it.
     this.cellOverlayManager?.hideCell(rowIndex, colId);
 
-    // Focus input after view update
+    if (editorComponent) {
+      // Render the editor host, then mount the custom component into it and focus.
+      this._cdr.detectChanges();
+      const host = this.editorContainerRef?.nativeElement;
+      if (host) host.appendChild(editorComponent.location.nativeElement);
+      const inst = editorComponent.instance;
+      if (typeof inst.afterGuiAttached === 'function') inst.afterGuiAttached();
+      else if (typeof inst.focusIn === 'function') inst.focusIn();
+      else
+        (editorComponent.location.nativeElement as HTMLElement)
+          .querySelector<HTMLElement>('input, select, textarea, [tabindex]')
+          ?.focus();
+      return;
+    }
+
+    // Built-in text editor: focus the input after the view updates.
     setTimeout(() => {
       if (this.editorInputRef) {
         const input = this.editorInputRef.nativeElement;
@@ -2428,10 +2703,79 @@ export class ArgentGridComponent<TData = any>
     }, 0);
   }
 
+  /**
+   * Resolve and instantiate a custom `cellEditor` Angular component for the cell,
+   * or return null to use the built-in text editor. Mirrors the renderer overlay:
+   * created via the grid's ViewContainerRef, then mounted into the editor host by
+   * the caller. Sets {@link editingComponentRef} on success.
+   */
+  private createEditorComponent(
+    colDef: ColDef<TData>,
+    value: any,
+    node: IRowNode<TData>,
+    column: Column,
+    rowIndex: number,
+    charPress: string | null
+  ): ComponentRef<ICellEditorAngularComp<TData>> | null {
+    const rendererParams = {
+      value,
+      data: node.data,
+      node,
+      rowIndex,
+      colDef,
+      column,
+      api: this.gridApi,
+    } as any;
+    const { component, params: selectorParams } = resolveCellEditor(colDef, rendererParams);
+    if (!component) return null;
+
+    const ref = this._viewContainerRef.createComponent(component) as ComponentRef<
+      ICellEditorAngularComp<TData>
+    >;
+    const editorParams: ICellEditorParams<TData> = {
+      ...(colDef.cellEditorParams || {}),
+      ...(selectorParams || {}),
+      value,
+      data: node.data,
+      node,
+      rowIndex,
+      colDef,
+      column,
+      api: this.gridApi,
+      charPress,
+      eventKey: charPress,
+      cellStartedEdit: true,
+      stopEditing: (cancel?: boolean) => this.stopEditing(!cancel),
+    };
+    ref.instance.agInit(editorParams);
+
+    // An editor may veto starting (e.g. a popup that opened a dialog instead).
+    if (
+      typeof ref.instance.isCancelBeforeStart === 'function' &&
+      ref.instance.isCancelBeforeStart()
+    ) {
+      ref.destroy();
+      return null;
+    }
+
+    this.editingComponentRef = ref;
+    return ref;
+  }
+
   private validationErrors: string[] | null = null;
 
   stopEditing(save: boolean = true): void {
     if (!this.isEditing) return;
+
+    // A custom editor may veto the commit as it closes.
+    const editorInstance = this.editingComponentRef?.instance;
+    if (
+      save &&
+      typeof editorInstance?.isCancelAfterEnd === 'function' &&
+      editorInstance.isCancelAfterEnd()
+    ) {
+      save = false;
+    }
 
     if (this.editorInputRef) {
       this.editorInputRef.nativeElement.classList.remove('ag-cell-editor-invalid');
@@ -2442,11 +2786,16 @@ export class ArgentGridComponent<TData = any>
     const colDef = this.editingColDef;
 
     if (save && colDef && rowNode) {
-      if (this.editorInputRef) {
-        this.editingValue = this.editorInputRef.nativeElement.value;
+      // Custom editor → its getValue() (raw, typed value); else the input text.
+      let newValue: any;
+      if (editorInstance) {
+        newValue = editorInstance.getValue();
+      } else {
+        if (this.editorInputRef) {
+          this.editingValue = this.editorInputRef.nativeElement.value;
+        }
+        newValue = this.editingValue;
       }
-
-      const newValue = this.editingValue;
       const field = colDef.field as string;
       const oldValue = (rowNode.data as any)[field];
 
@@ -2487,12 +2836,7 @@ export class ArgentGridComponent<TData = any>
         // Ensure isEditing is cleared on validation failure
         if (invalidMode === 'none') {
           // 'none' mode: exit without applying transaction (don't save invalid data)
-          this.isEditing = false;
-          this.editingRowNode = null;
-          this.editingColDef = null;
-          this.validationErrors = null;
-          this.cellOverlayManager?.showAll();
-          this._cdr.detectChanges();
+          this.resetEditingState();
           return;
         }
 
@@ -2527,12 +2871,7 @@ export class ArgentGridComponent<TData = any>
 
         // Handle invalid value in all modes
         if (invalidMode === 'none') {
-          this.isEditing = false;
-          this.editingRowNode = null;
-          this.editingColDef = null;
-          this.validationErrors = null;
-          this.cellOverlayManager?.showAll();
-          this._cdr.detectChanges();
+          this.resetEditingState();
           return;
         }
 
@@ -2570,6 +2909,18 @@ export class ArgentGridComponent<TData = any>
       this.canvasRenderer?.render();
     }
 
+    this.resetEditingState();
+  }
+
+  /**
+   * Tear down the active edit: destroy any custom editor instance, clear editing
+   * state, re-show overlay cells, and repaint. Shared by every edit-exit path.
+   */
+  private resetEditingState(): void {
+    if (this.editingComponentRef) {
+      this.editingComponentRef.destroy();
+      this.editingComponentRef = null;
+    }
     this.isEditing = false;
     this.editingRowNode = null;
     this.editingColDef = null;
