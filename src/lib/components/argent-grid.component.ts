@@ -25,6 +25,7 @@ import {
   getCellValue,
   getFormattedValue,
   getTextLineHeight,
+  groupIndicatorAreaWidth,
   wrapLines,
 } from '../rendering/render/cells';
 import { getColumnDef, isColumnVisible } from '../rendering/render/column-utils';
@@ -488,7 +489,15 @@ export class ArgentGridComponent<TData = any>
         const colDef = getColumnDef(col, this.gridApi);
         const value = getCellValue(col, colDef, node, this.gridApi);
         const text = getFormattedValue(value, colDef, node.data, node, this.gridApi);
-        const lines = wrapLines(ctx, text, (col.width || 0) - theme.cellPadding * 2);
+        // Mirror drawCellContent's available width: the auto-group/tree column
+        // reserves room at the left for the indent + expand indicator, so the
+        // measured wrap width must subtract the same offset or the row is sized
+        // too short and the last wrapped line is clipped.
+        const groupOffset =
+          col.colId === 'ag-Grid-AutoColumn' && (node.group || node.level > 0)
+            ? groupIndicatorAreaWidth(node.level, theme)
+            : 0;
+        const lines = wrapLines(ctx, text, (col.width || 0) - theme.cellPadding * 2 - groupOffset);
         const h = Math.max(1, lines.length) * lineH + theme.cellPadding * 2;
         maxH = maxH == null ? h : Math.max(maxH, h);
       }

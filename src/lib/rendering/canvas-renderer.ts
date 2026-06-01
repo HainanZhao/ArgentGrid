@@ -583,9 +583,10 @@ export class CanvasRenderer<TData = any> {
     if (!ranges) return;
 
     for (const range of ranges) {
-      // Calculate Y boundaries
-      const startY = range.startRow * this.theme.rowHeight - this.scrollTop;
-      const endY = (range.endRow + 1) * this.theme.rowHeight - this.scrollTop;
+      // Calculate Y boundaries from the cumulative row model so the box lines up
+      // with the cells under variable/auto row heights (a flat rowHeight drifts).
+      const startY = this.rowTopFor(range.startRow) - this.scrollTop;
+      const endY = this.rowTopFor(range.endRow) + this.rowHeightFor(range.endRow) - this.scrollTop;
 
       let minX = Infinity;
       let maxX = -Infinity;
@@ -817,20 +818,54 @@ export class CanvasRenderer<TData = any> {
   // EVENT HANDLING
   // ============================================================================
 
-  private handleMouseDown(event: MouseEvent): void {
+  /**
+   * Hit-test a mouse event to `{ rowIndex, columnIndex, colId }`. The row is
+   * resolved through the cumulative row model (so it stays correct under
+   * variable/auto row heights); the column comes from the shared performHitTest
+   * util. A point below the last row yields an out-of-range `rowIndex` so
+   * callers (via getDisplayedRowAtIndex) treat it as empty space.
+   */
+  private hitTestEvent(event: MouseEvent): {
+    rowIndex: number;
+    columnIndex: number;
+    colId: string | null;
+  } {
     const rect = this.canvas.getBoundingClientRect();
-    const { rowIndex, columnIndex } = performHitTest(
+    const canvasY = event.clientY - rect.top;
+    const columns = this.getVisibleColumns();
+    const { columnIndex } = performHitTest(
       event.clientX - rect.left,
-      event.clientY - rect.top,
+      canvasY,
       this.theme.rowHeight,
       this.scrollTop,
       this.scrollLeft,
       this.viewportWidth,
-      this.getVisibleColumns(),
+      columns,
       this.viewportWidth - this.scrollbarWidth
     );
-    const columns = this.getVisibleColumns();
     const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
+    return { rowIndex: this.rowIndexAtCanvasY(canvasY), columnIndex, colId };
+  }
+
+  /**
+   * Row index at a canvas-space Y, honoring variable row heights via the API's
+   * cumulative model (flat `rowHeight` fallback when unavailable). A Y past the
+   * bottom of the last row returns an out-of-range index so it reads as empty.
+   */
+  private rowIndexAtCanvasY(canvasY: number): number {
+    if (typeof this.gridApi.getRowAtY !== 'function') {
+      return getRowAtY(canvasY, this.theme.rowHeight, this.scrollTop);
+    }
+    const contentY = canvasY + this.scrollTop;
+    const rowCount = this.gridApi.getDisplayedRowCount();
+    if (typeof this.gridApi.getRowY === 'function' && contentY >= this.gridApi.getRowY(rowCount)) {
+      return rowCount; // below all rows → out of range
+    }
+    return this.gridApi.getRowAtY(contentY);
+  }
+
+  private handleMouseDown(event: MouseEvent): void {
+    const { rowIndex, colId } = this.hitTestEvent(event);
 
     if (this.onMouseDown) {
       this.onMouseDown(event, rowIndex, colId);
@@ -842,19 +877,7 @@ export class CanvasRenderer<TData = any> {
   }
 
   private handleMouseMove(event: MouseEvent): void {
-    const rect = this.canvas.getBoundingClientRect();
-    const { rowIndex, columnIndex } = performHitTest(
-      event.clientX - rect.left,
-      event.clientY - rect.top,
-      this.theme.rowHeight,
-      this.scrollTop,
-      this.scrollLeft,
-      this.viewportWidth,
-      this.getVisibleColumns(),
-      this.viewportWidth - this.scrollbarWidth
-    );
-    const columns = this.getVisibleColumns();
-    const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
+    const { rowIndex, colId } = this.hitTestEvent(event);
 
     // Update cursor: pointer for button cells, default otherwise
     const hoveredColDef = colId ? this.columnPreps.get(colId)?.colDef : null;
@@ -867,19 +890,7 @@ export class CanvasRenderer<TData = any> {
   }
 
   private handleMouseUp(event: MouseEvent): void {
-    const rect = this.canvas.getBoundingClientRect();
-    const { rowIndex, columnIndex } = performHitTest(
-      event.clientX - rect.left,
-      event.clientY - rect.top,
-      this.theme.rowHeight,
-      this.scrollTop,
-      this.scrollLeft,
-      this.viewportWidth,
-      this.getVisibleColumns(),
-      this.viewportWidth - this.scrollbarWidth
-    );
-    const columns = this.getVisibleColumns();
-    const colId = columnIndex !== -1 ? columns[columnIndex].colId : null;
+    const { rowIndex, colId } = this.hitTestEvent(event);
 
     if (this.onMouseUp) {
       this.onMouseUp(event, rowIndex, colId);
@@ -887,19 +898,10 @@ export class CanvasRenderer<TData = any> {
   }
 
   private handleClick(event: MouseEvent): void {
-    const rect = this.canvas.getBoundingClientRect();
-    const { rowIndex, columnIndex } = performHitTest(
-      event.clientX - rect.left,
-      event.clientY - rect.top,
-      this.theme.rowHeight,
-      this.scrollTop,
-      this.scrollLeft,
-      this.viewportWidth,
-      this.getVisibleColumns(),
-      this.viewportWidth - this.scrollbarWidth
-    );
+    const { rowIndex, columnIndex } = this.hitTestEvent(event);
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
+    const rect = this.canvas.getBoundingClientRect();
 
     // Handle selection column or explicit checkbox renderer
     const columns = this.getVisibleColumns();
@@ -987,41 +989,20 @@ export class CanvasRenderer<TData = any> {
   }
 
   private handleDoubleClick(event: MouseEvent): void {
-    const rect = this.canvas.getBoundingClientRect();
-    const { rowIndex, columnIndex } = performHitTest(
-      event.clientX - rect.left,
-      event.clientY - rect.top,
-      this.theme.rowHeight,
-      this.scrollTop,
-      this.scrollLeft,
-      this.viewportWidth,
-      this.getVisibleColumns(),
-      this.viewportWidth - this.scrollbarWidth
-    );
+    const { rowIndex, columnIndex, colId } = this.hitTestEvent(event);
     if (columnIndex === -1) return;
 
     const rowNode = this.gridApi.getDisplayedRowAtIndex(rowIndex);
     if (!rowNode) return;
 
-    const columns = this.getVisibleColumns();
-    const column = columns[columnIndex];
-
-    if (this.onCellDoubleClick) {
-      this.onCellDoubleClick(rowIndex, column.colId);
+    if (this.onCellDoubleClick && colId) {
+      this.onCellDoubleClick(rowIndex, colId);
     }
   }
 
   getHitTestResult(event: MouseEvent): { rowIndex: number; columnIndex: number } {
-    const rect = this.canvas.getBoundingClientRect();
-    return performHitTest(
-      event.clientX - rect.left,
-      event.clientY - rect.top,
-      this.theme.rowHeight,
-      this.scrollTop,
-      this.scrollLeft,
-      this.viewportWidth,
-      this.getVisibleColumns()
-    );
+    const { rowIndex, columnIndex } = this.hitTestEvent(event);
+    return { rowIndex, columnIndex };
   }
 
   // ============================================================================
@@ -1032,7 +1013,8 @@ export class CanvasRenderer<TData = any> {
     const container = this.canvas.parentElement;
     if (!container) return;
 
-    const targetPosition = rowIndex * this.theme.rowHeight;
+    // Cumulative offset (honors variable row heights) rather than a flat height.
+    const targetPosition = this.rowTopFor(rowIndex);
     container.scrollTop = targetPosition;
     this.scrollTop = targetPosition;
     this.damageTracker.markAllDirty();

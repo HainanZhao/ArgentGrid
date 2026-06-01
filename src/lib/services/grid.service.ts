@@ -1497,11 +1497,12 @@ export class GridService<TData = any> {
 
     this.displayedRowNodes.forEach((node, rowIndex) => {
       this.cumulativeRowHeights.push(currentTotal);
-      // Detail rows carry a fixed height assigned at creation — leave it as is.
-      // For every other row, resolve the height fresh each rebuild (so it tracks
-      // column-resize / data changes): the getRowHeight callback wins, then the
-      // auto-height measurer, otherwise the default.
-      if (!(node as any).detail) {
+      // Detail rows carry a fixed height assigned at creation, and group rows
+      // (whose `data` is undefined) are sized by the default — leave both as is.
+      // For every leaf data row, resolve the height fresh each rebuild (so it
+      // tracks column-resize / data changes): the getRowHeight callback wins,
+      // then the auto-height measurer, otherwise the default.
+      if (!(node as any).detail && !(node as any).group) {
         let resolved: number | null = null;
         if (getRowHeight) {
           const h = getRowHeight({ data: node.data, node, rowIndex });

@@ -608,4 +608,29 @@ describe('CanvasRenderer', () => {
     expect(mockRowNode.setSelected).toHaveBeenCalledWith(true);
     expect(mockRowNode.selected).toBe(true);
   });
+
+  it('hit-tests rows through the cumulative model under variable row heights', () => {
+    // Row 0 is 100px tall; rows 1+ keep the default 32px. The cumulative API
+    // mocks reflect that; a flat-rowHeight hit-test would mis-resolve clicks.
+    vi.spyOn(mockApi, 'getRowY').mockImplementation((i: number) =>
+      i <= 0 ? 0 : 100 + (i - 1) * 32
+    );
+    vi.spyOn(mockApi, 'getRowAtY').mockImplementation((y: number) =>
+      y < 100 ? 0 : 1 + Math.floor((y - 100) / 32)
+    );
+    vi.spyOn(mockApi, 'getDisplayedRowCount').mockReturnValue(50);
+    vi.spyOn(mockApi, 'getAllColumns').mockReturnValue([
+      { colId: 'c1', field: 'a', width: 200, visible: true, pinned: false },
+    ] as any[]);
+    (renderer as any).viewportWidth = 800;
+
+    const rect = mockCanvas.getBoundingClientRect();
+    // y=120 lands in row 1 ([100,132)); a flat 32px model would say row 3.
+    const inRow1 = new MouseEvent('click', { clientX: rect.left + 20, clientY: rect.top + 120 });
+    expect(renderer.getHitTestResult(inRow1).rowIndex).toBe(1);
+
+    // A click far below the last row resolves to an out-of-range index (empty).
+    const belowAll = new MouseEvent('click', { clientX: rect.left + 20, clientY: rect.top + 5000 });
+    expect(renderer.getHitTestResult(belowAll).rowIndex).toBeGreaterThanOrEqual(50);
+  });
 });
