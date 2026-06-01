@@ -22,6 +22,13 @@ export interface GridOptions<TData = any> {
   columnTypes?: { [key: string]: ColDef<TData> };
   /** Definitions for custom data types. */
   dataTypeDefinitions?: DataTypeDefinitions<TData>;
+  /**
+   * Named-renderer registry for this grid (AG-Grid-compatible). Maps a name to
+   * an Angular component class or a string-returning function, referenced from a
+   * column via `cellRenderer: 'myName'`. Takes precedence over the global
+   * registry (`registerCellRenderer`).
+   */
+  components?: { [name: string]: any };
   /** If true, the grid will maintain the order of columns as they are provided in the `columnDefs`. */
   maintainColumnOrder?: boolean;
   /** If true, pivot column order will be strictly maintained. */
@@ -464,11 +471,21 @@ export interface ColDef<TData = any, TValue = any> {
   cellClassRules?: { [key: string]: (params: CellClassParams<TData, TValue>) => boolean };
   /** If true, the cell will not show an ellipsis if the text overflows. */
   suppressEllipsis?: boolean;
-  /** Cell renderer component. */
+  /**
+   * Cell renderer. One of:
+   * - an Angular component class (rendered via the DOM overlay),
+   * - a function returning a string (drawn on the canvas),
+   * - a registered name (string) — resolved against `gridOptions.components`
+   *   then the global registry (see `registerCellRenderer`),
+   * - a built-in string ('checkbox', 'rating') drawn on the canvas.
+   */
   cellRenderer?: any;
   /** Parameters for the cell renderer. */
   cellRendererParams?: any;
-  /** Selector for the cell renderer. */
+  /**
+   * Selector for the cell renderer. May return `{ component }` where `component`
+   * is an Angular component class or a registered renderer name.
+   */
   cellRendererSelector?: (params: any) => any;
   /** If true, automatically set row height based on cell content. */
   autoHeight?: boolean;
@@ -1633,6 +1650,12 @@ export interface OverlayLayout {
   dataChanged: boolean;
   /** Per-column screen geometry (x already accounts for pinning/scroll). */
   columns: OverlayColumnPosition[];
+  /**
+   * The center (non-pinned) region in screen-x, or `null` when there is none.
+   * Center component-cells are clip-pathed to this so a buffered or scrolled
+   * cell never shows over the pinned columns. Pinned cells ignore it.
+   */
+  centerClip?: { left: number; right: number } | null;
 }
 
 /** Screen geometry for a single visible column (subset of PositionedColumn). */

@@ -29,7 +29,8 @@ export function walkColumns(
   leftPinnedWidth: number,
   rightPinnedWidth: number,
   callback: ColumnWalkCallback,
-  availableWidth?: number // Width excluding vertical scrollbar
+  availableWidth?: number, // Width excluding vertical scrollbar
+  columnBuffer = 0 // Extra center columns rendered each side of the viewport
 ): void {
   const leftPinned = columns.filter((c) => c.pinned === 'left');
   const rightPinned = columns.filter((c) => c.pinned === 'right');
@@ -45,24 +46,37 @@ export function walkColumns(
     x += width;
   }
 
-  // 2. Center columns (with scroll offset and clipping)
+  // 2. Center columns — horizontal virtualization. Compute every center
+  // column's x in one pass and find the visible window [first..last]; then emit
+  // only that window (plus `columnBuffer` extra each side so fast horizontal
+  // scrolling doesn't pop a blank column in at the leading edge before the next
+  // frame). The canvas clips the center region, so buffered columns that fall
+  // under the pinned areas are positioned but never painted there.
   const centerStartX = Math.floor(leftPinnedWidth);
   const centerEndX = Math.floor(effectiveWidth - rightPinnedWidth);
 
-  x = centerStartX - scrollX;
-  for (const col of centerColumns) {
-    const width = Math.floor(col.width);
-    // Skip columns completely outside viewport
-    if (x + width < centerStartX) {
-      x += width;
-      continue;
+  const xs: number[] = new Array(centerColumns.length);
+  let cx = centerStartX - scrollX;
+  let firstVisible = -1;
+  let lastVisible = -1;
+  for (let i = 0; i < centerColumns.length; i++) {
+    const width = Math.floor(centerColumns[i].width);
+    xs[i] = cx;
+    // Matches the previous skip/break bounds: kept when the column's right edge
+    // reaches the center region and its left edge hasn't passed the far edge.
+    if (cx + width >= centerStartX && cx <= centerEndX) {
+      if (firstVisible === -1) firstVisible = i;
+      lastVisible = i;
     }
-    if (x > centerEndX) {
-      break; // Rest of columns are off-screen
-    }
+    cx += width;
+  }
 
-    callback(col, x, width, false);
-    x += width;
+  if (firstVisible !== -1) {
+    const start = Math.max(0, firstVisible - columnBuffer);
+    const end = Math.min(centerColumns.length - 1, lastVisible + columnBuffer);
+    for (let i = start; i <= end; i++) {
+      callback(centerColumns[i], xs[i], Math.floor(centerColumns[i].width), false);
+    }
   }
 
   // 3. Right pinned columns (no scroll offset)
@@ -83,7 +97,8 @@ export function getPositionedColumns(
   viewportWidth: number,
   leftPinnedWidth: number,
   rightPinnedWidth: number,
-  availableWidth?: number
+  availableWidth?: number,
+  columnBuffer = 0
 ): PositionedColumn[] {
   const result: PositionedColumn[] = [];
 
@@ -96,7 +111,8 @@ export function getPositionedColumns(
     (column, x, width, isPinned, pinSide) => {
       result.push({ column, x, width, isPinned, pinSide });
     },
-    availableWidth
+    availableWidth,
+    columnBuffer
   );
 
   return result;

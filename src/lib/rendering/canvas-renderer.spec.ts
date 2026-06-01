@@ -326,6 +326,103 @@ describe('CanvasRenderer', () => {
     expect(mockCanvasContext.strokeRect).toHaveBeenCalled();
   });
 
+  it('clips the center region so center columns cannot overdraw pinned columns', () => {
+    const columns = [
+      { colId: 'left1', field: 'a', width: 100, visible: true, pinned: 'left' },
+      { colId: 'c1', field: 'b', width: 200, visible: true, pinned: false },
+      { colId: 'c2', field: 'c', width: 200, visible: true, pinned: false },
+      { colId: 'right1', field: 'd', width: 100, visible: true, pinned: 'right' },
+    ] as any[];
+
+    const rowNode = {
+      data: { a: 1, b: 2, c: 3, d: 4 },
+      selected: false,
+      rowIndex: 0,
+      displayedRowIndex: 0,
+      group: false,
+      master: false,
+      level: 0,
+      expanded: false,
+      detail: false,
+    } as any;
+
+    vi.spyOn(mockApi, 'getAllColumns').mockReturnValue(columns);
+    vi.spyOn(mockApi, 'getColumnDefs').mockReturnValue(columns);
+    vi.spyOn(mockApi, 'getDisplayedRowAtIndex').mockReturnValue(rowNode);
+    vi.spyOn(mockApi, 'getDisplayedRowCount').mockReturnValue(3);
+
+    (mockCanvasContext.clip as any).mockClear();
+    (mockCanvasContext.rect as any).mockClear();
+
+    // jsdom has no layout, so give the renderer an explicit viewport.
+    (renderer as any).viewportWidth = 800;
+    (renderer as any).viewportHeight = 600;
+
+    renderer.invalidateAll();
+    renderer.renderFrame();
+
+    // The center pass is clipped, and the clip rect starts at the left-pinned
+    // width (100) — i.e. center cells are confined to the center region.
+    expect(mockCanvasContext.clip).toHaveBeenCalled();
+    expect(mockCanvasContext.rect).toHaveBeenCalledWith(
+      100,
+      0,
+      expect.any(Number),
+      expect.any(Number)
+    );
+  });
+
+  describe('center-region clipping (range selection + focus ring)', () => {
+    const columns = [
+      { colId: 'left1', field: 'a', width: 100, visible: true, pinned: 'left' },
+      { colId: 'c1', field: 'b', width: 200, visible: true, pinned: false },
+      { colId: 'c2', field: 'c', width: 200, visible: true, pinned: false },
+      { colId: 'right1', field: 'd', width: 100, visible: true, pinned: 'right' },
+    ] as any[];
+
+    // Drive a frame with NO row nodes, so the only things that can clip are the
+    // range-selection and focus-ring passes (the per-row cell pass is skipped).
+    function renderFrame(opts: { focused?: any; ranges?: any }) {
+      vi.spyOn(mockApi, 'getAllColumns').mockReturnValue(columns);
+      vi.spyOn(mockApi, 'getColumnDefs').mockReturnValue(columns);
+      vi.spyOn(mockApi, 'getColumn').mockImplementation(
+        (id: any) =>
+          columns.find((c) => c.colId === (typeof id === 'string' ? id : id.colId)) ?? null
+      );
+      vi.spyOn(mockApi, 'getDisplayedRowAtIndex').mockReturnValue(null);
+      vi.spyOn(mockApi, 'getDisplayedRowCount').mockReturnValue(1);
+      if (opts.focused !== undefined)
+        vi.spyOn(mockApi, 'getFocusedCell').mockReturnValue(opts.focused);
+      if (opts.ranges !== undefined)
+        vi.spyOn(mockApi, 'getCellRanges').mockReturnValue(opts.ranges);
+      (renderer as any).viewportWidth = 800;
+      (renderer as any).viewportHeight = 600;
+      (mockCanvasContext.clip as any).mockClear();
+      renderer.invalidateAll();
+      renderer.renderFrame();
+    }
+
+    it('clips the focus ring of a center cell', () => {
+      renderFrame({ focused: { rowIndex: 0, column: columns[1] } }); // c1 (center)
+      expect(mockCanvasContext.clip).toHaveBeenCalled();
+    });
+
+    it('does NOT clip the focus ring of a pinned cell', () => {
+      renderFrame({ focused: { rowIndex: 0, column: columns[0] } }); // left1 (pinned)
+      expect(mockCanvasContext.clip).not.toHaveBeenCalled();
+    });
+
+    it('clips a range over center-only columns', () => {
+      renderFrame({ ranges: [{ startRow: 0, endRow: 0, columns: [{ colId: 'c1' }] }] });
+      expect(mockCanvasContext.clip).toHaveBeenCalled();
+    });
+
+    it('does NOT clip a range that includes a pinned column', () => {
+      renderFrame({ ranges: [{ startRow: 0, endRow: 0, columns: [{ colId: 'left1' }] }] });
+      expect(mockCanvasContext.clip).not.toHaveBeenCalled();
+    });
+  });
+
   // ============================================================================
   // REGRESSION TESTS — Canvas Renderer architectural invariants
   // These tests guard against the performance / feedback-loop bugs fixed in

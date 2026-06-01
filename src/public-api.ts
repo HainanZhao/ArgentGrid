@@ -20,6 +20,16 @@ export { CanvasRenderer } from './lib/rendering/canvas-renderer';
 export { CellOverlayManager } from './lib/rendering/cell-overlay-manager';
 // Live Data Optimizations
 export { LiveDataOptimizations } from './lib/rendering/live-data-optimizations';
+// Named cell-renderer registry (T1.3)
+export {
+  type CellRendererComponents,
+  type CellRendererEntry,
+  clearCellRendererRegistry,
+  getGlobalCellRenderer,
+  registerCellRenderer,
+  resolveNamedRenderer,
+  unregisterCellRenderer,
+} from './lib/rendering/render/cell-renderer-registry';
 // Services
 export { GridService } from './lib/services/grid.service';
 export {

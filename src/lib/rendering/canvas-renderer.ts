@@ -70,6 +70,14 @@ export class CanvasRenderer<TData = any> {
   // so it fires immediately after the current frame completes rather than being dropped.
   private nextRenderPending = false;
   private rowBuffer = 5;
+  /** Extra center columns drawn each side of the viewport (horizontal virtualization). */
+  private columnBuffer = 1;
+  /**
+   * The center-column clip rect for the current frame (`null` when there is no
+   * center region). Center cells are clipped to this so buffered/straddling
+   * columns never paint over the pinned columns drawn beside them.
+   */
+  private centerClip: { x: number; width: number; height: number } | null = null;
   private viewportHeight = 0;
   private viewportWidth = 0;
   private scrollbarWidth = 0;
@@ -482,8 +490,14 @@ export class CanvasRenderer<TData = any> {
       width,
       leftWidth,
       rightWidth,
-      availableWidth
+      availableWidth,
+      this.columnBuffer
     );
+
+    // Clip rect for the center region so center cells never bleed over the
+    // pinned columns (the buffer can position columns under the pinned areas).
+    const centerWidth = availableWidth - rightWidth - leftWidth;
+    this.centerClip = centerWidth > 0 ? { x: leftWidth, width: centerWidth, height } : null;
 
     // Render all visible rows
     walkRows(
@@ -538,7 +552,25 @@ export class CanvasRenderer<TData = any> {
         isPinned: p.isPinned,
         pinSide: p.pinSide,
       })),
+      centerClip: this.centerClip
+        ? { left: this.centerClip.x, right: this.centerClip.x + this.centerClip.width }
+        : null,
     });
+  }
+
+  /** Run `draw` with the canvas clipped to the center region (no-op when none). */
+  private clipCenter(draw: () => void): void {
+    const clip = this.centerClip;
+    if (!clip) {
+      draw();
+      return;
+    }
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.rect(clip.x, 0, clip.width, clip.height);
+    this.ctx.clip();
+    draw();
+    this.ctx.restore();
   }
 
   private drawRangeSelections(
@@ -557,6 +589,7 @@ export class CanvasRenderer<TData = any> {
 
       let minX = Infinity;
       let maxX = -Infinity;
+      let touchesPinned = false;
 
       // Calculate the total bounding box of all columns in the range
       range.columns.forEach((col) => {
@@ -564,25 +597,33 @@ export class CanvasRenderer<TData = any> {
         if (pc) {
           minX = Math.min(minX, pc.x);
           maxX = Math.max(maxX, pc.x + pc.width);
+          if (pc.isPinned) touchesPinned = true;
         }
       });
 
       if (minX === Infinity) continue;
 
-      drawRangeSelectionBorder(
-        this.ctx,
-        {
-          x: minX,
-          y: startY,
-          width: maxX - minX,
-          height: endY - startY,
-        },
-        {
-          color: '#2196f3', // Strong blue border (Material Blue)
-          fillColor: 'rgba(33, 150, 243, 0.25)', // 25% blue tint
-          lineWidth: 2,
-        }
-      );
+      const draw = () =>
+        drawRangeSelectionBorder(
+          this.ctx,
+          {
+            x: minX,
+            y: startY,
+            width: maxX - minX,
+            height: endY - startY,
+          },
+          {
+            color: '#2196f3', // Strong blue border (Material Blue)
+            fillColor: 'rgba(33, 150, 243, 0.25)', // 25% blue tint
+            lineWidth: 2,
+          }
+        );
+
+      // A range over center columns can be scrolled (or buffered) under a pinned
+      // area — clip it to the center region. Ranges that include a pinned column
+      // legitimately span into the pinned area, so leave those unclipped.
+      if (touchesPinned) draw();
+      else this.clipCenter(draw);
     }
   }
 
@@ -617,7 +658,11 @@ export class CanvasRenderer<TData = any> {
     // with the canvas rows and the DOM cell overlay under variable row heights.
     const y = this.rowTopFor(focused.rowIndex) - this.scrollTop;
     const height = this.rowHeightFor(focused.rowIndex);
-    drawCellSelectionBorder(this.ctx, pc.x, y, pc.width, height, '#2196f3');
+    const draw = () => drawCellSelectionBorder(this.ctx, pc.x, y, pc.width, height, '#2196f3');
+    // A focused center cell can sit partly under a pinned column when scrolled —
+    // clip its ring to the center region. Pinned cells never scroll, so no clip.
+    if (pc.isPinned) draw();
+    else this.clipCenter(draw);
   }
 
   private renderRow(
@@ -644,8 +689,21 @@ export class CanvasRenderer<TData = any> {
     // Fill background for the entire available width
     this.ctx.fillRect(0, Math.floor(y), this.viewportWidth - this.scrollbarWidth, rowHeight);
 
-    // Render columns using pre-calculated positions
+    // Render columns using pre-calculated positions. Center cells are clipped to
+    // the center region and drawn first; the pinned columns then paint over any
+    // bleed, so a center column scrolled (or buffered) under a pinned area never
+    // shows through. Pinned columns carry no scroll offset, so they need no clip.
+    const clip = this.centerClip;
+    if (clip) {
+      this.clipCenter(() => {
+        for (const pc of positionedColumns) {
+          if (!pc.isPinned)
+            this.renderCell(pc.column, pc.x, y, pc.width, rowNode, positionedColumns);
+        }
+      });
+    }
     for (const pc of positionedColumns) {
+      if (clip && !pc.isPinned) continue; // already drawn inside the clip
       this.renderCell(pc.column, pc.x, y, pc.width, rowNode, positionedColumns);
     }
   }

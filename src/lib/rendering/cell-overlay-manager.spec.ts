@@ -169,6 +169,70 @@ describe('CellOverlayManager (claude)', () => {
     mgr.destroy();
   });
 
+  it('clip-paths a center overlay cell that overflows under a pinned column', () => {
+    const col = makeColumn('status', 150);
+    const colDef = { field: 'status', cellRenderer: TestRenderer };
+    const rows = new Map([[0, makeNode('a', { status: 'Active' })]]);
+    const mgr = makeManager(rows, new Map([['status', col]]), colDef);
+
+    // Center region [100, 400]; the cell sits at x=50 → 50px hangs under the
+    // left-pinned area and must be clipped away, nothing clipped on the right.
+    mgr.sync({
+      startRow: 0,
+      endRow: 1,
+      scrollTop: 0,
+      rowHeight: 32,
+      dataChanged: true,
+      centerClip: { left: 100, right: 400 },
+      columns: [{ colId: 'status', x: 50, width: 150, isPinned: false }],
+    });
+
+    expect(visibleHosts(container)[0].style.clipPath).toBe('inset(0 0px 0 50px)');
+    mgr.destroy();
+  });
+
+  it('does not clip a center overlay cell fully inside the center region', () => {
+    const col = makeColumn('status', 150);
+    const colDef = { field: 'status', cellRenderer: TestRenderer };
+    const rows = new Map([[0, makeNode('a', { status: 'Active' })]]);
+    const mgr = makeManager(rows, new Map([['status', col]]), colDef);
+
+    mgr.sync({
+      startRow: 0,
+      endRow: 1,
+      scrollTop: 0,
+      rowHeight: 32,
+      dataChanged: true,
+      centerClip: { left: 100, right: 400 },
+      columns: [{ colId: 'status', x: 150, width: 150, isPinned: false }],
+    });
+
+    expect(visibleHosts(container)[0].style.clipPath).toBe('');
+    mgr.destroy();
+  });
+
+  it('never clips a pinned overlay cell', () => {
+    const col = makeColumn('status', 100);
+    const colDef = { field: 'status', cellRenderer: TestRenderer };
+    const rows = new Map([[0, makeNode('a', { status: 'Active' })]]);
+    const mgr = makeManager(rows, new Map([['status', col]]), colDef);
+
+    // Pinned cell sits in the pinned area (x < centerClip.left) but must NOT be
+    // clipped — pinned cells legitimately live outside the center region.
+    mgr.sync({
+      startRow: 0,
+      endRow: 1,
+      scrollTop: 0,
+      rowHeight: 32,
+      dataChanged: true,
+      centerClip: { left: 100, right: 400 },
+      columns: [{ colId: 'status', x: 0, width: 100, isPinned: true }],
+    });
+
+    expect(visibleHosts(container)[0].style.clipPath).toBe('');
+    mgr.destroy();
+  });
+
   it('refreshes value in place after a sort changes the node at a row index', () => {
     const col = makeColumn('status');
     const colDef = { field: 'status', cellRenderer: TestRenderer };
