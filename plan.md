@@ -11,7 +11,7 @@
 | **Rendering Engine** | DOM-based | DOM-based | **Canvas viewport + DOM headers** |
 | **Data Volume (client-side)** | ~100k rows | Millions (SSRM) | **1M+ rows** ✅ |
 | **Row Models** | Client-side | Client, SSRM, Infinite | **Client-side + Infinite (lazy `datasource`)** ✅; SSRM/viewport ❌ |
-| **Custom Cell Components** | Any framework component | Any framework component | **✅ Angular components via DOM overlay (class, `cellRendererSelector`, or registered name) + canvas primitives + string functions** |
+| **Custom Cell Components** | Any framework component | Any framework component | **✅ Angular components via DOM overlay (class, `cellRendererSelector`, or registered name) + canvas primitives + string functions** † |
 | **Custom Header Components** | Any framework component | Any framework component | **✅ Angular `headerComponent` (class or registered name) in the DOM header (`IHeaderAngularComp`/`IHeaderParams`)** |
 | **Sorting** | Yes | Yes | **✅ Single + multi-column; custom `colDef.comparator`** |
 | **Filtering** | Text, Num, Date | + Set, Multi | **✅ Text, Num, Date, Boolean, Set; quick + floating; custom `IFilterAngularComp` filter components** |
@@ -38,7 +38,10 @@
 | **Auto / Dynamic Row Height** | Yes | Yes | **✅ `wrapText` + `autoHeight` (measured), `getRowHeight` callback; cumulative offset model** |
 | **Accessibility (ARIA)** | Yes | Yes | **✅ `role=grid`/header/row/gridcell via DOM headers + off-screen ARIA row mirror (`aria-rowindex`/`colindex`/`sort`/`selected`/`activedescendant`); ⚠️ grouped-header row nesting is a follow-up** |
 | **Integrated Charts** | No | Yes | **❌ Planned** |
-| **Theming** | Yes | Yes | **✅ CSS-var driven (Quartz)** |
+| **Theming** | Yes | Yes | **✅ Programmatic theme object (`themeQuartz.withParams`)** † |
+| **Cell-level CSS** (`cellClass`/`cellClassRules`/`cellStyle`) | Yes | Yes | **❌ by design** † (only `cellStyle.color` honored) |
+
+† **Architectural boundary** (inherent to canvas rendering, *not* a roadmap gap) — see [Architectural boundaries](#-architectural-boundaries-out-of-scope-by-design).
 
 ---
 
@@ -46,7 +49,7 @@
 
 Canvas rendering buys the headline feature — **1M rows at 60fps** — but it directly fights the two things AG Grid users depend on most:
 
-1. **Arbitrary custom components in cells / headers / filters** — the single most popular AG Grid capability. Canvas cannot host `<a>`, buttons with handlers, images, or framework components. ArgentGrid currently supports only canvas-drawn primitives (checkbox, badge, button, progress, rating, sparkline) plus `cellRenderer` functions that return *plain strings*.
+1. **Arbitrary custom components in cells / headers / filters** — the single most popular AG Grid capability. Canvas cannot natively host `<a>`, buttons with handlers, images, or framework components. ~~ArgentGrid currently supports only canvas-drawn primitives plus string-returning `cellRenderer` functions.~~ **Resolved in Tier 1** — the recycled **DOM-overlay layer** mounts real **Angular** components (cell renderers, headers, filters, master/detail) over the canvas for visible cells, alongside the canvas-drawn primitives (checkbox, badge, button, progress, rating, sparkline). (Angular-only — see [Architectural boundaries](#-architectural-boundaries-out-of-scope-by-design).)
 2. **Accessibility** — ~~canvas content is invisible to screen readers; only DOM headers are exposed today.~~ **Resolved in T2.4** — an off-screen, visually-hidden ARIA DOM mirror (`AriaRowMirror`) exposes the visible rows as `role="row"`/`role="gridcell"` text nodes alongside `role="columnheader"` headers and a `role="grid"` root, kept in lockstep with the canvas via the same per-paint `sync(layout)` pipeline as the cell overlay.
 
 **The pivotal decision:** introduce a recycled **DOM-overlay layer** that positions a small pool of real DOM/Angular components over the canvas for the handful of *visible* cells that opt into component rendering (mirroring how AG Grid virtualizes its own DOM). Everything in Tier 1 below flows from this. It is the highest-leverage work in the roadmap and a prerequisite for genuine parity and a11y.
@@ -125,6 +128,19 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
 - [ ] **T4.3 — Fill handle** (Excel-style drag-to-fill).
 - [ ] **T4.4 — Integrated charts** from range selection.
 - [ ] **T4.5 — Cell flashing** on data change.
+
+---
+
+## 🧱 Architectural boundaries (out of scope by design)
+
+These gaps are **inherent to the canvas + DOM-overlay architecture**, not items on the roadmap. They are the deliberate trade-off for "1M rows at 60fps" and are not expected to close; each has a supported workaround. Listed here so they're not mistaken for unfinished work.
+
+- **Per-cell CSS** — `cellClass`, `cellClassRules`, and full `cellStyle` don't apply (cells are painted on canvas, not DOM). **Only `cellStyle.color` is read.** → *Workaround:* dynamic text color via `cellStyle: (p) => ({ color })`, anything richer via a **component cell renderer** (real DOM in the overlay).
+- **CSS-file theming** — `ag-theme-*.css` and CSS-variable overrides don't apply. → *Workaround:* the **programmatic theme object** (`themeQuartz.withParams(...)` / `withPart(...)`).
+- **No cell DOM** — there are no `.ag-cell` / `[col-id]` nodes to query or test against. → *Workaround:* the real-DOM header, component cells, the off-screen `[role="gridcell"]` ARIA mirror, or the public `GridApi`.
+- **Framework-agnostic cell/header components** — component cells are **Angular-only**; a renderer returning raw `HTMLElement`/HTML (stripped to text) or React/Vue/jQuery wrappers are not supported.
+
+> Everything in the [Roadmap](#-reprioritized-roadmap) above *is* achievable within this architecture; this section is the explicit "won't-do" list.
 
 ---
 
