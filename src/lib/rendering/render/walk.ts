@@ -32,9 +32,15 @@ export function walkColumns(
   availableWidth?: number, // Width excluding vertical scrollbar
   columnBuffer = 0 // Extra center columns rendered each side of the viewport
 ): void {
-  const leftPinned = columns.filter((c) => c.pinned === 'left');
-  const rightPinned = columns.filter((c) => c.pinned === 'right');
-  const centerColumns = columns.filter((c) => !c.pinned);
+  // Partition into pinned/center in a single pass (avoids three O(n) filters).
+  const leftPinned: Column[] = [];
+  const rightPinned: Column[] = [];
+  const centerColumns: Column[] = [];
+  for (const c of columns) {
+    if (c.pinned === 'left') leftPinned.push(c);
+    else if (c.pinned === 'right') rightPinned.push(c);
+    else centerColumns.push(c);
+  }
 
   const effectiveWidth = availableWidth ?? viewportWidth;
 
