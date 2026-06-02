@@ -418,9 +418,9 @@ export class CanvasRenderer<TData = any> {
   }
 
   /** Build the per-column prep cache once per frame before rendering visible rows. */
-  private prepareColumns(): void {
+  private prepareColumns(visibleColumns: Column[]): void {
     this.columnPreps.clear();
-    for (const column of this.getVisibleColumns()) {
+    for (const column of visibleColumns) {
       this.columnPreps.set(
         column.colId,
         prepColumn(this.ctx, column, getColumnDef(column, this.gridApi), this.theme)
@@ -468,18 +468,8 @@ export class CanvasRenderer<TData = any> {
       this.gridApi
     );
 
-    // Log state periodically (not every frame to avoid flood)
-    if (Math.random() < 0.01) {
-      console.log('[ArgentGrid] doRender', {
-        viewport: { width, height },
-        rows: { total: totalRows, start: startRow, end: endRow },
-        scroll: { top: this.scrollTop, left: this.scrollLeft },
-        columns: allVisibleColumns.length,
-      });
-    }
-
     // Prepare columns (sets font, caches colDef)
-    this.prepareColumns();
+    this.prepareColumns(allVisibleColumns);
 
     // Set common context properties
     this.ctx.font = getFontFromTheme(this.theme);
@@ -515,7 +505,7 @@ export class CanvasRenderer<TData = any> {
     );
 
     // Draw grid lines
-    this.drawGridLines(positionedColumns, startRow, endRow, width, height, leftWidth, rightWidth);
+    this.drawGridLines(allVisibleColumns, startRow, endRow, width, height, leftWidth, rightWidth);
 
     // Draw range selections
     this.drawRangeSelections(positionedColumns, leftWidth, rightWidth, width);
@@ -788,7 +778,7 @@ export class CanvasRenderer<TData = any> {
   }
 
   private drawGridLines(
-    positionedColumns: PositionedColumn[],
+    allColumns: Column[],
     startRow: number,
     endRow: number,
     viewportWidth: number,
@@ -811,7 +801,7 @@ export class CanvasRenderer<TData = any> {
     // Draw vertical column lines
     drawColumnLines(
       this.ctx,
-      this.getVisibleColumns(),
+      allColumns,
       this.scrollLeft,
       this.scrollTop,
       viewportWidth,
