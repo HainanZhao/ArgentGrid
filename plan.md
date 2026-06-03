@@ -128,6 +128,11 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
 - [ ] **T4.3 — Fill handle** (Excel-style drag-to-fill).
 - [ ] **T4.4 — Integrated charts** from range selection.
 - [ ] **T4.5 — Cell flashing** on data change.
+- [x] **T4.6 — Conditional cell styling (canvas-paintable subset)** — **landed**
+  - [x] `resolveCellPaintStyle` (`render/cells.ts`) bridges AG-Grid's CSS-class conditional styling onto the canvas: it evaluates `cellClass` (static/array/fn) + `cellClassRules`, maps each *active* class through a `cellClassStyles` map (grid-level `gridOptions.cellClassStyles` < `colDef.cellClassStyles`), then applies `cellStyle` on top (inline-style precedence). Returns the canvas-paintable subset `{ color, backgroundColor, fontWeight, fontStyle }` — a shared `NO_CELL_STYLE` (no allocation) for plain columns, gated by `hasConditionalStyle` so the per-frame hot path is a single property check.
+  - [x] Wired once per cell in `drawCell` and shared by both passes: `drawCellBackground` paints `backgroundColor` as the base (selection/hover still win so feedback is never lost); `drawCellContent` applies `color` and a weight/style-overridden font (restored to the column font afterwards so the next cell is unaffected).
+  - [x] New `CanvasCellStyle` type + `cellClassStyles` on `ColDef`/`GridOptions` (exported). Validated: `cells.spec.ts` (class-rule active/inactive, static `cellClass` string/array, colDef-over-grid precedence, `cellStyle` wins, unpaintable props ignored, no-op for plain columns + draw-pipeline background/selection/font-restore); `Features/ConditionalStyling` story. Full suite 653 passing; build clean.
+  - [ ] Follow-up: alpha-composite selection/hover over a conditional background (today selection replaces it); honour `cellStyle` background on the component-overlay path.
 
 ---
 
@@ -135,7 +140,7 @@ Core canvas engine, sorting, filtering (incl. set/quick/floating), editing+valid
 
 These gaps are **inherent to the canvas + DOM-overlay architecture**, not items on the roadmap. They are the deliberate trade-off for "1M rows at 60fps" and are not expected to close; each has a supported workaround. Listed here so they're not mistaken for unfinished work.
 
-- **Per-cell CSS** — `cellClass`, `cellClassRules`, and full `cellStyle` don't apply (cells are painted on canvas, not DOM). **Only `cellStyle.color` is read.** → *Workaround:* dynamic text color via `cellStyle: (p) => ({ color })`, anything richer via a **component cell renderer** (real DOM in the overlay).
+- **Per-cell CSS** — arbitrary CSS via `cellClass`/`cellClassRules`/`cellStyle` can't apply on a canvas (no DOM nodes). **A canvas-paintable subset _is_ now bridged** (see T4.6): `cellStyle` and active `cellClass`/`cellClassRules` classes (mapped through `cellClassStyles`) paint `{ color, backgroundColor, fontWeight, fontStyle }`. Anything outside that subset (borders, padding, box-shadow, transitions, …) still needs a **component cell renderer** (real DOM in the overlay).
 - **CSS-file theming** — `ag-theme-*.css` and CSS-variable overrides don't apply. → *Workaround:* the **programmatic theme object** (`themeQuartz.withParams(...)` / `withPart(...)`).
 - **No cell DOM** — there are no `.ag-cell` / `[col-id]` nodes to query or test against. → *Workaround:* the real-DOM header, component cells, the off-screen `[role="gridcell"]` ARIA mirror, or the public `GridApi`.
 - **Framework-agnostic cell/header components** — component cells are **Angular-only**; a renderer returning raw `HTMLElement`/HTML (stripped to text) or React/Vue/jQuery wrappers are not supported.

@@ -6,6 +6,8 @@
 
 import type { Type } from '@angular/core';
 import {
+  type CanvasCellStyle,
+  type CellClassParams,
   ColDef,
   type ColGroupDef,
   Column,
@@ -221,6 +223,119 @@ export function prepColumns<TData = any>(
 }
 
 // ============================================================================
+// CONDITIONAL CELL STYLING
+// ============================================================================
+
+/**
+ * The empty computed style, shared by reference and returned for the common
+ * case of a column with no conditional styling — so plain columns allocate
+ * nothing on the per-frame hot path. Never mutate it.
+ */
+export const NO_CELL_STYLE: CanvasCellStyle = {};
+
+/** Cheap guard: does this column declare any conditional styling at all? */
+export function hasConditionalStyle<TData = any>(colDef: ColDef<TData> | null): boolean {
+  return !!colDef && !!(colDef.cellStyle || colDef.cellClass || colDef.cellClassRules);
+}
+
+/** Build a canvas font string honouring an optional weight/style override. */
+function buildFont(theme: GridTheme, weight?: string, style?: string): string {
+  const w = weight || theme.fontWeight || 'normal';
+  const s = style && style !== 'normal' ? `${style} ` : '';
+  return `${s}${w} ${theme.fontSize}px ${theme.fontFamily}`;
+}
+
+/** Append the active class names from a `cellClass` value to `out`. */
+function collectCellClass<TData>(
+  cellClass: ColDef<TData>['cellClass'],
+  params: CellClassParams<TData>,
+  out: string[]
+): void {
+  const resolved = typeof cellClass === 'function' ? cellClass(params) : cellClass;
+  if (!resolved) return;
+  if (Array.isArray(resolved)) {
+    for (const c of resolved) if (c) out.push(...c.split(/\s+/).filter(Boolean));
+  } else {
+    out.push(...resolved.split(/\s+/).filter(Boolean));
+  }
+}
+
+/**
+ * Resolve the canvas-paintable style for one cell from `cellClass`,
+ * `cellClassRules` (mapped through the `cellClassStyles` class→style map) and
+ * `cellStyle`. This is the canvas bridge for AG-Grid's CSS-class conditional
+ * styling: a class name can't apply on a canvas, so an *active* class is looked
+ * up in the merged `cellClassStyles` map and its `CanvasCellStyle` painted.
+ *
+ * Precedence (low → high), mirroring CSS where inline style beats a class:
+ * grid-level `cellClassStyles` < `colDef.cellClassStyles` < `cellStyle`.
+ *
+ * Returns the shared `NO_CELL_STYLE` (no allocation) when nothing applies.
+ * Callers should gate the param build with {@link hasConditionalStyle} so plain
+ * columns never reach here.
+ */
+export function resolveCellPaintStyle<TData = any>(
+  colDef: ColDef<TData> | null,
+  params: CellClassParams<TData>,
+  gridClassStyles: { [className: string]: CanvasCellStyle } | undefined
+): CanvasCellStyle {
+  if (!hasConditionalStyle(colDef)) return NO_CELL_STYLE;
+
+  // 1. Gather active class names: static cellClass + passing cellClassRules.
+  const classes: string[] = [];
+  if (colDef!.cellClass) collectCellClass(colDef!.cellClass, params, classes);
+  if (colDef!.cellClassRules) {
+    for (const className in colDef!.cellClassRules) {
+      const rule = colDef!.cellClassRules[className];
+      if (rule && rule(params)) classes.push(...className.split(/\s+/).filter(Boolean));
+    }
+  }
+
+  // 2. Map each active class to a style and merge (colDef map over grid map).
+  let style: CanvasCellStyle = NO_CELL_STYLE;
+  const colStyles = colDef!.cellClassStyles;
+  if (classes.length && (gridClassStyles || colStyles)) {
+    for (const className of classes) {
+      const mapped = colStyles?.[className] ?? gridClassStyles?.[className];
+      if (mapped) style = style === NO_CELL_STYLE ? { ...mapped } : { ...style, ...mapped };
+    }
+  }
+
+  // 3. `cellStyle` wins (inline-style semantics). Only the canvas-paintable
+  //    subset is read; any other CSS props are ignored.
+  if (colDef!.cellStyle) {
+    const raw =
+      typeof colDef!.cellStyle === 'function'
+        ? colDef!.cellStyle({
+            value: params.value,
+            data: params.data,
+            node: params.node,
+            column: params.column,
+            api: params.api,
+          })
+        : colDef!.cellStyle;
+    if (raw) {
+      const inline: CanvasCellStyle = {};
+      if (raw.color != null) inline.color = raw.color;
+      const bg = raw.backgroundColor ?? raw.background;
+      if (bg != null) inline.backgroundColor = bg;
+      if (raw.fontWeight != null) inline.fontWeight = String(raw.fontWeight);
+      if (raw.fontStyle != null) inline.fontStyle = raw.fontStyle;
+      if (
+        inline.color != null ||
+        inline.backgroundColor != null ||
+        inline.fontWeight != null ||
+        inline.fontStyle != null
+      ) {
+        style = style === NO_CELL_STYLE ? inline : { ...style, ...inline };
+      }
+    }
+  }
+
+  return style;
+}
+
+// ============================================================================
 // CELL DRAW PHASE
 // ============================================================================
 
@@ -234,11 +349,28 @@ export function drawCell<TData = any>(
 ): void {
   const { rowNode } = context;
 
+  // Conditional styling (cellStyle / cellClass / cellClassRules → CanvasCellStyle).
+  // Computed once and shared by the background + content passes. Gated so plain
+  // columns skip the params build and the grid-option lookup entirely.
+  const computedStyle = hasConditionalStyle(context.colDef)
+    ? resolveCellPaintStyle(
+        context.colDef,
+        {
+          value: context.value,
+          data: rowNode.data,
+          node: rowNode,
+          column: context.column,
+          api: context.api,
+        },
+        context.api?.getGridOption?.('cellClassStyles')
+      )
+    : NO_CELL_STYLE;
+
   // Draw cell background
-  drawCellBackground(ctx, context);
+  drawCellBackground(ctx, context, computedStyle);
 
   // Draw cell content based on column type
-  drawCellContent(ctx, prep, context);
+  drawCellContent(ctx, prep, context, computedStyle);
 
   // Draw group indicators if needed
   if (rowNode && (rowNode.group || rowNode.level > 0)) {
@@ -251,13 +383,16 @@ export function drawCell<TData = any>(
  */
 export function drawCellBackground<TData = any>(
   ctx: CanvasRenderingContext2D,
-  context: CellDrawContext<TData>
+  context: CellDrawContext<TData>,
+  computedStyle: CanvasCellStyle = NO_CELL_STYLE
 ): void {
   const { x, y, width, height, isSelected, isHovered, isEvenRow } = context;
   const { theme } = context;
 
-  // Determine background color
+  // Determine background color. A conditional backgroundColor replaces the zebra
+  // base, but selection/hover still win so that feedback is never lost.
   let bgColor = isEvenRow ? theme.bgCellEven : theme.bgCell;
+  if (computedStyle.backgroundColor) bgColor = computedStyle.backgroundColor;
   if (isSelected) bgColor = theme.bgSelection;
   if (isHovered) bgColor = theme.bgHover;
 
@@ -270,8 +405,9 @@ export function drawCellBackground<TData = any>(
  */
 export function drawCellContent<TData = any>(
   ctx: CanvasRenderingContext2D,
-  _prep: ColumnPrepResult<TData>,
-  context: CellDrawContext<TData>
+  prep: ColumnPrepResult<TData>,
+  context: CellDrawContext<TData>,
+  computedStyle: CanvasCellStyle = NO_CELL_STYLE
 ): void {
   const { x, y, width, height, value, formattedValue, theme, colDef, rowNode, api } = context;
 
@@ -364,25 +500,16 @@ export function drawCellContent<TData = any>(
   const textX = x + theme.cellPadding + groupOffset;
   const textY = y + height / 2; // Centered vertically
 
-  // Handle cellStyle color
-  let textColor = theme.textCell;
-  if (colDef?.cellStyle) {
-    const style =
-      typeof colDef.cellStyle === 'function'
-        ? colDef.cellStyle({
-            value,
-            data: rowNode?.data,
-            node: rowNode!,
-            column: context.column,
-            api: api!,
-          })
-        : colDef.cellStyle;
-    if (style?.color) textColor = style.color;
-  }
-
-  // Set text properties
-  ctx.fillStyle = textColor;
+  // Conditional text color / font (cellStyle + cellClassRules → computedStyle).
+  ctx.fillStyle = computedStyle.color || theme.textCell;
   ctx.textBaseline = 'middle';
+  // A weight/style override needs a different canvas font; restore the column's
+  // font afterwards so the next cell in the row isn't affected.
+  const customFont =
+    computedStyle.fontWeight || computedStyle.fontStyle
+      ? buildFont(theme, computedStyle.fontWeight, computedStyle.fontStyle)
+      : null;
+  if (customFont) ctx.font = customFont;
 
   const maxWidth = width - theme.cellPadding * 2 - groupOffset;
 
@@ -399,6 +526,7 @@ export function drawCellContent<TData = any>(
       if (lineMidY + lineH / 2 > y + height + 1) break; // would overflow the row
       ctx.fillText(lines[i], Math.floor(textX), Math.floor(lineMidY));
     }
+    if (customFont) ctx.font = prep.font;
     return;
   }
 
@@ -410,6 +538,7 @@ export function drawCellContent<TData = any>(
   if (truncatedText) {
     ctx.fillText(truncatedText, Math.floor(textX), Math.floor(textY));
   }
+  if (customFont) ctx.font = prep.font;
 }
 
 /**
