@@ -29,6 +29,13 @@ export interface GridOptions<TData = any> {
    * registry (`registerCellRenderer`).
    */
   components?: { [name: string]: any };
+  /**
+   * Grid-wide map of class name → `CanvasCellStyle`, the canvas analogue of the
+   * CSS rules you'd write for `cellClass` / `cellClassRules` class names. When a
+   * column's `cellClass`/`cellClassRules` activate a class, its style here is
+   * painted. A column's own `colDef.cellClassStyles` merges over this map.
+   */
+  cellClassStyles?: { [className: string]: CanvasCellStyle };
   /** If true, the grid will maintain the order of columns as they are provided in the `columnDefs`. */
   maintainColumnOrder?: boolean;
   /** If true, pivot column order will be strictly maintained. */
@@ -494,6 +501,16 @@ export interface ColDef<TData = any, TValue = any> {
   cellClass?: string | string[] | ((params: CellClassParams<TData, TValue>) => string | string[]);
   /** Rules for applying CSS classes to cells based on data. */
   cellClassRules?: { [key: string]: (params: CellClassParams<TData, TValue>) => boolean };
+  /**
+   * Canvas-paintable styles keyed by the class names used in `cellClass` /
+   * `cellClassRules`. Because cells are painted on canvas (no DOM, no CSS), a
+   * class name on its own can't be styled — this map bridges the gap: when a
+   * class is active for a cell, its `CanvasCellStyle` is painted. Merges over
+   * (and takes precedence over) `gridOptions.cellClassStyles`. See
+   * `CanvasCellStyle` for the supported subset; richer styling needs a
+   * component cell renderer.
+   */
+  cellClassStyles?: { [className: string]: CanvasCellStyle };
   /** If true, the cell will not show an ellipsis if the text overflows. */
   suppressEllipsis?: boolean;
   /**
@@ -1369,6 +1386,23 @@ export interface CellStyleParams<TData = any, TValue = any> {
   node: IRowNode<TData>;
   column: Column;
   api: GridApi<TData>;
+}
+
+/**
+ * The subset of cell styling the canvas renderer can paint directly (no DOM, so
+ * no arbitrary CSS). Produced by `cellStyle` and by `cellClassStyles` entries
+ * whose class is active for the cell. Anything outside this subset (borders,
+ * padding, transitions, …) requires a component cell renderer.
+ */
+export interface CanvasCellStyle {
+  /** Text color (any canvas-valid color string). */
+  color?: string;
+  /** Cell background fill. Replaces the zebra base; selection/hover still win. */
+  backgroundColor?: string;
+  /** Font weight for the cell text, e.g. `'bold'`, `'600'`, `'normal'`. */
+  fontWeight?: string;
+  /** Font style for the cell text, e.g. `'italic'`, `'normal'`. */
+  fontStyle?: string;
 }
 
 export interface CellClassParams<TData = any, TValue = any> {
